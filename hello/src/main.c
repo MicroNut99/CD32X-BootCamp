@@ -218,6 +218,7 @@ int main(void)
     uint32_t boots = 0;
     int music = 0, x = 152, y = 150;
     uint16_t prev = 0xFFFF;                 /* buttons held at start don't count */
+    uint16_t chord = 0;                     /* the buttons pressed since all were last released */
 
     cd_status(0x4E00);                      /* 4E00: hello started */
     int view_text = HELLO_DIAG_TEXT;        /* 1: the Sub-CPU's green text shows (diagnostic disc) */
@@ -247,8 +248,20 @@ int main(void)
     while (1)
     {
         uint16_t pad = cd_pad(0, 0);
-        uint16_t hit = pad & ~prev;
-        prev = pad;
+        /* the buttons act when they are RELEASED, as a chord: everything pressed together counts as one
+           press.  So B+C (diagnostic disc) never also runs B's or C's own action. */
+        const uint16_t keys = SEGA_CTRL_A | SEGA_CTRL_B | SEGA_CTRL_C | SEGA_CTRL_START;
+        uint16_t hit = 0;
+        if (prev == 0xFFFF)                 /* buttons held at start don't count */
+        {
+            if (!(pad & keys)) prev = 0;
+        }
+        else
+        {
+            chord |= pad & keys;
+            if (chord && !(pad & keys)) { hit = chord; chord = 0; }
+            prev = pad;
+        }
 
         if (pad & SEGA_CTRL_LEFT)  x -= 2;
         if (pad & SEGA_CTRL_RIGHT) x += 2;
@@ -259,13 +272,14 @@ int main(void)
         if (y < 140) y = 140;
         if (y > 208) y = 208;
 
-        int bc = SEGA_CTRL_B | SEGA_CTRL_C;
-        if (HELLO_DIAG_TEXT && (pad & bc) == bc && (hit & bc))
+        if (HELLO_DIAG_TEXT && hit == (SEGA_CTRL_B | SEGA_CTRL_C))
         {
             view_text ^= 1;                 /* diagnostic disc: B+C = green text / hello's screen */
             cd_genesis_display(view_text);
             hit = 0;
         }
+        if (hit & (hit - 1))
+            hit = 0;                        /* any other chord: nothing */
         if (hit & SEGA_CTRL_A) { cd_music_play(2, 0); music = 1; }
         if (hit & SEGA_CTRL_B) { cd_music_stop(); music = 0; }
         if (hit & SEGA_CTRL_C)
@@ -284,9 +298,15 @@ int main(void)
 
         if (!cd_error.code && shown)
             cd_status(0x4B10);              /* the error went away (the action worked again) */
+        if (cd_error.code && !shown && view_text)
+        {
+            view_text = 0;                  /* a new error: hello's screen, so no green text covers the box */
+            cd_genesis_display(0);
+        }
         shown = cd_error.code;
 
-        clear(C_BLACK);                     /* colour 0x0000: see-through, the Genesis text shows there */
+        clear(C_BLACK);                     /* with the Genesis display on (diagnostic view) its text is in front
+                                               of the 32X picture (priority bit 0) wherever it has text */
         if (view_text)
         {
             /* the Genesis text fills all 28 rows, so these go where its rows are short: row 5

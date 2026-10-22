@@ -4,18 +4,19 @@
     python3 tools/diag_switch.py on      the diagnostic lines in, the files saved as <file>.diagsave
     python3 tools/diag_switch.py off     the saved files back (the release lines)
     python3 tools/diag_switch.py check   which state each switch is in
+    python3 tools/diag_switch.py release exit 1 unless all are the release lines (build.sh, release disc)
 
-Each switch is ONE existing line of the boot stack, swapped for its diagnostic twin, the way SuperTux CD32X
-REV keeps its diagnostics (docs/BOOT_PATH_NOTES.md there).  The release disc never has them; the source in
-git always holds the release lines.  tools/check_boot.py accepts either line.
+Each switch is ONE existing line of the boot stack, swapped for its diagnostic twin.  (SuperTux CD32X REV
+keeps the same four diagnostics as #define switches and edited lines, docs/BOOT_PATH_NOTES.md there.)  The
+release disc never has them; the source in git always holds the release lines; tools/check_boot.py accepts
+either line, and build.sh refuses to build a release disc unless all four are the release lines.
+In the hw_md.s twin the old comment "display OFF" stays next to 0x8174: the line is swapped whole.
 
   1 main.c        KOBO_DIAG_TEXT 1      the Sub-CPU's green text (boot steps, STATE, files, cart chunks)
   2 main.c        KOBO_BOOT_TEXT 1      main() does not switch the Genesis display off
   3 hw_md.s       0x8174 (OL-13)        the 68000 leaves the Genesis display ON: the white 32X start-up
                                         lines and the green text show from the start
   4 cdloader      CMD 52 COMM2 = 1      CDLOADER keeps the Genesis text on at 4D01 (OL-3 sends 0)
-  5 cdloader      DISPMODE 0x0081       the boot picture with the 32X priority bit: the text is in front of it
-                                        (OpenJazz REV OJ-J4B, Kobo K18)
 """
 import os, shutil, sys
 
@@ -51,20 +52,24 @@ def files():
 
 
 def on():
+    # check everything before touching anything: a half-switched stack must never be left behind
+    for rel in files():
+        p = os.path.join(ROOT, rel)
+        if os.path.exists(p + ".diagsave"):
+            sys.exit("diag_switch: %s.diagsave exists (an interrupted build?) - run: python3 tools/diag_switch.py off"
+                     % rel)
+    for f, release, diag in SWITCHES:
+        if open(os.path.join(ROOT, f), "rb").read().count(release) != 1:
+            sys.exit("diag_switch: the release line is not in %s exactly once:\n  %s" % (f, release.decode()))
     for rel in files():
         p = os.path.join(ROOT, rel)
         data = open(p, "rb").read()
-        if os.path.exists(p + ".diagsave"):
-            sys.exit("diag_switch: %s.diagsave exists - run 'off' first" % rel)
-        shutil.copyfile(p, p + ".diagsave")
+        shutil.copy2(p, p + ".diagsave")    # copy2: the file's mode and time are kept
         for f, release, diag in SWITCHES:
-            if f != rel:
-                continue
-            if data.count(release) != 1:
-                off()
-                sys.exit("diag_switch: the release line is not in %s exactly once:\n  %s" % (rel, release.decode()))
-            data = data.replace(release, diag)
-        open(p, "wb").write(data)
+            if f == rel:
+                data = data.replace(release, diag)
+        with open(p, "wb") as out:          # rewritten in place: the mode stays
+            out.write(data)
     print("diag_switch: %d diagnostic switches on" % len(SWITCHES))
 
 
@@ -73,9 +78,20 @@ def off():
     for rel in files():
         p = os.path.join(ROOT, rel)
         if os.path.exists(p + ".diagsave"):
-            shutil.move(p + ".diagsave", p)
+            os.replace(p + ".diagsave", p)  # the saved copy, with its original mode and time
             n += 1
     print("diag_switch: release lines back in %d files" % n)
+
+
+def release():
+    """exit 1 unless every switch holds its release line (build.sh runs this for a release disc)"""
+    bad = [f for f, rel_line, _ in SWITCHES if open(os.path.join(ROOT, f), "rb").read().count(rel_line) != 1]
+    left = [f for f in files() if os.path.exists(os.path.join(ROOT, f) + ".diagsave")]
+    if bad or left:
+        print("diag_switch: NOT the release lines (%s)%s - run: python3 tools/diag_switch.py off"
+              % (", ".join(sorted(set(bad))) or "-", "; .diagsave left: " + ", ".join(left) if left else ""))
+        sys.exit(1)
+    print("diag_switch: release lines")
 
 
 def check():
@@ -87,4 +103,4 @@ def check():
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    {"on": on, "off": off, "check": check}.get(cmd, lambda: sys.exit(__doc__))()
+    {"on": on, "off": off, "check": check, "release": release}.get(cmd, lambda: sys.exit(__doc__))()

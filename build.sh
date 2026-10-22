@@ -62,13 +62,15 @@ if [ -d "$G/cd" ] && [ -n "$(ls -A "$G/cd")" ]; then
   cp -v "$G"/cd/* "$ROMS/"
 fi
 
-# DIAG=1: the diagnostic disc - tools/diag_switch.py swaps five boot-stack lines for their diagnostic twins
-# for this build only (green Sub-CPU text, the display left on, CDLOADER's text kept in front of the boot
-# picture; docs/09_ERROR_CODES.md).  The release lines go back afterwards, even when the build fails.
-if [ "${DIAG:-0}" = 1 ]; then
+# DIAG=1: the diagnostic disc - tools/diag_switch.py swaps four boot-stack lines for their diagnostic twins
+# for this build only (the Sub-CPU's green text, the Genesis display left on by the 68000 and by CDLOADER;
+# docs/09_ERROR_CODES.md).  The release lines go back afterwards, even when the build fails.
+if [ "${DIAG:-0}" != 1 ]; then
+  python3 "$HERE/tools/diag_switch.py" release      # a release disc never ships a diagnostic line
+else
   echo "==> DIAG=1: the diagnostic disc"
-  python3 "$HERE/tools/diag_switch.py" on
   trap 'python3 "$HERE/tools/diag_switch.py" off' EXIT
+  python3 "$HERE/tools/diag_switch.py" on
 fi
 
 echo "==> 4. the SH2 loader (stack/sh2, unchanged)"

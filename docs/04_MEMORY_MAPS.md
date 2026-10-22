@@ -45,9 +45,10 @@ ranges onto slots.
 
 Other file numbers load `IMAGEn.RAW` to slot n. Number 16 is `KOBOGFX.BIN`.
 
-- Slots 32 and up lie beyond the 4 MB cart: the address wraps.
-- The game file list may hold at most 100 names. A 101st would make number 200 + 0 mean both "level
-  file 100" and "resident file 0".
+- Slots 32 and up are not the cart: the 68000 would write into the 32X's own area (slot 32 = its `0x800000`,
+  slot 34 = the frame buffer). `check_boot.py` allows slots 4–31 only.
+- The game file list may hold at most 100 names. With a 101st, number 200 would open the 101st file into
+  the level slot (the 100 + n range is checked first), and resident file 0 could not be reached.
 
 `build.sh` refuses:
 

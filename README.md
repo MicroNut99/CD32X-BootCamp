@@ -132,7 +132,8 @@ The full checklist is in [docs/02_PORTING_YOUR_GAME.md](docs/02_PORTING_YOUR_GAM
   this stack is built on (MIT, `stack/subcpu/LICENSE.md`).
 - **Kobo Deluxe CD32X:** where the command set and the boot sequence come from. Its boot sequence was
   worked out from the Night Trap CD32X disc.
-- **Victor Luchits and the D32XR team** (Doom 32X: Resurrection): CDLOADER began as D32XR's CD loader.
+- **Victor Luchits and the D32XR team** (Doom 32X: Resurrection): CDLOADER was first written to boot D32XR
+  from CD, and CMD 60 comes from that work.
 - **XProger:** OpenLara, the first game on this stack.
 - **MicroNut99:** the CD32X stack, the 4 MB RAM cart work, the ports, and this kit
   (https://github.com/MicroNut99/docs).

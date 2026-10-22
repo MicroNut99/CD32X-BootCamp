@@ -25,12 +25,15 @@ static int cur_file;                        /* the file being opened / loaded (f
 
 static void fail(uint16_t code, const char *tag, uint16_t cmd, uint16_t arg)
 {
+    if (cd_error.code)                      /* the FIRST error is the one that explains the rest: keep it */
+        return;
     cd_error.code = code; cd_error.tag = tag; cd_error.cmd = cmd; cd_error.arg = arg;
     cd_error.file = (uint16_t)cur_file;
     for (int i = 0; i < 8; i++)             /* COMM0 ... COMM14, as they were when it failed */
         cd_error.comm[i] = COMM_WORD(i);
     cd_error.ticks = gTicks;
     last_status = code;                     /* the error stays in COMM12 until cd_status() posts again */
+    COMM12_16 = code;
 }
 
 void cd_error_clear(void)
@@ -45,13 +48,15 @@ int cd_cmd(uint16_t cmd)
        loop count (2,000,000 short pauses: some tens of seconds) is the backstop for a game whose
        vertical blank counter is not running. */
     uint32_t t0 = gTicks;
+    /* once the Sub-CPU has failed to answer (BC-E4), later waits are short (0.1 s): the game keeps
+       running and the error box shows, instead of one frame every 10 s */
+    uint32_t limit = cd_error.code == CD_ERR_NO_ANSWER ? 6 : CD_TIMEOUT_TICKS;
     MARS_SYS_COMM0 = cmd;
-    for (int n = 0; n < 2000000 && MARS_SYS_COMM0 != 0 && gTicks - t0 < CD_TIMEOUT_TICKS; n++)
+    for (int n = 0; n < 2000000 && MARS_SYS_COMM0 != 0 && gTicks - t0 < limit; n++)
         cd_pause();
     if (MARS_SYS_COMM0 == 0)
         return 1;
     fail(CD_ERR_NO_ANSWER, "BC-E4 CDAPI.C CD_CMD", (uint16_t)(cmd & 0xFF), MARS_SYS_COMM2);   /* BC-E4 */
-    COMM12_16 = CD_ERR_NO_ANSWER;
     return 0;
 }
 

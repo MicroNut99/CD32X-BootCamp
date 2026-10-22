@@ -82,7 +82,8 @@ Loaded whole into the PCM chip's 64 KB wave RAM. No tool for it ships with this 
 | 256 | image | the wave RAM image: the PCM chip's sample format (8-bit sign-magnitude; `0xFF` = the loop marker). At most 48 sectors of the file are read. |
 | 256 + image | 256 | optional: a map from the game's sample number to effect number |
 
-Play an effect with CMD 48: the high byte of COMM0 is the effect number (1 … n), COMM2 is its volume (1–64,
+Play an effect with CMD 48: the high byte of COMM0 is the effect number (1 … n), or, when the pack has the
+map, the game's sample number + 1 (looked up in the map). COMM2 is its volume (1–64,
 64 = full). Effect 1 always gets channel 8; the others take turns on channels 1–7.
 
 ## Status codes (COMM12)

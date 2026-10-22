@@ -17,7 +17,7 @@ The repository states compared are listed in [08](08_RESEARCH_INDEX.md).
 ```
 Night Trap CD32X (Sega, 1994) ── its boot sequence, worked out by hand
    └─ Kobo Deluxe CD32X ─ the Sub-CPU coordinator, the 68000 listener, the command set (docs: KOBO-*.pdf)
-        ├─ OpenLara CD32X ─ + CDLOADER (from D32XR): the game is a 32X ROM copied into the RAM cart
+        ├─ OpenLara CD32X ─ + CDLOADER (written to load D32XR from CD): the game is a 32X ROM copied into the RAM cart
         │    ├─ OpenLara CD32X REV ─ + streaming, word copies, slots, movies   ◄── this kit's stack
         │    └─ OpenJazz CD32X (J19b) ─ the same loader, the quick check switched on
         │         ├─ OpenJazz CD32X REV ─ + Genesis plane, bonus floor (graphics chip), LZ packs
@@ -67,7 +67,7 @@ OpenTyrian 32X + Sega CD ─ a different architecture: a 32X cartridge with the 
 | Quick check (skip the copy when the cart already holds it) | off: always copies | **on**: first / middle / last chunk; A+B+C forces the copy | on | on | warm start: files whose cart checksum matches are skipped |
 | Boot picture | `IMAGE.RAW`, no bar | `IMAGE.RAW` + a progress bar | + bar | + bar | `IMAGE.RAW` + bar |
 | ROM made by | engine Makefile + `prep_openlara_cd.py` | `make_oj_rom.py` (`mars_boot.bin` + program at `0x8000`) + prep | same as OpenJazz | same + `check_sdram_code.py` | engine linked to run at `0x02000000`, no 32X header |
-| Boot path check | the build checks the loader is in OpenLara mode, the loader marker and the files on the disc, the module name, and the ROM / Caves sizes | build checks the module name | build refuses a wrong module name | `check_boot.py`: md5 of 70 files | sh2emu run before every burn |
+| Boot path check | the build checks the loader is in OpenLara mode, the loader marker and the files on the disc, the module name, and the ROM / Caves sizes | build checks the module name | build refuses a wrong module name | `check_boot.py`: md5 of 70 files | an SH2 emulator check run before every burn |
 
 **The BootCamp choice.** OpenLara's loader, with the quick check off, and its Sub-CPU program with the
 v1.5–v1.7 switches off (`STREAM`, `CARTW`, `FMVRING`, `SLOTS`). That is the code proven on the console
@@ -159,7 +159,7 @@ inside vblank. **Different:** how the work gets to the 68000:
 | OpenJazz REV | `make_disc.sh` → `build.sh`; the packs are made by running the PC build | frame md5 regression (`regress.sh`), Genesis test ROM pixel check | R1 (20–22 fps); R7–R9 emulation only |
 | Hurrican | `build.sh` / `make_disc.sh`, music rendered with libxmp-lite | PC host tests: frames, ASan over 20000 frames, reachability, demo recorder | P1–P1q |
 | SuperTux REV | `check_boot` → convert → … → `make_mixed_cd2.py`; stops if a paged build lacks its switch | PC model, ares headless runner | REV5, REV10b; REV11 emulation only |
-| Sonic CD 2011 | `build.sh` is PC-side checks only; the disc is a separate set of steps | **sh2emu** must report "no problems found" (it checks SH2 cart access while RV = 1); ares for the picture | up to R4B (R5G per the ledger); R5E untested |
+| Sonic CD 2011 | `build.sh` is PC-side checks only; the disc is a separate set of steps | its own SH2 emulator check must report no problems (SH2 cart access while RV = 1); ares for the picture | up to R4B (R5G per the ledger); R5E untested |
 
 **Similar.** A PC build of the same engine catches game bugs. Emulation catches stack and timing bugs,
 but not all of them. The console is the only final word. **Different:** how much is automated before the

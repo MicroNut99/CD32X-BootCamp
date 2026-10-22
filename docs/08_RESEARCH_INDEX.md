@@ -44,4 +44,4 @@
 
 - RAM cart: https://consolemods.org/wiki/Genesis:MD_32X_RAM_Cart
 - Chilly Willy's Sega CD / 32X toolchain and examples: the base of all of the above.
-- Doom 32X: Resurrection (Victor Luchits and team): where CDLOADER and CMD 60 come from.
+- Doom 32X: Resurrection (Victor Luchits and team): the game CDLOADER and CMD 60 were first written to boot.

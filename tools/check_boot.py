@@ -9,9 +9,9 @@ Every source file of stack/subcpu and stack/sh2 is compared with stack/BOOT_FILE
 differ without failing the check:
   - stack/subcpu/game_files.h  (your file names: not part of the hash list, but it may hold only
                                 #defines and lists of 8.3 file names - it is compiled into main.c)
-  - the five lines of the diagnostic disc (tools/diag_switch.py: KOBO_DIAG_TEXT, KOBO_BOOT_TEXT in main.c,
-    the display line in hw_md.s, two lines in cdloader_sh2.c): either their release or their diagnostic
-    form is accepted.
+  - the four lines of the diagnostic disc (tools/diag_switch.py: KOBO_DIAG_TEXT, KOBO_BOOT_TEXT in main.c,
+    the display line in hw_md.s, the CMD 52 argument in cdloader_sh2.c): either their release or their
+    diagnostic form is accepted (build.sh checks a release disc has the release lines).
 The idea is SuperTux CD32X REV's tools/check_boot.py.
 """
 import hashlib, os, re, sys
@@ -45,7 +45,7 @@ def digest(rel):
 
 
 GAME_FILES_OK = re.compile(r'^(#ifndef GAME_FILES_H|#define GAME_FILES_H|#endif|#define GAME_[A-Z_]+\s+("[^"]*"|\d+)'
-                           r'|static const char \*const game_(data|movie)_files\[\] = \{|"[A-Z0-9_]{1,8}\.[A-Z0-9_]{1,3}",|\};)$')
+                           r'|static const char \*const game_(data|movie)_files\[\] = \{|"[A-Z0-9_]{1,8}\.[A-Z0-9_]{1,3}",?|\};)$')
 
 
 def check_game_files():
@@ -57,6 +57,13 @@ def check_game_files():
         line = line.strip()
         if line and not GAME_FILES_OK.match(line):
             bad.append(line)
+    m = re.search(r'#define GAME_ROM_NAME\s+"([^"]*)"', text)
+    if not m or not re.fullmatch(r"[A-Z0-9_]{1,8}\.[A-Z0-9_]{1,3}", m.group(1)):
+        bad.append("GAME_ROM_NAME must be an ISO 8.3 name in capitals (main.c copies it into 24 bytes)")
+    for name in ("GAME_DATA_SLOT", "GAME_RESIDENT_SLOT"):
+        m = re.search(r"#define %s\s+(\d+)" % name, text)
+        if not m or not 4 <= int(m.group(1)) <= 31:
+            bad.append("%s must be 4-31: slot n = cart n x 128 KB (0-3 is the ROM, 32 and up is not the cart)" % name)
     m = re.search(r'#define GAME_BRAM_NAME\s+"([^"]*)"', text)
     if not m or not re.fullmatch(r"[A-Z0-9_]{11}", m.group(1)):
         bad.append("GAME_BRAM_NAME must be exactly 11 characters A-Z 0-9 _")

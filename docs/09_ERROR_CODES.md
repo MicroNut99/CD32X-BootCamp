@@ -12,7 +12,7 @@ to a tag or a line of text you can grep:
 | Disc | What you see | Built with |
 |---|---|---|
 | **Release** | the boot picture, then hello. Any failed CD service opens hello's **red error box**. | `bash build.sh` |
-| **Diagnostic** | the white 32X start-up lines and the Sub-CPU's **green text from the SEGA logo on**, in front of the boot picture: every boot step, `STATE:` (COMM12), every file and cart chunk. A boot that stops leaves its last lines on screen. Once hello runs it stays on that text: a one-line **PAD** readout (the directions and buttons held, in words) and **B+C** to switch to hello's screen and back. | `DIAG=1 DISC_NAME=BootCampDiag bash build.sh` |
+| **Diagnostic** | the white 32X start-up lines and the Sub-CPU's **green text from the SEGA logo on**, in front of the boot picture: every boot step, `STATE:` (COMM12), every file and cart chunk. A boot that stops leaves its last lines on screen. Once hello runs it stays on that text: a one-line **PAD** readout (the directions and buttons held, in words) and **B+C** to switch to hello's screen and back. hello's buttons act when released, as a chord, so B+C never also stops the music or loads a file. A new error switches to hello's screen, so no green row covers the box. | `DIAG=1 DISC_NAME=BootCampDiag bash build.sh` |
 | **ares** | COMM12 at any moment: Android's *Show fps and COMM12 STATE*, or the once-a-second line of `ares-headless` | either disc |
 
 **How the diagnostic disc shows text before the game.** On the release disc the Genesis display is off
@@ -54,7 +54,7 @@ docs/09_ERROR_CODES.md*.
 | COMM12 | Meaning | If it stops here |
 |---|---|---|
 | `4D01` | CDLOADER started. The Genesis display is off (CMD 52); `IMAGE.RAW` is shown (CMD 38 file 0, CMD 51). | — |
-| `4D06` | Checking the cart: CMD 47 compares the first, middle and last ROM chunks. The answer is ignored (quick check off), so it always copies. | the Sub-CPU did not answer CMD 47 |
+| `4D06` | Checking the cart: CMD 47 compares the first, middle and last ROM chunks. The answer is ignored (quick check off), so it always copies. | it does not stop here for good: CDLOADER gives up on an unanswered command after a long wait and goes on |
 | `4C00`+n | Chunk n (32 KB) of `GAME.32X` copied and read back. `4C0A` = chunk 10. | the copy of chunk n+1 hung: the cart or the 68000 |
 | `4D02` | All chunks loaded and verified | — |
 | `4D03` | The header checks out: `SEGA` at `0x100`; at `0x3D4` the SDRAM image (size 1 … 192 KB, destination + size ≤ 224 KB); the entries' top byte `0x06` | — |
@@ -72,7 +72,7 @@ ERROR 4EE3  FILE DID NOT REACH CART        <- the code, and what it means
 BC-E3 CDAPI.C CD_LOAD                      <- the tag: grep "BC-E3" in hello/src
 CMD 46 FILE 100 CHUNK 3 +018000            <- what was asked: command, file, chunk, offset in the file
 C0 0000 C2 0003 C4 0000 C6 0000            <- the COMM registers when it failed
-C8 0001 CA 2000 CC 4EE3 CE 3A1F
+C8 0001 CA 2000 CC 0001 CE 3A1F
 LOOK UP: DOCS 09 ERROR CODES
 ```
 
@@ -94,7 +94,7 @@ LOOK UP: DOCS 09 ERROR CODES
 | `C2` | COMM2 | the argument of the last command |
 | `C4`, `C6` | COMM4, COMM6 | the game's own (master ↔ slave, renderer) |
 | `C8`, `CA` | COMM8, COMM10 | the last reply: a file length (CMD 38), or the pad and the 68000's tick count (CMD 48) |
-| `CC` | COMM12 | the status: the error code itself, or the reply of CMD 46 / 61 |
+| `CC` | COMM12 | the Sub-CPU's reply in COMM12 at the moment of the failure: `0001` = CMD 46 or 61 said "bad", `FFFF` = CMD 46 never replied, `0000` = CMD 61 never replied. (The error code is posted to COMM12 right after this snapshot.) |
 | `CE` | COMM14 | **the Sub-CPU's heartbeat** (main.c `HW8`). The top digit is the CD drive's state: `0` stopped, `1` playing, `2` seeking, `3` scanning, `4` paused, `5` tray open, `9` reading the TOC, `B` no disc or error. The other three digits are its pass count ÷ 64. Two error boxes with the same `CE` mean the Sub-CPU has stopped. |
 
 ## 5. The green text, row by row (diagnostic disc)
@@ -116,16 +116,16 @@ Numbers are hex unless said otherwise.
 | 13 | `CART I<slot> C<chunk> @aaaaaa OK` | CMD 46: slot and chunk (decimal); `@` = the 68000 address written (`0x400000` + the cart offset). `BAD` = read back wrong, `EMPTY` = nothing read, `NOVFY` = not checked (bit 15). `CMP` instead of `CART` = CMD 47. After a `NOT FOUND`: `TIMEOUT: n` (0 none, 1 the drive command, 2 its acknowledge timed out). |
 | 14 | `CD TRACKS ff-ll TRACK2 xxxxxxxx` | the disc's first and last track, and track 2's position |
 | 15 | `ITER1 COMM PORT: nn` | the 68000's command byte on the main loop's first pass |
-| 16 | `32X WIN C<chunk> 900000: OK` / `… W<want> R<got>` | the chunk read back through the 68000's `0x900000` window; also `CART->FB`, `CD->FB` lines for CMD 47 / 50 |
-| 16 | `CKPT1: entered scd_open_file` … `CKPT4: filename write done` (`scd.c`) | the steps of opening a file on the disc. The last one shown is where an open stopped. |
+| 16 | `32X WIN C<chunk> 900000: OK` / `… W<want> R<got>` | the chunk read back through the 68000's `0x900000` window; also `CD->FB CHUNK c n SECTORS` for CMD 50 / 51 (the boot picture) |
+| 16 | `CKPT1: entered scd_open_file` (`scd.c`) | a file open started |
 | 17 | `COMM:nn CMD:c TIMEOUT` (`scd.c`) | the 68000 did not take the Sub-CPU's command `c` in time (its command byte `nn` stayed set) |
 | 17 | `MISMATCH C<n> +ooooo DISC xx CART yy` | the first byte of chunk n that differs. **On a first boot, `MISMATCH C0 +00000 … CART FF` is normal:** the quick check found an empty cart. |
 | 18 | `POST-SENDMD COMM: nn`, `SH2 REACHED THE LDC LINE`, `SH2 NEVER EVEN REACHED THIS FILE` | start-up checkpoints (COMM4 = `0x0EEE` / not `0x1234`) |
-| 19 | `INIT32X:r 1ST:xxxx` | the 32X start-up result: `0` ok, `-2` no 32X (no `MARS` at `0xA130EC`), `-3` the 32X's SDRAM failed its test (`SDER`), `-5` the adapter never became ready |
+| 19 | `INIT32X:r 1ST:xxxx` | the 32X start-up result: `0` ok; `1` the master SH2 never answered `M_OK`, `2` the slave never answered `S_OK`, `3` neither (the boot goes on); `-2` no 32X (no `MARS` at `0xA130EC`), `-3` the 32X's SDRAM failed its test (`SDER`), `-5` the adapter never became ready |
 | 19 | `SH2 READY FOR ISOLATED TEST: 0AAA` | CDLOADER's handshake arrived (anything else: it did not) |
 | 19 | `Sssss C0:cccc ST:ssss M:mmmm SL:llll` | the heartbeat while waiting for the game: pass count, COMM0, COMM12, COMM6, COMM10. It stops at `4B10`. |
 | 20 | `END C0:… C4:…` / `SH2 NEVER SIGNALLED READY - STOPPED` | the boot ROMs' last words; or no `0x0AAA` within 3 s (180 ticks): the Sub-CPU stops |
-| 21 | `32X INIT FAILED - STOPPED` / `68K EXC Vnn FRAME:` | row 19 was negative; or **the 68000 crashed** (main.c `HW1`): `V02` bus error, `V03` address error, `V04` illegal instruction, `V05` divide by zero, `V06` CHK, `V07` TRAPV, `V08` privilege, `V09` trace, `V10` line A, `V11` line F |
+| 21 | `32X INIT FAILED - STOPPED` / `68K EXC Vnn FRAME:` | row 19 was negative; or **the 68000 crashed** (main.c `HW1`): `V02` bus error, `V03` address error, `V04` illegal instruction, `V05` divide by zero, `V06` CHK, `V07` TRAPV, `V08` privilege, `V09` trace, `V0A` line A, `V0B` line F (hex). **This one shows on any disc:** the trap turns the Genesis display on itself (`hw_md.s` K29). |
 | 22 | the exception frame | V02/V03: `FC ADDR-HI ADDR-LO IR SR PC-HI PC-LO`; others: `SR PC-HI PC-LO` + stack. The PC leads to the routine in `hw_md.s` (the listener sits at `0xFF1000`). |
 | 23–24 | `BRAM ID:nn (nKB) OLD:nn`, `OLD:xxxx VIA 400000:xxxx`, `WROTE 5AA5 VIA 900000:xxxx` | the backup RAM size; the cart probe: what the 68000 read back through each window |
 | 25 | `SAFE CART: FOUND` / `NOT FOUND` | **is there a RAM cart?** (the probe of rows 23–24) |
@@ -133,7 +133,17 @@ Numbers are hex unless said otherwise.
 | 27 | `CDDA: PLAY TRACK n (REPEAT)`, `CDDA Tn ST ss TRY n` | CD audio requests and the drive's answer |
 
 **The white lines** (`Activated 32X`, `Cleared 32X`, …) come from Chilly Willy's 32X start-up in `hw_md.s`
-(`INIT_32X`). The last one shown is the step that did not finish.
+(`INIT_32X`), at column 12 of rows 19–26. Green rows 19, 20 and 23–26 are written over them, so usually only
+rows 21–22 (`Activated 32X`, `Cleared 32X`) stay readable. If the 32X start-up stops, its last white line
+is the step that did not finish.
+
+**Speed on the diagnostic disc.** Until COMM12 reads `4B10`, the Sub-CPU keeps redrawing its status rows
+(row 10 when the status changes, row 19 every 64 passes). With an error code in COMM12 the game therefore
+runs slower on the diagnostic disc. That is expected: the release disc compiles that text out.
+
+**After a file is not found** (row 12 `ERR: … NOT FOUND`), `scd.c` lists the disc's root directory on rows
+19–25 as `FILE: <name>`, over the rows that were there (including row 25 `SAFE CART`). Compare the list with
+the name you asked for.
 
 ## 6. Codes from the other games (so you do not reuse them by accident)
 
