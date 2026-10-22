@@ -1,6 +1,6 @@
 !-----------------------------------------------------------------------
 ! SEGA 32X support code for SH2
-! by Chilly Willy
+! by Chilly Willy (MIT).  CD32X BootCamp: only the header names changed (from OpenLara's copy).
 ! Rom header and SH2 init/exception code - must be first in object list
 !-----------------------------------------------------------------------
 
@@ -28,9 +28,9 @@
 ! Standard MegaDrive ROM header at 0x100
 
         .ascii  "SEGA 32X        "      /* First 4 bytes must be "SEGA" */
-        .ascii  "XProger (c)2022 "      /* Copyright and date */
-        .ascii  "OpenLara Alpha                                  "      /* JP Name */
-        .ascii  "OpenLara Alpha                                  "      /* EN Name */
+        .ascii  "(C)HOMEBREW 2026"      /* Copyright and date */
+        .ascii  "CD32X BOOTCAMP HELLO                            "      /* JP Name */
+        .ascii  "CD32X BOOTCAMP HELLO                            "      /* EN Name */
         .ascii  "GM 14021968-01"        /* Serial No. */
         .word   0x0000
         .ascii  "J6              "
@@ -101,7 +101,7 @@
 
 ! Standard Mars Header at 0x3C0
 
-        .ascii  "OpenLara        "      /* module name */
+        .ascii  "BOOTCAMP HELLO  "      /* module name */
         .long   0x00000000              /* version */
         .long   __text_end-0x02000000   /* Source (in ROM) */
         .long   0x00000000              /* Destination (in SDRAM) */
@@ -192,14 +192,12 @@
         .incbin "src-md/m68k.bin"       /* all 68000 code & data, compiled to 0x880800/0xFF0000 */
 
 
-        .global _gLightmap_base
-        .global _gLightmap
 
-        .data
-_gLightmap_base:
-        .space  128
-_gLightmap:
-        .space  256 * 32
+        .data                   /* from here on: copied to SDRAM by the boot ROM / CDLOADER */
+/* OpenLara's crt0.s reserves 128 + 8192 bytes here (_gLightmap_base, _gLightmap): the shading table of
+   OpenLara's 3D rasterizer (rasterizer.h), placed first in .data for a fixed SDRAM address.  Nothing in
+   the boot stack or the boot picture uses it (IMAGE.RAW goes straight to the frame buffer, CMD 51), so
+   hello leaves it out.  A game that uses OpenLara's renderer must put it back. */
 
 !-----------------------------------------------------------------------
 ! Primary Vector Base Table
