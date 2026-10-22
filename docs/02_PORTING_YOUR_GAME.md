@@ -69,7 +69,7 @@ instead of after a burn.
 |---|---|
 | **Resident data + one level slot.** Load a pack once into the resident slot and keep it across power-off. Check its length and checksum at start and reload only when it is missing; A+B+C held at start forces a reload. | OpenLara (Caves), Jazz, Hurrican |
 | **Quick check of the ROM.** CDLOADER compares the first, middle and last chunks with CMD 47 and skips the copy when they match. OpenLara's loader has the check switched off (`if (same && 0)`); OpenJazz, Hurrican and SuperTux switch it on (A+B+C still forces the copy). | OpenJazz / Hurrican / SuperTux CDLOADER |
-| **Read-ahead streaming** of CD data. CMD 46 no longer seeks for every chunk: loads became 2.5× faster on the console in Jazz and Hurrican. | `stack/subcpu` (`STREAM`, on by default) |
+| **Read-ahead streaming** of CD data. CMD 46 no longer seeks for every chunk: loads became about 2.5× faster on the console in OpenJazz R7. | `stack/subcpu` (`STREAM`, on by default) |
 | **The slave SH2 as a worker.** A job struct in SDRAM, read cache-through, with a cache purge per job and the slave on its own stack. Only the master talks to the Sub-CPU. | Hurrican, OpenJazz |
 | **The Genesis VDP as a second picture.** The SH2 decides what changes; the 68000 copies it in vblank, reading the cart through the `0x900000` window, never the SH2's way. | OpenJazz REV, SuperTux REV, Sonic CD 2011 |
 | **A frozen, checked boot path.** `check_boot.py` compares md5s of every boot file before each build. | SuperTux REV |

@@ -18,9 +18,18 @@ int cd_cmd(uint16_t cmd)
     return MARS_SYS_COMM0 == 0;
 }
 
+static uint16_t last_status;                /* COMM12 is also the reply of CMD 46 and 61: put it back after */
+
 void cd_status(uint16_t code)
 {
+    last_status = code;
     COMM12_16 = code;
+}
+
+static int keep_status(int result)
+{
+    COMM12_16 = last_status;
+    return result;
 }
 
 uint32_t cd_open(int file)
@@ -37,7 +46,7 @@ int cd_load(int file)
     cd_music_stop();                        /* rule: no CD data reads while CD audio plays */
     uint32_t len = cd_open(file);
     if (len == 0)
-        return 0;
+        return keep_status(0);
     uint32_t chunks = (len + 32767) >> 15;
     for (uint32_t c = 0; c < chunks; c++)
     {
@@ -45,9 +54,9 @@ int cd_load(int file)
         MARS_SYS_COMM2 = (uint16_t)c;       /* bit 15 clear: the Sub-CPU reads it back and compares */
         COMM12_16 = 0xFFFF;
         if (!cd_cmd(CD_CMD_CHUNK_CART) || COMM12_16 != 0)
-            return 0;
+            return keep_status(0);
     }
-    return 1;                               /* read it at CART_SLOT(slot) cache-through, or clear the cache */
+    return keep_status(1);                               /* read it at CART_SLOT(slot) cache-through, or clear the cache */
 }
 
 uint16_t cd_pad(int sfx, int volume)
@@ -91,6 +100,6 @@ int cart_save(int piece, const uint16_t *words, int count)
     MARS_SYS_COMM2 = (uint16_t)piece;
     COMM12_16 = 0;
     if (!cd_cmd(CD_CMD_SAVE_PIECE))
-        return 0;
-    return COMM12_16 == 1;                  /* the 68000 wrote it and read it back */
+        return keep_status(0);
+    return keep_status(COMM12_16 == 1);     /* 1: the 68000 wrote it and read it back */
 }
