@@ -50,7 +50,8 @@ for code in Word RAM.
 
 ### 3. The Genesis 68000 becomes the listener (`hw_md.s`)
 
-1. It copies itself to `0xFF1000` and sets up the VDP (font, palette, display on).
+1. It copies itself to `0xFF1000` and sets up the VDP (font, palette). It then switches the display **off**
+   (`hw_md.s`, `OL-13`), so no boot text shows unless a game turns it on again (CMD 52).
 2. It installs `vblank_int`. Every frame that handler:
    - reads pads 1 and 2 into the Sega CD comm words;
    - counts ticks;
@@ -73,10 +74,12 @@ it. CDLOADER has its own CD boot table in `cdl_crt0.s`.
 
 ### 5. The handshake (COMM10)
 CDLOADER writes `0x0AAA`. The Sub-CPU answers `0x0BBB` after checking the cart. Each value stays in COMM10
-until the other side has read it, so the order does not matter.
+until the other side has read it, so the order does not matter. The Sub-CPU waits at most 180 ticks
+(about 3 s) for `0x0AAA`; then it stops (`SH2 NEVER SIGNALLED READY`, [09](09_ERROR_CODES.md)).
 
 ### 6. CDLOADER loads your game (`stack/sh2/cdloader_sh2.c`)
-Status codes appear in COMM12. With the diagnostic text on, the Sub-CPU shows them as `STATE:`.
+Status codes appear in COMM12. The Sub-CPU writes them as `STATE:` in its diagnostic text, which shows only
+once a game turns the Genesis display on. Every code is in [09](09_ERROR_CODES.md).
 
 | Code | Step |
 |---|---|
@@ -85,7 +88,7 @@ Status codes appear in COMM12. With the diagnostic text on, the Sub-CPU shows th
 | — | CMD 46 copies each 32 KB chunk into the cart at offset 0; the Sub-CPU reads every chunk back and compares it. |
 | `4C00`+n | Chunk n loaded |
 | `4D02` | All chunks loaded and verified |
-| `4D03` | The ROM header checks out: `SEGA` at `0x100`; at `0x3D4` the SDRAM image (source, destination, size ≤ 192 KB) and the SH2 entries and VBRs in SDRAM |
+| `4D03` | The ROM header checks out: `SEGA` at `0x100`; at `0x3D4` the SDRAM image (source, destination, size ≤ 192 KB); the two entries' top byte is `0x06` (SDRAM). The VBRs are not checked. |
 | `4D04` | The slave is parked in a small routine at the top of SDRAM (`0x2603C000`) |
 | `4D05` | Hand-over |
 | `4DE1` | Error: `GAME.32X` not on the disc |

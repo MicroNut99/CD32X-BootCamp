@@ -20,6 +20,11 @@
 | `0x0603DF00` | CDLOADER's info block | free |
 | up to `0x06040000` | | the stacks: Chilly's `crt0.s` puts the master at `0x0603F800` and the slave at `0x06040000` (2 KB for the slave: give it its own stack if it does real work, as Hurrican does) |
 
+**`.bss` is not checked by CDLOADER.** The 192 KB / 224 KB limits cover the SDRAM image (`.data`) only.
+Your `crt0.s` clears `.bss` at once. If `.bss` reaches `0x0603C000`, it overwrites the hand-over routine
+that the slave may still be running. Keep `.data` + `.bss` below `0x0603C000` (the stacks sit above it),
+and check `build/output.map`.
+
 ## The RAM cart (4 MB, battery-backed)
 
 **Who writes it.** Only the Genesis 68000, with RV = 1, at its `0x400000`–`0x7FFFFF` (Mega CD mode). The
@@ -39,6 +44,17 @@ ranges onto slots.
 | `0x3F0000`–`0x3FFFFF` | `0x023F0000` | the shared save area: 16 pieces of 4 KB | CMD 58 + 61 |
 
 Other file numbers load `IMAGEn.RAW` to slot n. Number 16 is `KOBOGFX.BIN`.
+
+- Slots 32 and up lie beyond the 4 MB cart: the address wraps.
+- The game file list may hold at most 100 names. A 101st would make number 200 + 0 mean both "level
+  file 100" and "resident file 0".
+
+`build.sh` refuses:
+
+- a `GAME.32X` over 512 KB;
+- a data file over 1984 KB.
+
+It warns about a data file over 1.5 MB, which can then only be loaded as 100 + n.
 
 ### The layouts of the existing games
 
@@ -82,7 +98,7 @@ named `GAME_BRAM_NAME`). Sonic CD 2011 saves there, and Hurrican keeps its high 
 reports that backup-RAM saves never worked on its console. Test both on yours.
 
 ## 8 / 16 MB paged carts
-These need the 16MB-PCB-CD32X board and a `CART=8` / `CART=16` build. The cart shows as two 2 MB windows.
+These need an 8 / 16 MB paged cart board and a `CART=8` / `CART=16` build. The cart shows as two 2 MB windows.
 
 - **Window 0** (`0x000000`–`0x1FFFFF`): never paged. Your ROM lives here.
 - **Window 1** (`0x200000`–`0x3FFFFF`): pages 1–7, picked with CMD 68. The page register is `0xA130F2`;

@@ -7,7 +7,8 @@
 
 Every source file of stack/subcpu and stack/sh2 is compared with stack/BOOT_FILES.md5.  Two things may
 differ without failing the check:
-  - stack/subcpu/game_files.h  (your file names: not part of the hash list)
+  - stack/subcpu/game_files.h  (your file names: not part of the hash list, but it may hold only
+                                #defines and lists of 8.3 file names - it is compiled into main.c)
   - the diagnostic switches in stack/subcpu/main.c (KOBO_DIAG_TEXT, KOBO_BOOT_TEXT): their value is
     ignored, so switching the boot text on or off is allowed.
 The idea is SuperTux CD32X REV's tools/check_boot.py.
@@ -43,7 +44,35 @@ def digest(rel):
     return hashlib.md5(data).hexdigest()
 
 
+GAME_FILES_OK = re.compile(r'^(#ifndef GAME_FILES_H|#define GAME_FILES_H|#endif|#define GAME_[A-Z_]+\s+("[^"]*"|\d+)'
+                           r'|static const char \*const game_(data|movie)_files\[\] = \{|"[A-Z0-9_]{1,8}\.[A-Z0-9_]{1,3}",|\};)$')
+
+
+def check_game_files():
+    """game_files.h is compiled into the Sub-CPU program: it may hold names and numbers, nothing else."""
+    bad = []
+    text = open(os.path.join(ROOT, "stack/subcpu/game_files.h")).read()
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)          # comments
+    for n, line in enumerate(text.splitlines(), 1):
+        line = line.strip()
+        if line and not GAME_FILES_OK.match(line):
+            bad.append(line)
+    m = re.search(r'#define GAME_BRAM_NAME\s+"([^"]*)"', text)
+    if not m or not re.fullmatch(r"[A-Z0-9_]{11}", m.group(1)):
+        bad.append("GAME_BRAM_NAME must be exactly 11 characters A-Z 0-9 _")
+    data = re.search(r"game_data_files\[\] = \{(.*?)\};", text, re.S)
+    if data and len(re.findall(r'"', data.group(1))) // 2 > 100:
+        bad.append("game_data_files: at most 100 names (200 + n would overlap 100 + n)")
+    return bad
+
+
 def main():
+    gf = check_game_files()
+    if gf:
+        print("check_boot: stack/subcpu/game_files.h may hold only #defines and lists of 8.3 file names:")
+        for line in gf:
+            print("  " + line)
+        return 1
     now = {rel: digest(rel) for rel in files()}
     if "--update" in sys.argv:
         with open(LIST, "w") as f:

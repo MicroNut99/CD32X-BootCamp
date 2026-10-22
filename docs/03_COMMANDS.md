@@ -38,27 +38,52 @@ status, is the command ledger in https://github.com/MicroNut99/docs: the Kobo PD
 | CMD | Name | Arguments | Reply | Notes |
 |---|---|---|---|---|
 | **38** | open file | COMM2 = file number (`game_files.h`) | COMM8L = length, 0 = not on the disc | Also sets the cart slot for the next CMD 46: file n → slot n × 128 KB, or the slot `game_files.h` gives it |
-| **46** | chunk → cart | COMM2 = chunk (32 KB); bit 15 = skip the read-back. COMM8L = the file's length | COMM12 = 0 ok, 1 bad | The 68000 writes the cart with RV = 1; the SH2s' cart reads wait meanwhile. Clear caches afterwards. `FMVRING`: bit 14 = ring mode (movies), reply \| 0x100. `CARTW`: word copy (3× faster). |
+| **46** | chunk → cart | COMM2 = chunk (32 KB); bit 15 = skip the read-back. COMM8L = the file's length | COMM12 = 0 ok, 1 bad | The 68000 writes the cart with RV = 1; the SH2s' cart reads wait meanwhile. Clear caches afterwards. Switches (off by default here, emulation-tested only): `FMVRING` bit 14 = ring mode (movies), reply \| 0x100; `CARTW` word copy (3× faster); `STREAM` read-ahead. |
 | **47** | chunk compare | as 46 | COMM12 = 0 same, 1 different | Nothing is written; used for "is it already in the cart?" |
 | **48** | pad (+ sound effect) | COMM0 high byte = PCM effect (0 = none); COMM2 = its volume | COMM8 = pad 1 (`SEGA_CTRL_*`, `0xF000` = no pad); COMM10 = the 68000's tick counter | Answered first in the Sub-CPU's loop. Send it once a frame. |
 | **45** | play CD track | COMM2 = track; bit 15 = play once (else repeat) | — | Disc track N. Rule: no CD data reads while it plays. |
 | **54** | stop CD audio | — | — | Send it before any CD data read (`cd_load` does) |
 | **53** | load PCM effects | COMM2 = n: `SFXnn.BIN` | COMM12 = number of effects (0 = failed) | Packs as made by OpenLara's `make_sfx_packs.py` (8-bit samples, a table) |
 | **52** | Genesis display | COMM2 = 1 on / 0 off | — | Off: only the 32X picture shows. CDLOADER switches it off. |
-| **51** | file chunk → frame buffer | COMM2 = chunk | — | The SH2 first gives the frame buffer to the 68000 (FM = 0). Chunk c goes to byte `0x200 + c × 32 KB`. Used for `IMAGE.RAW`. |
+| **51** | file chunk → frame buffer | COMM2 = chunk | COMM12 + COMM14 overwritten (chunk, sectors) | The SH2 first gives the frame buffer to the 68000 (FM = 0). Chunk c goes to byte `0x200 + c × 32 KB`. Used for `IMAGE.RAW`. Post your status again after it. |
 | **50** | file chunk → frame buffer (16 KB, off-screen) | COMM2 = chunk | — | Kobo's no-cart mode; not needed with a cart |
 | **56** | backup RAM: load | — | COMM12 = 1 ok, 0 no file | Fills the Sub-CPU's 4 KB buffer from the backup-RAM file `GAME_BRAM_NAME` |
 | **57** | buffer: get word | COMM2 = word 0–2047 | COMM8 = word | |
 | **58** | buffer: put word | COMM2 = word 0–2047, COMM8 = word | — | Fills the buffer for 59 or 61 |
 | **59** | backup RAM: save | — | COMM12 = 1 ok | Writes the 4 KB buffer as a backup-RAM file (64 blocks: half the internal backup RAM). SuperTux reports that backup-RAM saving never worked on its console; cart saves (61) did. |
-| **61** | buffer → cart save piece | COMM2 = piece 0–15 | COMM12 = 1 ok | Cart `0x3F0000 + piece × 4 KB`, written by the 68000 and read back. `SLOTS`: bit 8 = OpenLara's slot area at `0x060000` (reply `0x101`); leave it alone unless your layout is OpenLara's. |
+| **61** | buffer → cart save piece | COMM2 = piece 0–15 | COMM12 = 1 ok | Cart `0x3F0000 + piece × 4 KB`, written by the 68000 and read back. Only the low 4 bits count. (`SLOTS=1`, off by default: bit 8 writes OpenLara's slot area at `0x060000`, which is inside this kit's ROM area.) |
 | **44** | (clear Genesis planes) | — | — | Answered; does nothing in this build |
 | **60** | 68000 → cartridge code | — | — | The D32XR experiment: hands the 68000 to the ROM's Genesis code and ends the CD stack. **Never** use it with this loader. |
 | **68** | cart page, window 1 | COMM2 = page 1–7 | COMM12 = 1 done, 0 refused | Only in `CART=8` / `CART=16` builds, for the 8/16 MB paged cart. Clear caches after it. |
 
-**Free numbers.** On this stack: 39–43, 49, 55, 62–67 (SuperTux uses them), 69–79, 81 and up. Before you
-take one, check the ledger's list. A number must never mean two things on any stack, and the command
-must sit behind a build switch in `main.c`, which is compiled with **HWFLAGS** (not CCFLAGS).
+**Free numbers.** Free on every stack, per the ledger's list:
+
+- 39–43, 49, 55;
+- 72–79, and 81 and up.
+
+Do not take these: 62–67 (SuperTux REV), 67 and 69–71 (OpenJazz REV), 80 (Sonic CD 2011).
+
+A number must never mean two things on any stack. Your command must sit behind a build switch in
+`main.c`, which is compiled with **HWFLAGS** (not CCFLAGS).
+
+**A number this Sub-CPU does not have is never answered.** There is no catch-all in `main.c`, so COMM0
+stays set and the SH2's wait times out (hello: error `4EE4`, [09](09_ERROR_CODES.md)).
+
+## The PCM pack (`SFXnn.BIN`, CMD 53)
+Loaded whole into the PCM chip's 64 KB wave RAM. No tool for it ships with this kit. OpenLara's
+`tools/make_sfx_packs.py` writes it; the reader is `pcm_load()` in `stack/subcpu/main.c`.
+
+| Offset | Size | What |
+|---|---|---|
+| 0 | 4 | `KSFX` |
+| 4 | 2 | number of effects (big-endian, at most 31) |
+| 6 | 2 | size of the wave image in bytes (0 = 65536) |
+| 8 + 8 × i | 8 | effect i + 1: start page (`ST`, the high byte of the wave address), volume (`ENV`), frequency step (`FD`, 2 bytes), loop address (2 bytes), length (2 bytes) |
+| 256 | image | the wave RAM image: the PCM chip's sample format (8-bit sign-magnitude; `0xFF` = the loop marker). At most 48 sectors of the file are read. |
+| 256 + image | 256 | optional: a map from the game's sample number to effect number |
+
+Play an effect with CMD 48: the high byte of COMM0 is the effect number (1 … n), COMM2 is its volume (1–64,
+64 = full). Effect 1 always gets channel 8; the others take turns on channels 1–7.
 
 ## Status codes (COMM12)
 These are conventions the existing games share. Show your own as you like, but keep `4B10`.
@@ -90,13 +115,15 @@ disabled since.
 
 ## Clashes between the stacks
 
-| CMD | This stack (OpenLara path) | Kobo path (Sonic CD 2011) | Cartridge stack (OpenTyrian) |
-|---|---|---|---|
-| 46 | chunk → cart; bit 15 = no read-back | 4 forms: `0x00nn` chunk, `0x01nn`–`0x03nn` runs of up to 4 chunks, `0xF8nn` cart page, `0xF0nn` slot override | — |
-| 47 | chunk compare | cart → frame buffer | — |
-| 60–63 | 60 D32XR start, 61 save piece, 62–63 Genesis picture (SuperTux) | — | CD find, CD read, SRAM read / write |
-| 68 | cart page (window 1) | act file → Genesis planes | — |
-| 80 | — | the graphics chip's stamp floor | — |
+| CMD | This stack (OpenLara path) | Its forks (OpenJazz REV, SuperTux REV) | Kobo path (Sonic CD 2011) | Cartridge stack (OpenTyrian) |
+|---|---|---|---|---|
+| 46 | chunk → cart; bit 15 = no read-back | same | 4 forms: `0x00nn` chunk, `0x01nn`–`0x03nn` runs of up to 4 chunks, `0xF8nn` cart page, `0xF0nn` slot override | — |
+| 47 | chunk compare | same | cart → frame buffer | — |
+| 60–63 | 60 D32XR start, 61 save piece | 62–66 Genesis VDP from the cart (SuperTux) | — | CD find, CD read, SRAM read / write |
+| 67 | — | **two meanings:** OpenJazz = Genesis plane (load, start, off, one map cell); SuperTux = map columns into VRAM | — | — |
+| 68 | cart page (window 1) | same | act file → Genesis planes | — |
+| 69–71 | — | OpenJazz: 69 unpack LZ, 70 disc stamp, 71 bonus floor | — | — |
+| 80 | — | — | the graphics chip's stamp floor | — |
 
 **File numbers clash too.** CMD 38 numbers 200 and up are OpenLara's resident files, but `OJnnn.PAK` in
 OpenJazz, Hurrican and SuperTux. Sonic uses its own numbering. A Sub-CPU program belongs to one game.

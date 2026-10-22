@@ -3,7 +3,7 @@ a5399fd233321a10693ea68b791f5ba8  stack/sh2/cdl_crt0.s
 122246bcd7c9050f5a661fbff63b471e  stack/sh2/cdloader.ld
 10eb72e99064e553c4880a1be385842c  stack/sh2/cdloader_sh2.c
 fadfd0f3996194d154d292ec1ca5fcca  stack/subcpu/LICENSE.md
-ddbdb1f2da5d1d2d9c453d42ac16440a  stack/subcpu/Makefile
+bfe988a12aa9e6f8b74eccc7feca65d2  stack/subcpu/Makefile
 2a50ec97332a94aec01e464eff90c40e  stack/subcpu/cd.s
 479eb6d18d2d8a188993bda2db5e6904  stack/subcpu/cdfs.s
 b9c91b5d2ae3b111f901f4822d274130  stack/subcpu/crt.s

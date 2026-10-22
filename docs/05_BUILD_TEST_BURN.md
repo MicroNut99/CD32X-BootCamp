@@ -19,7 +19,7 @@ GAME=mygame DISC_NAME=MyGame bash build.sh
 
 | Step | What happens | Stops when |
 |---|---|---|
-| 0 | `tools/check_boot.py`: the stack's files against `stack/BOOT_FILES.md5` | a stack file changed (only `game_files.h` and the two diagnostic switches may differ) |
+| 0 | `tools/check_boot.py`: the stack's files against `stack/BOOT_FILES.md5` | a stack file changed (only `game_files.h` and the two diagnostic switches may differ). Your game's `crt0.s` and `src-md/` are not checked: keep their start-up code as in `hello/`. |
 | 1 | `make -C <game>` builds `<game>.32x`. `tools/prep_rom.py` then checks the header as CDLOADER will, writes `CDB2` at `0x3BC`, trims the padding and writes `stack/subcpu/ROMS/GAME.32X`. | not a 32X ROM; SDRAM image too big; entries not in SDRAM |
 | 2 | `splash.png` → `IMAGE.RAW` (320 × 224, 256 colours) | |
 | 3 | `<game>/cd/*` → `ROMS/` | |
@@ -27,24 +27,33 @@ GAME=mygame DISC_NAME=MyGame bash build.sh
 | 5 | `APP.BIN` + `genisoimage` → `CDROMPlayer.iso` | CDLOADER or `GAME.32X` missing from the image |
 | 6 | the ISO padded to at least 600 sectors, then `make_mixed_cd2.py` → `disc/<name>.cue/.bin` with `music/Track*.wav` as tracks 2… (with no music, a 4 s test tone is made) | |
 
-**Sub-CPU build switches** (`make cd` in `stack/subcpu`, all on by default; every one is a HWFLAGS switch
-in `main.c`):
+**Sub-CPU build switches.** These are set on `build.sh` or on `make cd` in `stack/subcpu`. Each one is a
+HWFLAGS switch in `main.c`. **All are off by default**: with all of them off, the Sub-CPU code is the code
+OpenLara ran on the console. Each one has been tested in emulation only.
 
 | Switch | What it does |
 |---|---|
-| `STREAM=0` | Turns off the CD read-ahead for CMD 46 / 47. |
-| `CARTW=0` | Copies to the cart in bytes instead of words. |
-| `FMVRING=0` | Turns off movie ring mode. |
-| `SLOTS=0` | Turns off OpenLara's slot area in CMD 61. |
-| `CART=8` / `CART=16` | Builds the paged-cart test build with CMD 68. |
+| `STREAM=1` | CD read-ahead for CMD 46 / 47: loads about 2.5× faster in emulation |
+| `CARTW=1` | Copies to the cart in words instead of bytes (about 3× faster) |
+| `FMVRING=1` | Movie ring mode in CMD 46 (OpenLara's streaming movies) |
+| `SLOTS=1` | CMD 61 bit 8 writes OpenLara's slot area at `0x060000`. That is inside this kit's ROM area: leave it off. |
+| `CART=8` / `CART=16` | The paged-cart test build, with CMD 68 |
+
+**Other build options:**
+
+| Option | What it does |
+|---|---|
+| `REGION=EU` / `JP` | The toolchain's EU / JP boot block. The default is US, and only US is tested. |
+| `DIAG=1` | The diagnostic disc ([09](09_ERROR_CODES.md)) |
+
+**`stack/BOOT_FILES.md5`** holds md5s of the files with CRLF turned into LF and the two diagnostic switches
+masked. Check it with `tools/check_boot.py`, not `md5sum -c`.
 
 ## 3. Test in emulation: ares CD32X
 
-The ares CD32X fork (MicroNut99/ares_android, ares v148) adds the battery-backed RAM cart, including the
+The ares CD32X build (ares v148 with a RAM cart) adds the battery-backed RAM cart, including the
 8 / 16 MB paged board. It is how every boot-stack change, and every new game, is checked before a burn.
 
-> Note: ares_android is private at the time of writing. Ask MicroNut99 for the Windows build or the
-> Android APK.
 
 1. **Settings → Firmware → Mega CD**: your BIOS.
 2. **Settings → Options → Mega Drive Settings**: *Mega CD 32X: RAM cart* is on. It defaults to the 16 MB
@@ -55,7 +64,7 @@ The cart is kept like the real one (`Systems\RAM Cart 16 MB-<n>.ram`, nine carts
 "power-off". Delete the file to wipe the cart. On Android, *Show fps and COMM12 STATE* shows your status
 codes on the screen.
 
-**Scripted runs.** `ares-headless` is in the same repository (`build-headless/`):
+**Scripted runs.** The ares CD32X build comes with a headless runner, `ares-headless`:
 
 ```
 ares-headless --game disc/BootCamp.cue --machine cd32x --bios-us us.bin \
@@ -75,8 +84,8 @@ It prints the COMM registers once a second, so you can watch COMM12 go `4D01` �
 The other tools:
 
 - **Kega Fusion**: boots only to the boot picture (no RAM cart).
-- **Sonic CD 2011's `tools/sh2emu`**: checks that no SH2 touches the cart while RV = 1. Run it before
-  burning anything that changes the copy timing.
+- **An SH2-side checker** (Sonic CD 2011 uses one): checks that no SH2 touches the cart while RV = 1. Worth
+  having before burning anything that changes the copy timing.
 
 **What hello does in ares** (4 MB cart):
 
@@ -100,24 +109,28 @@ The other tools:
 4. **Every boot** copies the ROM into the cart while the boot picture shows (a few seconds; this loader's quick check is off).
 
 ## 5. When it does not boot
-Turn the diagnostic text on:
 
-1. In `stack/subcpu/main.c`, set `#define KOBO_DIAG_TEXT 1`. Set `KOBO_BOOT_TEXT 1` for the 32X's
-   start-up messages too.
-2. Rebuild. `check_boot.py` allows these two switches.
+1. **Look up what the screen shows** in [09](09_ERROR_CODES.md). It covers:
+   - the screen you are stuck on;
+   - the loader's codes;
+   - hello's red error box: the code, the `BC-Ex` tag, the COMM registers.
+2. **Build the diagnostic disc** and burn it:
 
-The green `STATE:` line then shows COMM12, and pad C hides or shows the text. See also
-`DIAG_TEXT_HOWTO.md` in MicroNut99/docs.
+   ```
+   DIAG=1 DISC_NAME=BootCampDiag bash build.sh
+   ```
 
-| Last thing seen | Where it stopped | Look at |
-|---|---|---|
-| Black screen, no text, no boot picture | before CDLOADER: the boot block, `APP.BIN`, or the 32X did not wake up. (No `IMAGE.RAW` also leaves the screen black, but `STATE:` still shows.) | Is the boot stack unchanged (`check_boot.py`)? Is the 32X on? Is the disc burnt as `.cue/.bin`? |
-| Black, no `STATE:` at all | the handshake (`0x0AAA` / `0x0BBB`) or CMD 52 never finished | the boot stack; the 32X |
-| Boot picture, then it stops (`4D06`, `4C00`+n or `4DE2`) | the ROM copy into the cart | Is the cart seated, and is it the RAM cart? A stock emulator has no cart and stops here. |
-| `4DE1` | `GAME.32X` not on the disc | `game_files.h` `GAME_ROM_NAME`; step 5 of the build |
-| `4DE2` | a chunk read back wrong | the cart or its battery; the disc |
-| `4DE3` | not a 32X ROM, or a bad header | `prep_rom.py` output; `crt0.s` first in the link |
-| `4DE4` | the slave did not park | timing. Report it: this has not been seen with this loader. |
-| `4D05`, then nothing | your `crt0.s` / `main()` | your entries at `0x3E0`; `.data` size; a wait on COMM that never comes |
-| your own code, then a hang | a command that was never answered | a timeout on every wait; one writer per COMM register; music stopped before a load ([06](06_HARDWARE_RULES.md)) |
-| `4B10` and a picture | it runs | |
+   It sets the stack's own switches `KOBO_DIAG_TEXT` and `KOBO_BOOT_TEXT` for that build only; `main.c` is
+   put back afterwards. hello then starts on the Sub-CPU's green text and the 32X's white start-up lines:
+   - every boot step;
+   - every file opened;
+   - every cart chunk, with its address;
+   - the cart probe;
+   - any 68000 crash.
+
+   **B+C** switches between that text and hello's screen. Each row is explained in [09](09_ERROR_CODES.md) §5.
+3. **A stop before the game starts shows no text, even on the diagnostic disc.** On this stack the
+   Genesis display stays off until a game turns it on (see [09](09_ERROR_CODES.md) §1). Run the same disc in
+   ares and read COMM12 there; the boot picture and the screen symptoms narrow it down.
+
+See also `DIAG_TEXT_HOWTO.md` in MicroNut99/docs.

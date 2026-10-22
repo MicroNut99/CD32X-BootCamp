@@ -12,11 +12,19 @@
  *   - CD audio (CMD 45 / 54): A plays track 2, B stops it
  *   - a save in the cart (CMD 58 + 61): the boot counter, START saves it again
  *   - status codes in COMM12 (4Exx while starting, 4B10 = running)
+ *   - an error box: any failed CD service shows its code (docs/09_ERROR_CODES.md) on the screen
  */
 #include <stdint.h>
 #include "32x.h"
 #include "cdapi.h"
 #include "font8x8.h"
+
+/* HELLO_DIAG_TEXT (build.sh DIAG=1 -> make DIAG=1): the diagnostic disc.  hello starts on the Sub-CPU's
+   green text (the boot history: STATE, files opened, cart chunks and addresses) and B+C switches
+   between that text and hello's own screen.  0: the Genesis display stays off (release). */
+#ifndef HELLO_DIAG_TEXT
+#define HELLO_DIAG_TEXT 0
+#endif
 
 #define SAVE_PIECE  12                      /* a cart save piece: check the ledger before you take one */
 #define SAVE_MAGIC  0x4243                  /* "BC" */
@@ -109,6 +117,66 @@ static void flip(void)                      /* show what was drawn at the next v
     while ((MARS_VDP_FBCTL & MARS_VDP_FS) == cur) { }
 }
 
+static void hexn(char *d, uint32_t v, int n)    /* n hex digits */
+{
+    for (int i = 0; i < n; i++)
+        d[i] = "0123456789ABCDEF"[(v >> (4 * (n - 1 - i))) & 15];
+    d[n] = 0;
+}
+
+static const char *error_text(uint16_t code)
+{
+    switch (code)
+    {
+    case CD_ERR_SAVE:      return "CART SAVE FAILED";
+    case CD_ERR_NO_FILE:   return "FILE NOT ON THE DISC";
+    case CD_ERR_CHUNK:     return "FILE DID NOT REACH CART";
+    case CD_ERR_NO_ANSWER: return "SEGA CD DID NOT ANSWER";
+    default:               return "UNKNOWN ERROR";
+    }
+}
+
+/* the error box: the code, where it was raised (the BC-Ex tag in cdapi.c), what was asked, and the
+   COMM registers as they were at that moment.  Every number is in docs/09_ERROR_CODES.md. */
+static void error_box(void)
+{
+    char b[12];
+    const CdError *e = &cd_error;
+    box(4, 140, 312, 78, C_RED);
+    box(6, 142, 308, 74, C_BLACK);
+    hex4(b, e->code);
+    text(8, 145, "ERROR", C_RED);  text(56, 145, b, C_YELLOW);
+    text(104, 145, error_text(e->code), C_WHITE);
+    text(8, 156, e->tag ? e->tag : "?", C_CYAN);
+    text(8, 167, "CMD", C_GREY);  dec(b, e->cmd);  text(40, 167, b, C_WHITE);
+    switch (e->code)
+    {
+    case CD_ERR_SAVE:                       /* the piece and where it lives in the cart */
+        text(72, 167, "PIECE", C_GREY); dec(b, e->arg); text(120, 167, b, C_WHITE);
+        text(152, 167, "CART", C_GREY); hexn(b, 0x3F0000u + ((uint32_t)e->arg << 12), 6); text(192, 167, b, C_WHITE);
+        break;
+    case CD_ERR_CHUNK:                      /* the file, the chunk, its offset in the file */
+        text(72, 167, "FILE", C_GREY);  dec(b, e->file); text(112, 167, b, C_WHITE);
+        text(152, 167, "CHUNK", C_GREY); dec(b, e->arg); text(200, 167, b, C_WHITE);
+        text(232, 167, "+", C_GREY);    hexn(b, (uint32_t)e->arg << 15, 6); text(240, 167, b, C_WHITE);
+        break;
+    case CD_ERR_NO_FILE:
+        text(72, 167, "FILE", C_GREY);  dec(b, e->arg); text(112, 167, b, C_WHITE);
+        break;
+    default:
+        text(72, 167, "COMM2", C_GREY); hex4(b, e->arg); text(120, 167, b, C_WHITE);
+        break;
+    }
+    static const char *const name[8] = { "C0", "C2", "C4", "C6", "C8", "CA", "CC", "CE" };
+    for (int i = 0; i < 8; i++)             /* COMM0 ... COMM14 (CE = the Sub-CPU's heartbeat) */
+    {
+        int x = 8 + (i & 3) * 64, y = 180 + (i >> 2) * 11;
+        text(x, y, name[i], C_GREY);
+        hex4(b, e->comm[i]); text(x + 24, y, b, C_WHITE);
+    }
+    text(8, 205, "LOOK UP: DOCS 09 ERROR CODES", C_GREEN);
+}
+
 /* the first line of a text file in the cart (the files are plain text, see disc/data) */
 static void cart_line(char *d, uint32_t addr, int max)
 {
@@ -126,7 +194,8 @@ int main(void)
     uint16_t prev = 0xFFFF;                 /* buttons held at start don't count */
 
     cd_status(0x4E00);                      /* 4E00: hello started */
-    cd_genesis_display(0);                  /* only the 32X picture */
+    int view_text = HELLO_DIAG_TEXT;        /* 1: the Sub-CPU's green text shows (diagnostic disc) */
+    cd_genesis_display(view_text);          /* 0: only the 32X picture */
 
     MARS_VDP_DISPMODE = MARS_224_LINES | MARS_VDP_MODE_256;
     palette();
@@ -139,12 +208,15 @@ int main(void)
     boots++;
     uint16_t words[2] = { SAVE_MAGIC, (uint16_t)boots };
     int saved = cart_save(SAVE_PIECE, words, 2);
-    cd_status(saved ? 0x4E01 : 0x4EE1);     /* 4E01 saved, 4EE1 the save failed */
+    if (saved)
+        cd_status(0x4E01);                  /* 4E01 saved (a failure posts 4EE1 itself) */
 
     /* a data file from the disc into the cart's level slot (file 100 = LEVEL00.BIN, slot 16) */
     if (cd_load(100))
         cart_line(file_text, CART_SLOT(16), 39);
-    cd_status(0x4B10);                      /* 4B10: running */
+    uint16_t shown = cd_error.code;         /* an error code stays in COMM12 while its box shows */
+    if (!shown)
+        cd_status(0x4B10);                  /* 4B10: running */
 
     while (1)
     {
@@ -161,6 +233,13 @@ int main(void)
         if (y < 140) y = 140;
         if (y > 208) y = 208;
 
+        int bc = SEGA_CTRL_B | SEGA_CTRL_C;
+        if (HELLO_DIAG_TEXT && (pad & bc) == bc && (hit & bc))
+        {
+            view_text ^= 1;                 /* diagnostic disc: B+C = green text / hello's screen */
+            cd_genesis_display(view_text);
+            hit = 0;
+        }
         if (hit & SEGA_CTRL_A) { cd_music_play(2, 0); music = 1; }
         if (hit & SEGA_CTRL_B) { cd_music_stop(); music = 0; }
         if (hit & SEGA_CTRL_C)
@@ -177,7 +256,19 @@ int main(void)
             saved = cart_save(SAVE_PIECE, words, 2);
         }
 
-        clear(C_BLACK);
+        if (!cd_error.code && shown)
+            cd_status(0x4B10);              /* the error went away (the action worked again) */
+        shown = cd_error.code;
+
+        clear(C_BLACK);                     /* colour 0x0000: see-through, the Genesis text shows there */
+        if (view_text)
+        {
+            text(8, 216, "B+C: HELLO SCREEN", C_YELLOW);
+            if (cd_error.code)
+                error_box();
+            flip();
+            continue;
+        }
         text(64, 16, "CD32X BOOTCAMP - HELLO", C_YELLOW);
         box(16, 30, 288, 2, C_BLUE);
         dec(buf, boots);
@@ -193,6 +284,8 @@ int main(void)
         text(16, 120, "D-PAD MOVES THE BOX", C_GREEN);
         box(0, 136, 320, 1, C_GREY);
         box(x, y, 16, 16, C_RED);
+        if (cd_error.code)
+            error_box();
         flip();
     }
     return 0;

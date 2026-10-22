@@ -2,15 +2,18 @@
 disc/
 stack/subcpu/ROMS/
 stack/subcpu/cd/
+stack/subcpu/*.bin
+stack/subcpu/*.iso
+stack/subcpu/main.c.diagsave
+stack/sh2/*.32x
+stack/sh2/*.BIN
 *.o
 *.elf
 *.map
-*.bin
-*.iso
+*/build/
+*/src-md/*.bin
 *.32x
-*.32X
-hello/build/
-stack/subcpu/temp.bin
 # made by build.sh when a game has no music
 hello/music/Track02.wav
 __pycache__/
+# (data files in <game>/cd/ are NOT ignored, whatever their names)

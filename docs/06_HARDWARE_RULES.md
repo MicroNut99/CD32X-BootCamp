@@ -62,7 +62,10 @@ you burn.
     them). The drive cannot do both. The load fails or hangs.
 16. **Never restart a CD track every frame.** It stays silent while the drive spins up again.
     (OpenLara)
-17. **After CMD 51, open the file again before CMD 46.** CMD 38 keeps its state in COMM8. (OpenJazz)
+17. **Open the file again before CMD 46, and write its length into COMM8 for every chunk.** CMD 46 reads
+    from the file the **last** CMD 38 opened (the Sub-CPU keeps its position and length). It takes the
+    length from COMM8, which other commands' replies overwrite. So after the boot picture (CMD 38 file 0
+    + CMD 51), reopen your file. (OpenJazz)
 18. **Word RAM in 2M mode: the Sub-CPU must not swap banks.** Its next Word RAM access hangs. (Sonic CD
     2011)
 

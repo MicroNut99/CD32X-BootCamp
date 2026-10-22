@@ -9,7 +9,6 @@
 | [MicroNut99/OpenJazzCD32X-REV](https://github.com/MicroNut99/OpenJazzCD32X-REV) | `79b9cf0` (R11) | `cd32x/subcpu/main.c` (cached directory, streaming, CMD 67–71); `docs/GENESIS_PLANE.md`; `port/pack.h` (cart layout) |
 | [MicroNut99/HurricanCD32X](https://github.com/MicroNut99/HurricanCD32X) | `b70770a` | The slave worker (`port/plat_mars.c`), the PC host tests, music from IT modules |
 | [MicroNut99/SuperTuxCD32X_REV](https://github.com/MicroNut99/SuperTuxCD32X_REV) | `9f3fde6` | `tools/check_boot.py` + `docs/BOOT_FILES.md5`; CMD 62–67 (Genesis VDP); 16 MB preload |
-| MicroNut99/Sonic2011CD32X *(private)* | `23d09ca` (R5E) | `cd32x/sh2_engboot.c` (the resident loader), `cd32x/kobo/hw_md.s` (`sgb_*`), `tools/sh2emu` |
 
 ## The documents: [MicroNut99/docs](https://github.com/MicroNut99/docs)
 
@@ -39,8 +38,6 @@
 | [OpenJazzCD32X](https://github.com/MicroNut99/OpenJazzCD32X), [SuperTuxCD32X](https://github.com/MicroNut99/SuperTuxCD32X) | The earlier versions of the REV repositories |
 | [OpenTyrianCD32X](https://github.com/MicroNut99/OpenTyrianCD32X) | The cartridge + CD architecture |
 | [MD-32X-RAM-Cart-32Bit](https://github.com/MicroNut99/MD-32X-RAM-Cart-32Bit) | The RAM cart hardware |
-| 16MB-PCB-CD32X *(private)* | The 8 / 16 MB paged cart board |
-| ares_android *(private)* | ares CD32X: the RAM cart, the paged board, `ares-headless`; Windows and Android builds |
 | [Sonic32XPlus1](https://github.com/MicroNut99/Sonic32XPlus1), [Sonic32XPlus1-RealHardware](https://github.com/MicroNut99/Sonic32XPlus1-RealHardware), [BlakeStone32X](https://github.com/MicroNut99/BlakeStone32X), [AnotherWorld32X](https://github.com/MicroNut99/AnotherWorld32X), [VitualRacing32X](https://github.com/MicroNut99/VitualRacing32X) | 32X cartridge projects (no CD) |
 
 ## Outside

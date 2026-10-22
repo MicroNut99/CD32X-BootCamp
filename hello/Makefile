@@ -17,6 +17,9 @@ CC_VER  := $(shell $(SHCC) -dumpversion)
 LIBPATH  = -L$(SHROOT)/sh-elf/lib -L$(SHROOT)/sh-elf/lib/gcc/sh-elf/$(CC_VER) -L$(SHROOT)/sh-elf/sh-elf/lib
 INCPATH  = -Isrc -I$(SHROOT)/sh-elf/include -I$(SHROOT)/sh-elf/sh-elf/include
 CCFLAGS  = -D__32X__ -m2 -mb -O2 -Wall -c -fomit-frame-pointer -std=gnu99
+# DIAG=1: the diagnostic disc (build.sh DIAG=1): hello starts on the Sub-CPU's green text
+DIAG    ?= 0
+CCFLAGS += -DHELLO_DIAG_TEXT=$(DIAG)
 LDFLAGS  = -T $(SHROOT)/ldscripts/mars.ld -Wl,-Map=$(BUILD)/output.map -nostdlib
 ASFLAGS  = --big
 LIBS     = $(LIBPATH) -lc -lgcc -lgcc-Os-4-200 -lnosys

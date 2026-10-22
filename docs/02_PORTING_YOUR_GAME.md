@@ -54,9 +54,13 @@ instead of after a burn.
    `0x3F0000`). Check the ownership table in the command ledger (MicroNut99/docs,
    `CD32X_COMMAND_LEDGER_ADDITIONS.md` §5). Free as of Oct 2026: 11, 12. Piece 15 is test scratch.
 7. **Music:** `mygame/music/Track02.wav`, `Track03.wav`, … (44.1 kHz 16-bit stereo). Disc track N = CMD 45 N.
-8. **Post status codes** in COMM12 (`cd_status`) at each start-up step, and `0x4B10` once running. On a
-   console with the diagnostic text on, they are your only debugger.
-9. **Put a timeout on every command wait** (`cd_cmd` does). An unanswered command looks like a hang.
+8. **Post status codes** in COMM12 (`cd_status`) at each start-up step, and `0x4B10` once running.
+   - Give your game its own range, and list it as hello's are listed in [09](09_ERROR_CODES.md).
+   - Keep hello's error box, or show `cd_error` your own way. On a console, the code, the `BC-Ex` tag and
+     the COMM registers are your debugger.
+   - Keep the diagnostic view too: `DIAG=1` shows the Sub-CPU's boot history on screen.
+9. **Put a timeout on every command wait** (`cd_cmd` does: 10 s by the vertical blank counter `gTicks`,
+   which your game must count). An unanswered command looks like a hang.
 10. **Stop the music before any CD data read.** `cd_load` does it. The drive cannot read data and play
     audio at once.
 11. **Clear the caches after cart writes.** The 68000 writes the cart behind the SH2 caches: read
@@ -69,7 +73,7 @@ instead of after a burn.
 |---|---|
 | **Resident data + one level slot.** Load a pack once into the resident slot and keep it across power-off. Check its length and checksum at start and reload only when it is missing; A+B+C held at start forces a reload. | OpenLara (Caves), Jazz, Hurrican |
 | **Quick check of the ROM.** CDLOADER compares the first, middle and last chunks with CMD 47 and skips the copy when they match. OpenLara's loader has the check switched off (`if (same && 0)`); OpenJazz, Hurrican and SuperTux switch it on (A+B+C still forces the copy). | OpenJazz / Hurrican / SuperTux CDLOADER |
-| **Read-ahead streaming** of CD data. CMD 46 no longer seeks for every chunk: loads became about 2.5× faster on the console in OpenJazz R7. | `stack/subcpu` (`STREAM`, on by default) |
+| **Read-ahead streaming** of CD data. CMD 46 no longer seeks for every chunk: loads about 2.5× faster, measured in emulation (OpenLara, OpenJazz R7). | `stack/subcpu` (`STREAM=1`; off by default here until it has run on a console) |
 | **The slave SH2 as a worker.** A job struct in SDRAM, read cache-through, with a cache purge per job and the slave on its own stack. Only the master talks to the Sub-CPU. | Hurrican, OpenJazz |
 | **The Genesis VDP as a second picture.** The SH2 decides what changes; the 68000 copies it in vblank, reading the cart through the `0x900000` window, never the SH2's way. | OpenJazz REV, SuperTux REV, Sonic CD 2011 |
 | **A frozen, checked boot path.** `check_boot.py` compares md5s of every boot file before each build. | SuperTux REV |

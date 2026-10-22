@@ -61,29 +61,30 @@ OpenTyrian 32X + Sega CD ─ a different architecture: a 32X cartridge with the 
 
 | | OpenLara REV (this kit) | OpenJazz REV | Hurrican | SuperTux REV | Sonic CD 2011 |
 |---|---|---|---|---|---|
-| SH2 boot program | CDLOADER | CDLOADER, 4 edits | CDLOADER, OpenJazz's edits | CDLOADER, OpenJazz's edits | its own loader (`sh2_engboot.c`, `SCDSH2.BIN`) |
+| SH2 boot program | CDLOADER | CDLOADER, 4 edits | CDLOADER, OpenJazz's edits | CDLOADER, OpenJazz's edits | its own loader, built into `APP.BIN` |
 | What it loads | file 20 `OPENLARA.32X`, a 32X ROM with a header | file 20 `OPENLARA.32X` (module "OpenJazz") | file 20 `OPENLARA.32X` (module "OpenJazz 32X") | file 20 `OPENLARA.32X` (module "OpenJazz") | file 21 `SONICCD.PAK`, a headerless engine. It also loads the data pack and the first scene. |
 | Hand-over | copies the ROM's SDRAM image over itself; both SH2s jump to the ROM's entries | same | same | same | the loader **stays resident** at `0x06000000`–`0x06002000` and calls `0x02000000`. It leaves a boot record at `0x06001F00` (file loader, cart checksum, the slave's mailbox) for the engine. |
 | Quick check (skip the copy when the cart already holds it) | off: always copies | **on**: first / middle / last chunk; A+B+C forces the copy | on | on | warm start: files whose cart checksum matches are skipped |
 | Boot picture | `IMAGE.RAW`, no bar | `IMAGE.RAW` + a progress bar | + bar | + bar | `IMAGE.RAW` + bar |
 | ROM made by | engine Makefile + `prep_openlara_cd.py` | `make_oj_rom.py` (`mars_boot.bin` + program at `0x8000`) + prep | same as OpenJazz | same + `check_sdram_code.py` | engine linked to run at `0x02000000`, no 32X header |
-| Boot path check | `cmp` of `APP.BIN` / `CDLOADER.BIN` with the last good build | build checks the module name | build refuses a wrong module name | `check_boot.py`: md5 of 70 files | sh2emu run before every burn |
+| Boot path check | the build checks the loader is in OpenLara mode, the loader marker and the files on the disc, the module name, and the ROM / Caves sizes | build checks the module name | build refuses a wrong module name | `check_boot.py`: md5 of 70 files | sh2emu run before every burn |
 
-**The BootCamp choice.** OpenLara's loader, with the quick check off. It is the version proven on the
-console with the plain file table. A game that wants fast restarts can copy OpenJazz's quick check, but
+**The BootCamp choice.** OpenLara's loader, with the quick check off, and its Sub-CPU program with the
+v1.5–v1.7 switches off (`STREAM`, `CARTW`, `FMVRING`, `SLOTS`). That is the code proven on the console
+(OpenLara v1.0–v1.4); the switches are emulation-tested only. A game that wants fast restarts can copy OpenJazz's quick check, but
 that is a CDLOADER change: see rule 2 in [06](06_HARDWARE_RULES.md).
 
 ### 3.2 The Sub-CPU program (`main.c`)
 
 | | OpenLara REV | OpenJazz REV | Hurrican | SuperTux REV | Sonic CD 2011 |
 |---|---|---|---|---|---|
-| Base | OpenLara's, with switches `STREAM`, `CARTW`, `FMVRING`, `SLOTS`, `CART`, `UB` | OpenJazz fork, 1639 lines | older OpenLara (no `STREAM` / `CARTW` / `SLOTS`) | Hurrican's, 1086 lines | Kobo's (`cd32x/kobo`) |
+| Base | OpenLara's, with switches `STREAM`, `CARTW`, `FMVRING`, `SLOTS`, `CART`, `UB` | OpenJazz fork, 1639 lines | older OpenLara (no `STREAM` / `CARTW` / `SLOTS`) | Hurrican's, 1086 lines | Kobo's |
 | Files: CMD 38 numbers | 20 ROM; 100+ levels → `0x200000`; 200+ Caves → `0x080000`; 300+ movies | 200–1199 `OJnnn.PAK` → `0x280000`; 1200–2199 `GBnnn.PAK` → `0x080000`; 2200+ / 3200+ compressed; 8 `IMAGE8.RAW` → `0x100000` | 200–1199 `OJnnn.PAK` → `0x280000` | same as Hurrican | 21 engine; 22 data; `0x1nn`–`0x4nn` scene images; `0x11nn`–`0x14nn` act files |
-| Directory | read on every open | **cached root directory** (no disc read per open) | on every open | on every open | on every open |
+| Directory | read on every open | **cached root directory** (no disc read per open) | on every open | on every open | **cached root directory** (R4K) |
 | CD reads | read-ahead streaming (`STREAM`) | streaming always on (R7) | a seek per chunk: the repository's `main.c` has no read-ahead | a seek per chunk | runs of up to 4 chunks per command (CMD 46 forms) |
 | Cart copy (68000) | words (`CARTW`, MD 27) | bytes (MD 33) | bytes | bytes | MD 33 with `move.l` when aligned |
 | Added commands | 61 bit 8 (slots), 68 (paging) | 67 Genesis plane, 69 LZ, 70 disc stamp, 71 bonus floor, 68 | 68 (paged build) | 62–67 Genesis VDP, 68 | 46 forms, 47 cart → frame buffer, 68 act → planes, 80 stamp floor |
-| Listener (`hw_md.s`) additions | none (routines 1–35) | 36 → 46 routines (`genbg_md.s`, `bonusmd_md.s`) | none | 36 `set_vsram`, 37 `copy_vram_col` | `sgb_poll`, `sgb_vblank`, `sgb_water` (H-interrupt colour swap) |
+| Listener (`hw_md.s`) additions | none (routines 1–35) | 36 → 46 routines (`genbg_md.s`, `bonusmd_md.s`) | none | 36 `set_vsram`, 37 `copy_vram_col` | picture record polling, vblank copy, an H-interrupt colour swap at the water line |
 
 **Similar.** Every new command sits behind a build switch, gets a number from the ledger, and is
 registered in it.
@@ -129,7 +130,7 @@ length + checksum.
 | OpenLara REV, Hurrican | the 32X frame buffer only; the Genesis display is off (CMD 52) |
 | OpenJazz REV | **Genesis plane** behind the 32X picture: tiles packed at build time (≤ 1600 patterns, 4 palettes). The 68000 loads them from the cart through `0x900000`; scrolling comes from COMM4 / COMM6 every vblank. **Bonus floor:** the Sega CD graphics chip draws into Word RAM (2M mode), and the 68000 copies it to VRAM. |
 | SuperTux REV | the level on Genesis plane A (64-column ring), the sky on plane B, the 32X sprites in front (PRI = 1). The SH2 sends VRAM / CRAM / VSRAM work as commands 62–67, and the 68000 copies straight from the cart. |
-| Sonic CD 2011 | the whole Genesis picture: plane A level, plane B parallax, hardware sprites, the window plane for the floor. The SH2 writes a record into the frame buffer; the 68000 picks it up (`sgb_poll`) and writes it in vblank. Stamp floor through the graphics chip (CMD 80). |
+| Sonic CD 2011 | the whole Genesis picture: plane A level, plane B parallax, hardware sprites, the window plane for the floor. The SH2 writes a record into the frame buffer; the 68000 picks it up and writes it in vblank. Stamp floor through the graphics chip (CMD 80). |
 
 **Similar.** The SH2 decides what changes, and the 68000 only copies, in vblank, never reading the cart
 inside vblank. **Different:** how the work gets to the 68000:

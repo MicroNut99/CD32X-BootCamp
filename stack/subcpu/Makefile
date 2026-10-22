@@ -22,21 +22,24 @@ ifdef CART
 CCFLAGS += -DOL_CART_MB=$(CART)
 HWFLAGS += -DOL_CART_MB=$(CART)
 endif
-# STREAM-1: the drive read-ahead for CMD 46 / 47 (main.c, OL_STREAM).  Default on; make cd STREAM=0
-# (or STREAM=0 bash build.sh) builds main.c exactly as before.
-STREAM ?= 1
+# BOOTCAMP: the four switches below default to 0 here.  With all four at 0 this main.c compiles to the
+# Sub-CPU code OpenLara CD32X ran on the console (v1.0-v1.4), apart from the file table (game_files.h).
+# Each one is tested in emulation only: turn it on (e.g. STREAM=1 bash build.sh) after testing it.
+# STREAM-1: the drive read-ahead for CMD 46 / 47 (main.c, OL_STREAM).  OpenLara's default is on;
+# 0 builds main.c exactly as before.
+STREAM ?= 0
 HWFLAGS += -DOL_STREAM=$(STREAM)
-# SLOTS-1: CMD 61 also writes OpenLara's save slot area (cart 0x060000-0x07FFFF). Default on;
-# make cd SLOTS=0 builds CMD 61 as before (the game then keeps its single save).
-SLOTS ?= 1
+# SLOTS-1: CMD 61 also writes OpenLara's save slot area (cart 0x060000-0x07FFFF). OpenLara's default is on;
+# it writes OpenLara's cart layout (inside this kit's ROM area): leave it off.
+SLOTS ?= 0
 HWFLAGS += -DOL_SLOTS=$(SLOTS)
-# FMV-2: CMD 46 ring mode, the big movies play while they stream from the CD. Default on;
-# make cd FMVRING=0 builds CMD 46 as before (the game then plays only the movies that fit).
-FMVRING ?= 1
+# FMV-2: CMD 46 ring mode, the big movies play while they stream from the CD. OpenLara's default is on;
+# 0 builds CMD 46 as before.
+FMVRING ?= 0
 HWFLAGS += -DOL_FMVRING=$(FMVRING)
 # CARTW-1: CMD 46 copies the chunks to the cart in words (hw_md.s command 27), almost 3 times faster
-# than bytes (command 33).  Default on; make cd CARTW=0 builds the copy as before.
-CARTW ?= 1
+# than bytes (command 33).  OpenLara's default is on; 0 builds the copy as before.
+CARTW ?= 0
 HWFLAGS += -DOL_CARTW=$(CARTW)
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional

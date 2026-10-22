@@ -17,8 +17,10 @@ What the example shows on screen:
 - CD audio (A plays, B stops);
 - a save in the cart: a boot counter that survives power-off.
 
-The example boots in emulation (see the [checks](#status) below). The stack under it is the one OpenLara
-CD32X runs on the console.
+The example boots in emulation (see the [checks](#status) below). The stack under it is the code OpenLara
+CD32X ran on the console (v1.0–v1.4).
+
+**Something wrong?** Every number the disc can show is in [docs/09_ERROR_CODES.md](docs/09_ERROR_CODES.md).
 
 ## What you need
 
@@ -45,10 +47,11 @@ On Linux, or in WSL on Windows:
 3. **Build:**
 
    ```
-   cd /mnt/s/KoboPort/sega-toolchain-12.1/sega/CD32X-BootCamp     # wherever this folder is
+   cd /path/to/CD32X-BootCamp                                      # e.g. /mnt/c/... in WSL
    bash build.sh                                                   # toolchain in /opt/toolchains/sega
    SEGA_TOOLCHAIN=/path/to/sega bash build.sh                      # toolchain somewhere else
    GAME=mygame DISC_NAME=MyGame bash build.sh                      # your own game folder
+   DIAG=1 DISC_NAME=BootCampDiag bash build.sh                     # the diagnostic disc (docs/09)
    ```
 
 4. **The result:** `disc/BootCamp.cue` + `disc/BootCamp.bin`, which hold the data track plus CD audio.
@@ -114,13 +117,14 @@ The full checklist is in [docs/02_PORTING_YOUR_GAME.md](docs/02_PORTING_YOUR_GAM
 | [06 Hardware rules](docs/06_HARDWARE_RULES.md) | The rules learned on real hardware: break one and the console hangs |
 | [07 The methods compared](docs/07_METHODS_COMPARED.md) | How OpenLara, OpenJazz REV, Hurrican, SuperTux REV and Sonic CD 2011 use the stack |
 | [08 Research index](docs/08_RESEARCH_INDEX.md) | Where to read more: MicroNut99's repositories and documents |
+| [09 Error codes](docs/09_ERROR_CODES.md) | **Look up any number the disc shows**: the error box, the loader's codes, the green and white diagnostic text, the screen you are stuck on |
 
 ## Status
 
 | What | Status |
 |---|---|
-| The stack (`stack/`) | Run on the console in OpenLara CD32X. CDLOADER is byte-identical. APP.BIN only changes the file table (`game_files.h`) and the backup RAM file name. |
-| `hello/` + `build.sh` | Built and booted in emulation with a 4 MB RAM cart: the boot picture, ROM loaded, `4B10`, file loads, the pad, the save surviving a second boot, CD audio playing. Not yet run on a console. |
+| The stack (`stack/`) | The code OpenLara CD32X ran on the console (v1.0–v1.4). CDLOADER is byte-identical. With its default switches (`STREAM`, `CARTW`, `FMVRING`, `SLOTS` all 0), the Sub-CPU program compiles to the same code, apart from the file table (`game_files.h`) and the backup RAM file name. The four switches are tested in emulation only. |
+| `hello/` + `build.sh` | Built and booted in emulation with a 4 MB RAM cart: the boot picture, the ROM loaded, `4B10`, file loads, the pad, the save surviving a second boot, CD audio, the error box, the diagnostic disc's text view. Not yet run on a console. |
 
 ## Credits
 
@@ -133,5 +137,5 @@ The full checklist is in [docs/02_PORTING_YOUR_GAME.md](docs/02_PORTING_YOUR_GAM
 - **MicroNut99:** the CD32X stack, the 4 MB RAM cart work, the ports, and this kit
   (https://github.com/MicroNut99/docs).
 
-No game data, BIOS or disc images are included. Sega, Mega Drive, Genesis, Sega CD and 32X are Sega's
-trademarks; this project is not affiliated with Sega.
+No game data, BIOS or disc images are included. Licences: [LICENSE.md](LICENSE.md). Sega, Mega Drive,
+Genesis, Sega CD and 32X are Sega's trademarks; this project is not affiliated with Sega.
