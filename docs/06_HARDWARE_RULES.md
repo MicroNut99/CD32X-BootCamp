@@ -6,8 +6,9 @@ you burn.
 
 ## The boot stack
 
-1. **Do not change the boot stack.** That is the boot block, `stack/subcpu/` (except `game_files.h` and the
-   two diagnostic switches), `hw_md.s`, `stack/sh2/`, and your `crt0.s`'s start-up code.
+1. **Do not change the boot stack.** That is the boot block, `stack/subcpu/` (except `game_files.h`),
+   `hw_md.s`, `stack/sh2/`, and your `crt0.s`'s start-up code. The diagnostic disc's lines are swapped in by
+   `DIAG=1` for one build only (`tools/diag_switch.py`): never edit them by hand.
    - **Why:** Hurrican edited its boot path once and black-screened. Every team now freezes its boot
      stack, and SuperTux checks it with md5s.
    - **The check:** `tools/check_boot.py`. Your game code starts at `main()`.

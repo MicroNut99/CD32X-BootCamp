@@ -9,11 +9,14 @@ Every source file of stack/subcpu and stack/sh2 is compared with stack/BOOT_FILE
 differ without failing the check:
   - stack/subcpu/game_files.h  (your file names: not part of the hash list, but it may hold only
                                 #defines and lists of 8.3 file names - it is compiled into main.c)
-  - the diagnostic switches in stack/subcpu/main.c (KOBO_DIAG_TEXT, KOBO_BOOT_TEXT): their value is
-    ignored, so switching the boot text on or off is allowed.
+  - the five lines of the diagnostic disc (tools/diag_switch.py: KOBO_DIAG_TEXT, KOBO_BOOT_TEXT in main.c,
+    the display line in hw_md.s, two lines in cdloader_sh2.c): either their release or their diagnostic
+    form is accepted.
 The idea is SuperTux CD32X REV's tools/check_boot.py.
 """
 import hashlib, os, re, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import diag_switch                          # the diagnostic disc's switches: either line is accepted
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -22,7 +25,6 @@ DIRS = ["stack/subcpu", "stack/sh2"]
 EXTS = (".c", ".h", ".s", ".ld", ".py", ".md")
 NAMES = ("Makefile", "Makefile.cdloader")
 SKIP = {"stack/subcpu/game_files.h"}
-SWITCH = re.compile(rb"^(#define\s+(?:KOBO_DIAG_TEXT|KOBO_BOOT_TEXT)\s+)[01]\b", re.M)
 
 
 def files():
@@ -39,9 +41,7 @@ def files():
 
 def digest(rel):
     data = open(os.path.join(ROOT, rel), "rb").read().replace(b"\r\n", b"\n")
-    if rel == "stack/subcpu/main.c":
-        data = SWITCH.sub(rb"\g<1>X", data)
-    return hashlib.md5(data).hexdigest()
+    return hashlib.md5(diag_switch.to_release(rel, data)).hexdigest()
 
 
 GAME_FILES_OK = re.compile(r'^(#ifndef GAME_FILES_H|#define GAME_FILES_H|#endif|#define GAME_[A-Z_]+\s+("[^"]*"|\d+)'
@@ -97,7 +97,7 @@ def main():
         print("check_boot: the boot stack is NOT the one this kit ships:")
         for b in bad:
             print("  " + b)
-        print("Undo the change (only game_files.h and the two diagnostic switches may differ).")
+        print("Undo the change (only game_files.h and the diagnostic switches of tools/diag_switch.py may differ).")
         print("See docs/06_HARDWARE_RULES.md before changing the stack on purpose.")
         return 1
     print("check_boot: the boot stack is unchanged (%d files)" % len(now))

@@ -19,7 +19,7 @@ GAME=mygame DISC_NAME=MyGame bash build.sh
 
 | Step | What happens | Stops when |
 |---|---|---|
-| 0 | `tools/check_boot.py`: the stack's files against `stack/BOOT_FILES.md5` | a stack file changed (only `game_files.h` and the two diagnostic switches may differ). Your game's `crt0.s` and `src-md/` are not checked: keep their start-up code as in `hello/`. |
+| 0 | `tools/check_boot.py`: the stack's files against `stack/BOOT_FILES.md5` | a stack file changed (only `game_files.h` and the diagnostic lines of `tools/diag_switch.py` may differ). Your game's `crt0.s` and `src-md/` are not checked: keep their start-up code as in `hello/`. |
 | 1 | `make -C <game>` builds `<game>.32x`. `tools/prep_rom.py` then checks the header as CDLOADER will, writes `CDB2` at `0x3BC`, trims the padding and writes `stack/subcpu/ROMS/GAME.32X`. | not a 32X ROM; SDRAM image too big; entries not in SDRAM |
 | 2 | `splash.png` → `IMAGE.RAW` (320 × 224, 256 colours) | |
 | 3 | `<game>/cd/*` → `ROMS/` | |
@@ -46,8 +46,8 @@ OpenLara ran on the console. Each one has been tested in emulation only.
 | `REGION=EU` / `JP` | The toolchain's EU / JP boot block. The default is US, and only US is tested. |
 | `DIAG=1` | The diagnostic disc ([09](09_ERROR_CODES.md)) |
 
-**`stack/BOOT_FILES.md5`** holds md5s of the files with CRLF turned into LF and the two diagnostic switches
-masked. Check it with `tools/check_boot.py`, not `md5sum -c`.
+**`stack/BOOT_FILES.md5`** holds md5s of the files with CRLF turned into LF and any diagnostic line of
+`tools/diag_switch.py` put back to its release form. Check it with `tools/check_boot.py`, not `md5sum -c`.
 
 ## 3. Test in emulation: ares CD32X
 
@@ -120,17 +120,15 @@ The other tools:
    DIAG=1 DISC_NAME=BootCampDiag bash build.sh
    ```
 
-   It sets the stack's own switches `KOBO_DIAG_TEXT` and `KOBO_BOOT_TEXT` for that build only; `main.c` is
-   put back afterwards. hello then starts on the Sub-CPU's green text and the 32X's white start-up lines:
-   - every boot step;
-   - every file opened;
-   - every cart chunk, with its address;
-   - the cart probe;
-   - any 68000 crash.
+   `tools/diag_switch.py` puts four diagnostic lines into the stack for that build only, and puts the
+   release lines back afterwards. With them, from the SEGA logo on, you see:
+   - the 32X's white start-up lines;
+   - the Sub-CPU's green text, in front of the boot picture: every boot step, `STATE:`, every file opened,
+     every cart chunk with its address, the cart probe, any 68000 crash.
 
-   **B+C** switches between that text and hello's screen. Each row is explained in [09](09_ERROR_CODES.md) §5.
-3. **A stop before the game starts shows no text, even on the diagnostic disc.** On this stack the
-   Genesis display stays off until a game turns it on (see [09](09_ERROR_CODES.md) §1). Run the same disc in
-   ares and read COMM12 there; the boot picture and the screen symptoms narrow it down.
+   A boot that stops leaves its last lines on screen. Once hello runs, it stays on that text, shows a
+   one-line pad readout in words, and switches to its own screen with **B+C**. Each row is explained in
+   [09](09_ERROR_CODES.md) §5.
+3. **In ares**, the same disc shows COMM12 at any moment, with no burn needed.
 
 See also `DIAG_TEXT_HOWTO.md` in MicroNut99/docs.

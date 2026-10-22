@@ -4,7 +4,6 @@ stack/subcpu/ROMS/
 stack/subcpu/cd/
 stack/subcpu/*.bin
 stack/subcpu/*.iso
-stack/subcpu/main.c.diagsave
 stack/sh2/*.32x
 stack/sh2/*.BIN
 *.o
@@ -17,3 +16,4 @@ stack/sh2/*.BIN
 hello/music/Track02.wav
 __pycache__/
 # (data files in <game>/cd/ are NOT ignored, whatever their names)
+*.diagsave

@@ -62,21 +62,18 @@ if [ -d "$G/cd" ] && [ -n "$(ls -A "$G/cd")" ]; then
   cp -v "$G"/cd/* "$ROMS/"
 fi
 
+# DIAG=1: the diagnostic disc - tools/diag_switch.py swaps five boot-stack lines for their diagnostic twins
+# for this build only (green Sub-CPU text, the display left on, CDLOADER's text kept in front of the boot
+# picture; docs/09_ERROR_CODES.md).  The release lines go back afterwards, even when the build fails.
+if [ "${DIAG:-0}" = 1 ]; then
+  echo "==> DIAG=1: the diagnostic disc"
+  python3 "$HERE/tools/diag_switch.py" on
+  trap 'python3 "$HERE/tools/diag_switch.py" off' EXIT
+fi
+
 echo "==> 4. the SH2 loader (stack/sh2, unchanged)"
 make -C "$HERE/stack/sh2" -f Makefile.cdloader clean > /dev/null
 make -C "$HERE/stack/sh2" -f Makefile.cdloader ROOTDIR="$ROOTDIR"
-
-# DIAG=1: the diagnostic disc - the stack's own two switches (KOBO_DIAG_TEXT, KOBO_BOOT_TEXT) set to 1 for
-# this build only, so the Sub-CPU's green text and the 32X start-up messages show until the boot picture
-# (docs/09_ERROR_CODES.md).  main.c is put back afterwards, even when the build fails.
-if [ "${DIAG:-0}" = 1 ]; then
-  echo "==> DIAG=1: the boot text is on (diagnostic disc)"
-  cp "$HERE/stack/subcpu/main.c" "$HERE/stack/subcpu/main.c.diagsave"
-  trap 'mv -f "$HERE/stack/subcpu/main.c.diagsave" "$HERE/stack/subcpu/main.c"' EXIT
-  sed -i -e 's/^#define KOBO_DIAG_TEXT        0/#define KOBO_DIAG_TEXT        1/' \
-         -e 's/^#define KOBO_BOOT_TEXT        0/#define KOBO_BOOT_TEXT        1/' "$HERE/stack/subcpu/main.c"
-  [ "$(grep -c '^#define KOBO_\(DIAG\|BOOT\)_TEXT        1' "$HERE/stack/subcpu/main.c")" = 2 ] || { echo "*** DIAG=1: the switches were not found"; exit 1; }
-fi
 
 echo "==> 5. the Sub-CPU program + the disc image (stack/subcpu)"
 # REGION=EU / JP: the toolchain's EU_BOOT.BIN / JP_BOOT.BIN boot block for those consoles (only US is tested)

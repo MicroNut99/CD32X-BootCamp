@@ -14,7 +14,7 @@ b979f95f122b4a71770f1ec595d81dc3  stack/subcpu/files.s
 0bf506694f4123316b70d70e574387bd  stack/subcpu/hw_md.h
 3a245d7e54fb1b9280a0d8fbdafe7fe7  stack/subcpu/hw_md.s
 59ddb6c8154f98101e90697fec7b38ba  stack/subcpu/kos.s
-2a7aeb9d98241c9ce5bd6b539fd62d2a  stack/subcpu/main.c
+2d4baf5d9434f353d8774d1744f45905  stack/subcpu/main.c
 463ff58dcc02ea41e6f1155bfbad2d77  stack/subcpu/make_mixed_cd2.py
 e9e54b09e009f6d6251d61f5203570d4  stack/subcpu/scd.c
 4fff1d2c3c9d092e4ba0b79f5fde8812  stack/subcpu/scd_fs.c

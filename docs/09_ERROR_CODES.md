@@ -12,17 +12,28 @@ to a tag or a line of text you can grep:
 | Disc | What you see | Built with |
 |---|---|---|
 | **Release** | the boot picture, then hello. Any failed CD service opens hello's **red error box**. | `bash build.sh` |
-| **Diagnostic** | the same, but hello starts on the Sub-CPU's **green text** and the 32X's **white start-up lines**: the whole boot history. **B+C** switches between that text and hello's screen. | `DIAG=1 bash build.sh` (→ `disc/BootCampDiag.cue` with `DISC_NAME=BootCampDiag`) |
+| **Diagnostic** | the white 32X start-up lines and the Sub-CPU's **green text from the SEGA logo on**, in front of the boot picture: every boot step, `STATE:` (COMM12), every file and cart chunk. A boot that stops leaves its last lines on screen. Once hello runs it stays on that text: a one-line **PAD** readout (the directions and buttons held, in words) and **B+C** to switch to hello's screen and back. | `DIAG=1 DISC_NAME=BootCampDiag bash build.sh` |
 | **ares** | COMM12 at any moment: Android's *Show fps and COMM12 STATE*, or the once-a-second line of `ares-headless` | either disc |
 
-**What no screen can show on this stack.** Before the game starts, the Genesis display is off:
+**How the diagnostic disc shows text before the game.** On the release disc the Genesis display is off
+during the boot:
 
-- `hw_md.s` switches it off at the end of the 68000's set-up (`OL-13: display OFF`);
-- CDLOADER sends CMD 52 with COMM2 = 0 at `4D01`.
+- `hw_md.s` switches it off at the end of the 68000's set-up (`OL-13`);
+- CDLOADER sends CMD 52 with COMM2 = 0 at `4D01` (`OL-3`).
 
-So a boot that stops **before** the game runs shows no text on the console, even on the diagnostic disc.
-The text is still written, and the diagnostic hello makes it visible once the game runs. For a stop
-before that, read COMM12 in ares, or use the screen symptoms in §2.
+`DIAG=1` builds the disc with four diagnostic lines in place of their release lines, for that build only.
+`tools/diag_switch.py` lists them (`check` shows their state):
+
+| Switch | Release line | Diagnostic line | Effect |
+|---|---|---|---|
+| `main.c` | `KOBO_DIAG_TEXT 0` | `1` | the green text is written |
+| `main.c` | `KOBO_BOOT_TEXT 0` | `1` | `main()` does not switch the display off |
+| `hw_md.s` | `move.w #0x8134` | `#0x8174` | the 68000 leaves the display on |
+| `cdloader_sh2.c` | CMD 52 `COMM2 = 0` | `COMM2 = 1` | CDLOADER keeps the text on at `4D01` |
+
+The Genesis text then sits **in front of** the boot picture: the 32X's priority bit (bit 7 of `0x20004100`)
+stays 0, which per the 32X manual gives the Mega Drive screen priority. The source in git always holds the
+release lines, and `tools/check_boot.py` accepts either form.
 
 ## 2. "It stopped here": the screen tells you the stage
 

@@ -102,6 +102,32 @@ static void hex4(char *d, uint32_t v)
     d[4] = 0;
 }
 
+/* the pad as words, one line: "UP LEFT A START" ("-" = nothing pressed or no pad); at most max chars */
+static void pad_words(char *d, uint16_t pad, int max)
+{
+    static const struct { uint16_t bit; const char *name; } k[] = {
+        { SEGA_CTRL_UP, "UP" }, { SEGA_CTRL_DOWN, "DOWN" }, { SEGA_CTRL_LEFT, "LEFT" },
+        { SEGA_CTRL_RIGHT, "RIGHT" }, { SEGA_CTRL_A, "A" }, { SEGA_CTRL_B, "B" }, { SEGA_CTRL_C, "C" },
+        { SEGA_CTRL_X, "X" }, { SEGA_CTRL_Y, "Y" }, { SEGA_CTRL_Z, "Z" }, { SEGA_CTRL_START, "START" },
+        { SEGA_CTRL_MODE, "MODE" },
+    };
+    int n = 0;
+    for (unsigned i = 0; i < sizeof k / sizeof k[0]; i++)
+    {
+        if (!(pad & k[i].bit))
+            continue;
+        const char *w = k[i].name;
+        int len = 0;
+        while (w[len]) len++;
+        if (n + (n ? 1 : 0) + len > max)
+            break;
+        if (n) d[n++] = ' ';
+        while (*w) d[n++] = *w++;
+    }
+    if (!n) d[n++] = '-';
+    d[n] = 0;
+}
+
 static void dec(char *d, uint32_t v)
 {
     char t[12]; int n = 0;
@@ -263,7 +289,11 @@ int main(void)
         clear(C_BLACK);                     /* colour 0x0000: see-through, the Genesis text shows there */
         if (view_text)
         {
-            text(8, 216, "B+C: HELLO SCREEN", C_YELLOW);
+            /* the Genesis text fills all 28 rows, so these go where its rows are short: row 5
+               ("CD DRIVE READY", up to x 128) and row 8 ("68K LISTENER ACTIVE", up to x 168) */
+            pad_words(buf, pad, 18);        /* the pad still works here: one line, in words */
+            text(136, 40, "PAD", C_GREY);   text(168, 40, buf, C_WHITE);
+            text(232, 64, "B+C:HELLO", C_YELLOW);
             if (cd_error.code)
                 error_box();
             flip();
@@ -274,14 +304,16 @@ int main(void)
         dec(buf, boots);
         text(16, 40, "BOOTS:", C_GREY);  text(80, 40, buf, C_WHITE);
         text(160, 40, saved ? "SAVED" : "SAVE FAILED", saved ? C_GREEN : C_RED);
-        hex4(buf, pad);
-        text(16, 56, "PAD:", C_GREY);    text(80, 56, buf, C_WHITE);
-        dec(buf, gTicks / 60);
-        text(160, 56, "SECONDS:", C_GREY); text(232, 56, buf, C_WHITE);
+        pad_words(buf, pad, 30);            /* what is held, in words */
+        text(16, 56, "PAD:", C_GREY);    text(64, 56, buf, C_WHITE);
         text(16, 72, "FILE:", C_GREY);   text(64, 72, file_text, C_CYAN);
         text(16, 88, "MUSIC:", C_GREY);  text(72, 88, music ? "TRACK 2" : "OFF", C_WHITE);
+        dec(buf, gTicks / 60);
+        text(160, 88, "SECONDS:", C_GREY); text(232, 88, buf, C_WHITE);
         text(16, 108, "A MUSIC  B STOP  C FILE  START SAVE", C_GREEN);
         text(16, 120, "D-PAD MOVES THE BOX", C_GREEN);
+        if (HELLO_DIAG_TEXT)
+            text(200, 120, "B+C:TEXT", C_YELLOW);
         box(0, 136, 320, 1, C_GREY);
         box(x, y, 16, 16, C_RED);
         if (cd_error.code)
