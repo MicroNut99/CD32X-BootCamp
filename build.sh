@@ -31,6 +31,17 @@ python3 -c "import PIL" 2>/dev/null || { echo "*** Python Pillow missing (sudo a
 echo "==> 0. the boot stack is unchanged"
 python3 "$HERE/tools/check_boot.py"
 
+# the layout in stack/subcpu/game_files.h: the ROM's name and the two slots (slot n = cart n x 128 KB)
+GF="$HERE/stack/subcpu/game_files.h"
+ROMNAME=$(sed -n 's/^#define GAME_ROM_NAME *"\(.*\)".*/\1/p' "$GF")
+SLOT_D=$(sed -n 's/^#define GAME_DATA_SLOT *\([0-9]*\).*/\1/p' "$GF")
+SLOT_R=$(sed -n 's/^#define GAME_RESIDENT_SLOT *\([0-9]*\).*/\1/p' "$GF")
+[ -n "$ROMNAME" ] && [ -n "$SLOT_D" ] && [ -n "$SLOT_R" ] && [ "$SLOT_D" != "$SLOT_R" ] || { echo "*** game_files.h: GAME_ROM_NAME, GAME_DATA_SLOT, GAME_RESIDENT_SLOT (two different slots) needed"; exit 1; }
+SAVE=$((0x3F0000)); D0=$((SLOT_D << 17)); R0=$((SLOT_R << 17))
+ROM_MAX=$(( D0 < R0 ? D0 : R0 ))                                  # the ROM ends where the first slot starts
+if [ "$D0" -gt "$R0" ]; then R_MAX=$((D0 - R0)); D_MAX=$((SAVE - D0)); else D_MAX=$((R0 - D0)); R_MAX=$((SAVE - R0)); fi
+[ "$D_MAX" -gt 0 ] && [ "$R_MAX" -gt 0 ] || { echo "*** game_files.h: a slot is at or past the save area (0x3F0000)"; exit 1; }
+
 echo "==> 1. the game ROM ($GAME)"
 make -C "$G" clean > /dev/null 2>&1 || true     # a DIAG change must rebuild everything
 make -C "$G" ROOTDIR="$ROOTDIR" DIAG="${DIAG:-0}"
@@ -39,9 +50,8 @@ ROMLIST=$(ls "$G"/*.32x 2>/dev/null || true)
 [ "$(echo "$ROMLIST" | wc -l)" = 1 ] || { echo "*** more than one .32x in $G - keep only the game's ROM there"; exit 1; }
 ROM="$ROMLIST"
 rm -rf "$ROMS"; mkdir -p "$ROMS"                  # stack/subcpu/ROMS is made by this script: keep nothing of yours there
-python3 "$HERE/tools/prep_rom.py" "$ROM" "$ROMS/GAME.32X"
-# the default cart layout (stack/subcpu/game_files.h, docs/04): the ROM ends below the resident slot
-[ "$(stat -c %s "$ROMS/GAME.32X")" -le $((0x80000)) ] || { echo "*** GAME.32X is over 512 KB: it would overlap the resident slot at cart 0x080000 (change GAME_RESIDENT_SLOT)"; exit 1; }
+python3 "$HERE/tools/prep_rom.py" "$ROM" "$ROMS/$ROMNAME"
+[ "$(stat -c %s "$ROMS/$ROMNAME")" -le "$ROM_MAX" ] || { echo "*** $ROMNAME is over $((ROM_MAX >> 10)) KB: it would overlap the first data slot (game_files.h)"; exit 1; }
 
 echo "==> 2. the boot picture"
 if [ -f "$G/splash.png" ]; then
@@ -56,8 +66,10 @@ if [ -d "$G/cd" ] && [ -n "$(ls -A "$G/cd")" ]; then
     n=$(stat -c %s "$f")
     # one array of names serves both the level slot (100 + n, cart 0x200000-0x3EFFFF) and the resident
     # slot (200 + n, cart 0x080000-0x1FFFFF): a bigger file would run into the next area
-    [ "$n" -le $((0x1F0000)) ] || { echo "*** $(basename "$f") is over 1984 KB: it would overwrite the save area at cart 0x3F0000"; exit 1; }
-    [ "$n" -le $((0x180000)) ] || echo "    note: $(basename "$f") is over 1.5 MB: load it as 100 + n only (as 200 + n it would overwrite the level slot)"
+    BIG=$(( D_MAX > R_MAX ? D_MAX : R_MAX ))
+    [ "$n" -le "$BIG" ] || { echo "*** $(basename "$f") is over $((BIG >> 10)) KB: it fits neither slot (game_files.h)"; exit 1; }
+    [ "$n" -le "$D_MAX" ] || echo "    note: $(basename "$f") is over $((D_MAX >> 10)) KB: load it as 200 + n only (the resident slot)"
+    [ "$n" -le "$R_MAX" ] || echo "    note: $(basename "$f") is over $((R_MAX >> 10)) KB: load it as 100 + n only (the level slot)"
   done
   cp -v "$G"/cd/* "$ROMS/"
 fi
@@ -83,7 +95,7 @@ case "${REGION:-US}" in US|EU|JP) ;; *) echo "*** REGION must be US, EU or JP"; 
 cd "$HERE/stack/subcpu" && make clean > /dev/null && make cd ROOTDIR="$ROOTDIR" BOOTBLOCK="$ROOTDIR/bootblocks/${REGION:-US}_BOOT.BIN"
 ISO="$HERE/stack/subcpu/CDROMPlayer.iso"
 grep -a -q "SH2-OPENLARA-CD-OL1-LOADER" "$ISO" || { echo "*** the disc has no CDLOADER - stopping"; exit 1; }
-[ -f "$HERE/stack/subcpu/cd/GAME.32X" ] || { echo "*** GAME.32X is not on the disc - stopping"; exit 1; }
+[ -f "$HERE/stack/subcpu/cd/$ROMNAME" ] || { echo "*** $ROMNAME (GAME_ROM_NAME) is not on the disc - stopping"; exit 1; }
 
 echo "==> 6. CD audio + the burnable image"
 mkdir -p "$OUT"

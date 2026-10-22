@@ -19,12 +19,13 @@ GAME=mygame DISC_NAME=MyGame bash build.sh
 
 | Step | What happens | Stops when |
 |---|---|---|
-| 0 | `tools/check_boot.py`: the stack's files against `stack/BOOT_FILES.md5` | a stack file changed (only `game_files.h` and the diagnostic lines of `tools/diag_switch.py` may differ). Your game's `crt0.s` and `src-md/` are not checked: keep their start-up code as in `hello/`. |
-| 1 | `make -C <game>` builds `<game>.32x`. `tools/prep_rom.py` then checks the header as CDLOADER will, writes `CDB2` at `0x3BC`, trims the padding and writes `stack/subcpu/ROMS/GAME.32X`. | not a 32X ROM; SDRAM image too big; entries not in SDRAM |
+| 0 | `tools/check_boot.py`: the stack's files against `stack/BOOT_FILES.md5` | a stack file changed (`game_files.h` may differ; so may the diagnostic lines of `tools/diag_switch.py`, but a release build refuses them, see 3b). `game_files.h` holds anything but #defines and 8.3 names; the ROM name is not 8.3; a slot is outside 4–31; the backup-RAM name is not 11 characters; more than 100 names. Your game's `crt0.s` and `src-md/` are not checked: keep their start-up code as in `hello/`. |
+| 1 | `make -C <game>` builds `<game>.32x`. `tools/prep_rom.py` then checks the header as CDLOADER will, writes `CDB2` at `0x3BC`, trims the padding and writes `stack/subcpu/ROMS/<GAME_ROM_NAME>`. | no or several `.32x`; not a 32X ROM; SDRAM image too big; entries not in SDRAM; the ROM runs into the first slot |
 | 2 | `splash.png` → `IMAGE.RAW` (320 × 224, 256 colours) | |
-| 3 | `<game>/cd/*` → `ROMS/` | |
+| 3 | `<game>/cd/*` → `ROMS/` | a file too big for both slots |
+| 3b | release disc: `diag_switch.py release`. `DIAG=1`: `diag_switch.py on` (put back on exit) | a diagnostic line or a `.diagsave` is left in the stack (run `python3 tools/diag_switch.py off`, or `git checkout` the file) |
 | 4 | CDLOADER (`stack/sh2`) | |
-| 5 | `APP.BIN` + `genisoimage` → `CDROMPlayer.iso` | CDLOADER or `GAME.32X` missing from the image |
+| 5 | `APP.BIN` + `genisoimage` → `CDROMPlayer.iso` | CDLOADER or the ROM missing from the image |
 | 6 | the ISO padded to at least 600 sectors, then `make_mixed_cd2.py` → `disc/<name>.cue/.bin` with `music/Track*.wav` as tracks 2… (with no music, a 4 s test tone is made) | |
 
 **Sub-CPU build switches.** These are set on `build.sh` or on `make cd` in `stack/subcpu`. Each one is a

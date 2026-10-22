@@ -89,6 +89,7 @@ def release():
     left = [f for f in files() if os.path.exists(os.path.join(ROOT, f) + ".diagsave")]
     if bad or left:
         print("diag_switch: NOT the release lines (%s)%s - run: python3 tools/diag_switch.py off"
+              " (with no .diagsave: git checkout the file)"
               % (", ".join(sorted(set(bad))) or "-", "; .diagsave left: " + ", ".join(left) if left else ""))
         sys.exit(1)
     print("diag_switch: release lines")

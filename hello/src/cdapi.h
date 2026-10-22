@@ -42,10 +42,12 @@ typedef struct {
     uint16_t comm[8];               /* COMM0, COMM2 ... COMM14 at the moment it failed */
     uint32_t ticks;                 /* the vertical blank count then */
 } CdError;
-extern CdError cd_error;                                /* the last error; code 0 = none */
+extern CdError cd_error;                                /* the FIRST error (a later BC-E4 replaces it); 0 = none.
+                                                           BC-E4 is final: after it every wait is 0.1 s and
+                                                           nothing clears it - reboot */
 void     cd_error_clear(void);
 
-int      cd_cmd(uint16_t cmd);                          /* 1 = answered, 0 = no answer within 10 s.
+int      cd_cmd(uint16_t cmd);                          /* 1 = answered, 0 = no answer within 10 s (0.1 s after a BC-E4).
                                                            Needs the game's vertical blank counter:
                                                            extern volatile uint32_t gTicks */
 void     cd_status(uint16_t code);                      /* COMM12: shown as STATE: in the diagnostics */

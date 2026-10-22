@@ -22,10 +22,13 @@ static void cd_pause(void)                  /* rule: never hammer a COMM registe
 CdError cd_error;
 static uint16_t last_status;                /* COMM12 is also the reply of CMD 46 and 61: put it back after */
 static int cur_file;                        /* the file being opened / loaded (for the error box) */
+static int no_answer;                       /* 1 once the Sub-CPU has failed to answer (BC-E4): final */
 
 static void fail(uint16_t code, const char *tag, uint16_t cmd, uint16_t arg)
 {
-    if (cd_error.code)                      /* the FIRST error is the one that explains the rest: keep it */
+    /* the FIRST error is the one that explains the rest: keep it.  Except a Sub-CPU that stops answering
+       (BC-E4): that explains more than any earlier error, so it replaces one (and is never replaced). */
+    if (cd_error.code && !(code == CD_ERR_NO_ANSWER && cd_error.code != CD_ERR_NO_ANSWER))
         return;
     cd_error.code = code; cd_error.tag = tag; cd_error.cmd = cmd; cd_error.arg = arg;
     cd_error.file = (uint16_t)cur_file;
@@ -50,12 +53,13 @@ int cd_cmd(uint16_t cmd)
     uint32_t t0 = gTicks;
     /* once the Sub-CPU has failed to answer (BC-E4), later waits are short (0.1 s): the game keeps
        running and the error box shows, instead of one frame every 10 s */
-    uint32_t limit = cd_error.code == CD_ERR_NO_ANSWER ? 6 : CD_TIMEOUT_TICKS;
+    uint32_t limit = no_answer ? 6 : CD_TIMEOUT_TICKS;
     MARS_SYS_COMM0 = cmd;
     for (int n = 0; n < 2000000 && MARS_SYS_COMM0 != 0 && gTicks - t0 < limit; n++)
         cd_pause();
     if (MARS_SYS_COMM0 == 0)
         return 1;
+    no_answer = 1;
     fail(CD_ERR_NO_ANSWER, "BC-E4 CDAPI.C CD_CMD", (uint16_t)(cmd & 0xFF), MARS_SYS_COMM2);   /* BC-E4 */
     return 0;
 }
@@ -169,7 +173,7 @@ int cd_sfx_load(int pack)
     MARS_SYS_COMM2 = (uint16_t)pack;        /* SFXnn.BIN -> the PCM chip */
     COMM12_16 = 0;
     if (!cd_cmd(CD_CMD_LOAD_SFX))
-        return 0;
+        return keep_status(0);
     int n = COMM12_16;                      /* the number of effects, 0 = failed */
     keep_status(0);
     return n;
@@ -179,7 +183,7 @@ int bram_load(void)
 {
     COMM12_16 = 0;
     if (!cd_cmd(CD_CMD_BRAM_LOAD))
-        return 0;
+        return keep_status(0);
     int ok = COMM12_16 == 1;                /* 0: no such file in the backup RAM (yet) */
     return keep_status(ok);
 }
@@ -203,7 +207,7 @@ int bram_save(const uint16_t *words, int count)
     }
     COMM12_16 = 0;
     if (!cd_cmd(CD_CMD_BRAM_SAVE))
-        return 0;
+        return keep_status(0);
     int ok = COMM12_16 == 1;
     return keep_status(ok);
 }

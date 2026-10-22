@@ -241,8 +241,8 @@ int main(void)
     /* a data file from the disc into the cart's level slot (file 100 = LEVEL00.BIN, slot 16) */
     if (cd_load(100))
         cart_line(file_text, CART_SLOT(16), 39);
-    uint16_t shown = cd_error.code;         /* an error code stays in COMM12 while its box shows */
-    if (!shown)
+    uint16_t shown = 0;                     /* an error code stays in COMM12 while its box shows */
+    if (!cd_error.code)
         cd_status(0x4B10);                  /* 4B10: running */
 
     while (1)

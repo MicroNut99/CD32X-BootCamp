@@ -12,7 +12,7 @@ to a tag or a line of text you can grep:
 | Disc | What you see | Built with |
 |---|---|---|
 | **Release** | the boot picture, then hello. Any failed CD service opens hello's **red error box**. | `bash build.sh` |
-| **Diagnostic** | the white 32X start-up lines and the Sub-CPU's **green text from the SEGA logo on**, in front of the boot picture: every boot step, `STATE:` (COMM12), every file and cart chunk. A boot that stops leaves its last lines on screen. Once hello runs it stays on that text: a one-line **PAD** readout (the directions and buttons held, in words) and **B+C** to switch to hello's screen and back. hello's buttons act when released, as a chord, so B+C never also stops the music or loads a file. A new error switches to hello's screen, so no green row covers the box. | `DIAG=1 DISC_NAME=BootCampDiag bash build.sh` |
+| **Diagnostic** | the white 32X start-up lines and the Sub-CPU's **green text from the SEGA logo on**, in front of the boot picture: every boot step, `STATE:` (COMM12), every file and cart chunk. A boot that stops leaves its last lines on screen. Once hello runs it stays on that text: a one-line **PAD** readout (the directions and buttons held, in words) and **B+C** to switch to hello's screen and back. hello's buttons act when released, as a chord, so B+C never also stops the music or loads a file. An error switches to hello's screen, so no green row covers the box (except after `4EE4`: the Sub-CPU is not answering, so the display cannot be switched). | `DIAG=1 DISC_NAME=BootCampDiag bash build.sh` |
 | **ares** | COMM12 at any moment: Android's *Show fps and COMM12 STATE*, or the once-a-second line of `ares-headless` | either disc |
 
 **How the diagnostic disc shows text before the game.** On the release disc the Genesis display is off
@@ -41,7 +41,7 @@ release lines, and `tools/check_boot.py` accepts either form.
 |---|---|---|---|
 | The BIOS screen, the disc is not started | the BIOS rejected the disc | — | the disc was burnt as ISO only (burn the `.cue`); the region of `US_BOOT.BIN` vs the console's; a bad burn |
 | The SEGA logo, then black, forever | the Sub-CPU program, the 68000 listener, or the 32X start-up | `0000` | is the 32X on and seated? The boot stack unchanged (`check_boot.py`)? In ares: does COMM10 reach `0BBB`? |
-| The boot picture, forever | CDLOADER stopped while loading the ROM | `4D06`, `4C00`+n, or `4DEx` | §3. The usual cause: no RAM cart, or a cart that does not keep what is written (`4DE2`) |
+| The boot picture, forever | CDLOADER stopped while loading the ROM | `4C00`+n or `4DEx` (`4D06` only for a while: an unanswered command is given up after about 20 s) | §3. The usual cause: no RAM cart, or a cart that does not keep what is written (`4DE2`) |
 | The boot picture, then black, forever | the hand-over or your `crt0.s` / `main()` | `4D05` | your ROM's entries at `0x3E0`; a `.bss` that runs over the hand-over routine at `0x0603C000` ([04](04_MEMORY_MAPS.md)); a wait in your start-up that never ends |
 | hello's screen, red box | a CD service failed | `4EEx` | §4 |
 | hello's screen, frozen | a wait without a timeout, or a crash on the SH2 | the last code posted | every wait bounded ([06](06_HARDWARE_RULES.md) rule 7) |
@@ -70,7 +70,7 @@ docs/09_ERROR_CODES.md*.
 ```
 ERROR 4EE3  FILE DID NOT REACH CART        <- the code, and what it means
 BC-E3 CDAPI.C CD_LOAD                      <- the tag: grep "BC-E3" in hello/src
-CMD 46 FILE 100 CHUNK 3 +018000            <- what was asked: command, file, chunk, offset in the file
+CMD 46 FILE 100 CHUNK 2 +010000            <- what was asked: command, file, chunk, offset in the file
 C0 0000 C2 0003 C4 0000 C6 0000            <- the COMM registers when it failed
 C8 0001 CA 2000 CC 0001 CE 3A1F
 LOOK UP: DOCS 09 ERROR CODES
@@ -86,6 +86,11 @@ LOOK UP: DOCS 09 ERROR CODES
 | **`4EE4`** | `BC-E4` `cd_cmd` | a command was not answered within 10 s (COMM0 never went back to 0) | `CMD`, `COMM2` = its argument | a command number this Sub-CPU does not have: it is never answered (`main.c` has no catch-all), so check `CMD` against [03](03_COMMANDS.md). Otherwise the Sub-CPU is busy or stopped: is `CE` (its heartbeat) changing? |
 | `4B10` | | running, no error | | — |
 
+**Which error the box shows.** The first one: later errors are usually its consequences. The exception is
+`4EE4`: a Sub-CPU that stopped answering explains everything after it, so it replaces an earlier error.
+`4EE4` is final. Every later wait gives up after 0.1 s, and nothing clears it: reboot. A later successful
+load clears `4EE2` / `4EE3`, and a successful save clears `4EE1`.
+
 **The register line** (the 32X COMM registers, `0x20004020` + n):
 
 | | Register | What it tells you |
@@ -94,11 +99,11 @@ LOOK UP: DOCS 09 ERROR CODES
 | `C2` | COMM2 | the argument of the last command |
 | `C4`, `C6` | COMM4, COMM6 | the game's own (master ↔ slave, renderer) |
 | `C8`, `CA` | COMM8, COMM10 | the last reply: a file length (CMD 38), or the pad and the 68000's tick count (CMD 48) |
-| `CC` | COMM12 | the Sub-CPU's reply in COMM12 at the moment of the failure: `0001` = CMD 46 or 61 said "bad", `FFFF` = CMD 46 never replied, `0000` = CMD 61 never replied. (The error code is posted to COMM12 right after this snapshot.) |
+| `CC` | COMM12 | taken just before the error code is posted. CMD 46: `0001` = the chunk was bad, `FFFF` = no reply. CMD 61: `0000` = failed or no reply (the error code tells which). Any other command: the status hello had posted. |
 | `CE` | COMM14 | **the Sub-CPU's heartbeat** (main.c `HW8`). The top digit is the CD drive's state: `0` stopped, `1` playing, `2` seeking, `3` scanning, `4` paused, `5` tray open, `9` reading the TOC, `B` no disc or error. The other three digits are its pass count ÷ 64. Two error boxes with the same `CE` mean the Sub-CPU has stopped. |
 
 ## 5. The green text, row by row (diagnostic disc)
-Printed by the Sub-CPU: `print_diag(…, row)` in `stack/subcpu/main.c`, and three rows from `scd.c`. Grep
+Printed by the Sub-CPU: `print_diag(…, row)` in `stack/subcpu/main.c`, and rows 2, 16, 17 and 19–25 from `scd.c`. Grep
 the text to find the code.
 Numbers are hex unless said otherwise.
 
@@ -113,7 +118,7 @@ Numbers are hex unless said otherwise.
 | 10 | `32X:cc 32XReg:rrrr STATE:ssss CKPT:kkkk` | COMM0 (the command), COMM4, **COMM12 (the status codes of §3–4)**, COMM8's high word. Redrawn when the status changes, until `4B10`. |
 | 11 | `OPENING <NAME>...` | CMD 38: the file name the number became |
 | 12 | `<NAME> n BYTES OK` / `ERR: <NAME> NOT FOUND` | its length (decimal); `(TOO TALL)` = over 128000 bytes, a note for pictures only |
-| 13 | `CART I<slot> C<chunk> @aaaaaa OK` | CMD 46: slot and chunk (decimal); `@` = the 68000 address written (`0x400000` + the cart offset). `BAD` = read back wrong, `EMPTY` = nothing read, `NOVFY` = not checked (bit 15). `CMP` instead of `CART` = CMD 47. After a `NOT FOUND`: `TIMEOUT: n` (0 none, 1 the drive command, 2 its acknowledge timed out). |
+| 13 | `CART I<slot> C<chunk> @aaaaaa OK` | CMD 46: slot and chunk (decimal); `@` = the 68000 address written (`0x400000` + the cart offset). `BAD` = read back wrong, `EMPTY` = nothing read, `NOVFY` = not checked (bit 15). `CMP` instead of `CART` = CMD 47. |
 | 14 | `CD TRACKS ff-ll TRACK2 xxxxxxxx` | the disc's first and last track, and track 2's position |
 | 15 | `ITER1 COMM PORT: nn` | the 68000's command byte on the main loop's first pass |
 | 16 | `32X WIN C<chunk> 900000: OK` / `… W<want> R<got>` | the chunk read back through the 68000's `0x900000` window; also `CD->FB CHUNK c n SECTORS` for CMD 50 / 51 (the boot picture) |
@@ -142,8 +147,8 @@ is the step that did not finish.
 runs slower on the diagnostic disc. That is expected: the release disc compiles that text out.
 
 **After a file is not found** (row 12 `ERR: … NOT FOUND`), `scd.c` lists the disc's root directory on rows
-19–25 as `FILE: <name>`, over the rows that were there (including row 25 `SAFE CART`). Compare the list with
-the name you asked for.
+19–25 as `FILE: <name>`, over the rows that were there (including row 25 `SAFE CART`); the heartbeat soon
+rewrites row 19. Compare the list with the name you asked for.
 
 ## 6. Codes from the other games (so you do not reuse them by accident)
 

@@ -50,7 +50,8 @@ Other file numbers load `IMAGEn.RAW` to slot n. Number 16 is `KOBOGFX.BIN`.
 - The game file list may hold at most 100 names. With a 101st, number 200 would open the 101st file into
   the level slot (the 100 + n range is checked first), and resident file 0 could not be reached.
 
-`build.sh` refuses:
+`build.sh` reads the ROM name and both slots from `game_files.h` and works out the limits from them. With
+the default layout it refuses:
 
 - a `GAME.32X` over 512 KB;
 - a data file over 1984 KB.
