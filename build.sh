@@ -4,6 +4,7 @@
 #   bash build.sh                       hello -> disc/BootCamp.cue + .bin (data + CD audio)
 #   GAME=mygame bash build.sh           your game folder, laid out like hello/ (see docs/02_PORTING_YOUR_GAME.md)
 #   ROOTDIR=/opt/toolchains/sega        Chilly Willy's Sega toolchain (sh-elf, m68k-elf, ldscripts, bootblocks)
+#   SEGA_TOOLCHAIN=<folder>             the same, plus <folder>/usr/bin on PATH (genisoimage)
 #
 # A game folder holds:  Makefile (makes <game>.32x, a normal 32X cartridge ROM), splash.png (the boot
 # picture), cd/ (data files for the disc, named as in stack/subcpu/game_files.h), music/TrackNN.wav
@@ -12,7 +13,11 @@ set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 GAME="${GAME:-hello}"
 G="$HERE/$GAME"
+# SEGA_TOOLCHAIN=<folder>: a toolchain somewhere else (sh-elf, m68k-elf, ldscripts, bootblocks; genisoimage
+# in <folder>/usr/bin if it is not installed), as in OpenJazz CD32X REV's build.sh
+if [ -n "${SEGA_TOOLCHAIN:-}" ]; then ROOTDIR="$SEGA_TOOLCHAIN"; export PATH="$PATH:$SEGA_TOOLCHAIN/usr/bin"; fi
 ROOTDIR="${ROOTDIR:-/opt/toolchains/sega}"
+[ -x "$ROOTDIR/sh-elf/bin/sh-elf-gcc" ] || { echo "*** no toolchain at $ROOTDIR (set ROOTDIR= or SEGA_TOOLCHAIN=)"; exit 1; }
 OUT="$HERE/disc"
 ROMS="$HERE/stack/subcpu/ROMS"
 NAME="${DISC_NAME:-BootCamp}"

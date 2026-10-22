@@ -29,6 +29,36 @@ CD32X runs on the console.
 | Host | Linux or WSL, `make`, `genisoimage`, Python 3 with Pillow |
 | Burning | a CD-R and a burner that writes `.cue/.bin` (data + audio) |
 
+## How to build
+
+On Linux, or in WSL on Windows:
+
+1. **Install the host tools:**
+
+   ```
+   sudo apt install build-essential genisoimage python3 python3-pil
+   ```
+
+2. **Get Chilly Willy's Sega toolchain.** You need `sh-elf/`, `m68k-elf/`, `ldscripts/` and
+   `bootblocks/US_BOOT.BIN`. The default place is `/opt/toolchains/sega`.
+
+3. **Build:**
+
+   ```
+   cd /mnt/s/KoboPort/sega-toolchain-12.1/sega/CD32X-BootCamp     # wherever this folder is
+   bash build.sh                                                   # toolchain in /opt/toolchains/sega
+   SEGA_TOOLCHAIN=/path/to/sega bash build.sh                      # toolchain somewhere else
+   GAME=mygame DISC_NAME=MyGame bash build.sh                      # your own game folder
+   ```
+
+4. **The result:** `disc/BootCamp.cue` + `disc/BootCamp.bin`, which hold the data track plus CD audio.
+   - Load the `.cue` in ares (*Mega CD 32X*, RAM cart on).
+   - Or burn the `.cue` with ImgBurn and run it on a Sega CD + 32X with the 4 MB RAM cart in the
+     32X slot.
+
+`build.sh` first checks that the boot stack is unchanged (`tools/check_boot.py`). It stops with a message
+at the first problem. Each step is explained in [docs/05_BUILD_TEST_BURN.md](docs/05_BUILD_TEST_BURN.md).
+
 ## How it boots, in one picture
 
 ```
