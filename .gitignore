@@ -1,0 +1,16 @@
+# build outputs (bash build.sh makes all of these again)
+disc/
+stack/subcpu/ROMS/
+stack/subcpu/cd/
+*.o
+*.elf
+*.map
+*.bin
+*.iso
+*.32x
+*.32X
+hello/build/
+stack/subcpu/temp.bin
+# made by build.sh when a game has no music
+hello/music/Track02.wav
+__pycache__/
