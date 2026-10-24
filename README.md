@@ -33,34 +33,89 @@ CD32X ran on the console (v1.0–v1.4).
 
 ## How to build
 
-On Linux, or in WSL on Windows:
+On Linux, or in WSL on Windows.
 
-1. **Install the host tools:**
+### 1. Install the host tools
 
-   ```
-   sudo apt install build-essential genisoimage python3 python3-pil
-   ```
+```
+sudo apt install build-essential genisoimage python3 python3-pil
+```
 
-2. **Get Chilly Willy's Sega toolchain.** You need `sh-elf/`, `m68k-elf/`, `ldscripts/` and
-   `bootblocks/US_BOOT.BIN`. The default place is `/opt/toolchains/sega`.
+### 2. Get Chilly Willy's Sega toolchain
 
-3. **Build:**
+You need `sh-elf/`, `m68k-elf/`, `ldscripts/` and `bootblocks/US_BOOT.BIN` (`EU_BOOT.BIN` / `JP_BOOT.BIN`
+for those regions). The default place is `/opt/toolchains/sega`.
 
-   ```
-   cd /path/to/CD32X-BootCamp                                      # e.g. /mnt/c/... in WSL
-   bash build.sh                                                   # toolchain in /opt/toolchains/sega
-   SEGA_TOOLCHAIN=/path/to/sega bash build.sh                      # toolchain somewhere else
-   GAME=mygame DISC_NAME=MyGame bash build.sh                      # your own game folder
-   DIAG=1 DISC_NAME=BootCampDiag bash build.sh                     # the diagnostic disc (docs/09)
-   ```
+### 3. Build
 
-4. **The result:** `disc/BootCamp.cue` + `disc/BootCamp.bin`, which hold the data track plus CD audio.
-   - Load the `.cue` in ares (*Mega CD 32X*, RAM cart on).
-   - Or burn the `.cue` with ImgBurn and run it on a Sega CD + 32X with the 4 MB RAM cart in the
-     32X slot.
+```
+cd /path/to/CD32X-BootCamp          # e.g. /mnt/c/... or /mnt/s/... in WSL
+bash build.sh                       # hello/ -> disc/BootCamp.cue + disc/BootCamp.bin
+```
 
-`build.sh` first checks that the boot stack is unchanged (`tools/check_boot.py`). It stops with a message
-at the first problem. Each step is explained in [docs/05_BUILD_TEST_BURN.md](docs/05_BUILD_TEST_BURN.md).
+**The result:** `disc/<DISC_NAME>.cue` + `.bin`: the data track, plus the CD audio tracks.
+- Load the `.cue` in ares (*Mega CD 32X*, RAM cart on).
+- Or burn the `.cue` (ImgBurn, or `cdrdao` on Linux) and run it on a Sega CD + 32X, with the 4 MB RAM cart
+  in the 32X slot.
+
+### 4. Every switch
+
+All switches are environment variables set in front of `bash build.sh`, and any of them can be combined.
+
+**The build** (`build.sh`):
+
+| Switch | Default | What it does |
+|---|---|---|
+| `GAME=<folder>` | `hello` | The game folder to build, laid out like `hello/`: `Makefile` (makes `<game>.32x`), `splash.png`, `cd/` (data files), `music/TrackNN.wav` (CD audio). |
+| `DISC_NAME=<name>` | `BootCamp` | The disc's file names: `disc/<name>.cue` + `.bin`. |
+| `ROOTDIR=<folder>` | `/opt/toolchains/sega` | Where the toolchain is. |
+| `SEGA_TOOLCHAIN=<folder>` | — | The same as `ROOTDIR`, and it also adds `<folder>/usr/bin` to `PATH` (for a `genisoimage` kept there). |
+| `REGION=US` / `EU` / `JP` | `US` | The boot block for the console's region. Only US is tested. |
+| `DIAG=1` | `0` | **The diagnostic disc.** It shows the 32X's white start-up lines and the Sub-CPU's green boot text from the SEGA logo on, in front of the boot picture. hello starts on that text, with a pad readout; **B+C** switches to hello's screen. The release lines are put back after the build. See [docs/09](docs/09_ERROR_CODES.md). |
+
+**The Sub-CPU program** (`stack/subcpu/Makefile`). All are **off** by default; with all of them off, the
+Sub-CPU code is the code OpenLara CD32X ran on the console. Each one is tested in emulation only.
+
+| Switch | What it does |
+|---|---|
+| `STREAM=1` | CD read-ahead for file loads (CMD 46 / 47): about 2.5× faster in emulation |
+| `CARTW=1` | Copies to the cart in words instead of bytes: about 3× faster |
+| `FMVRING=1` | Ring mode in CMD 46, for movies that play while they stream (OpenLara) |
+| `SLOTS=1` | CMD 61 bit 8 writes OpenLara's save-slot area at `0x060000`. That is inside this kit's ROM area: leave it off. |
+| `CART=8` / `CART=16` | The 8 / 16 MB paged-cart test build, with CMD 68 |
+
+**The game** (`hello/Makefile`): `build.sh` passes `DIAG` on to it as `HELLO_DIAG_TEXT`. Your own
+game's Makefile may use it or ignore it.
+
+**Set in files, not on the command line:**
+
+| Where | What |
+|---|---|
+| `stack/subcpu/game_files.h` | `GAME_ROM_NAME` (8.3); `GAME_BRAM_NAME` (11 characters); `GAME_DATA_SLOT` / `GAME_RESIDENT_SLOT` (4–31: slot n = cart n × 128 KB); the data and movie file lists (at most 100 names). `build.sh` takes the ROM name and the size limits from here. |
+| `stack/subcpu/main.c` | `KOBO_DIAG_TEXT`, `KOBO_BOOT_TEXT`: leave them at 0 and use `DIAG=1`. |
+
+### 5. Examples
+
+```
+bash build.sh                                          # the release disc
+DIAG=1 DISC_NAME=BootCampDiag bash build.sh            # the diagnostic disc
+GAME=mygame DISC_NAME=MyGame bash build.sh             # your game
+SEGA_TOOLCHAIN=/opt/sega REGION=EU bash build.sh       # another toolchain place, a PAL console
+STREAM=1 CARTW=1 DISC_NAME=BootCampFast bash build.sh  # faster loads (emulation-tested only)
+```
+
+### 6. What build.sh checks
+
+It stops with a message at the first problem:
+
+- the boot stack has changed (`tools/check_boot.py`);
+- `game_files.h` breaks its rules;
+- the game made no ROM, or more than one;
+- the ROM is not a 32X ROM, or it runs into the first data slot;
+- a data file fits neither slot;
+- a release build still has a diagnostic line in it.
+
+Each step is explained in [docs/05_BUILD_TEST_BURN.md](docs/05_BUILD_TEST_BURN.md).
 
 ## How it boots, in one picture
 

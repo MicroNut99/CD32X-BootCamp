@@ -3,11 +3,13 @@
 #
 #   bash build.sh                       hello -> disc/BootCamp.cue + .bin (data + CD audio)
 #   GAME=mygame bash build.sh           your game folder, laid out like hello/ (see docs/02_PORTING_YOUR_GAME.md)
+#   DISC_NAME=<name>                    disc/<name>.cue + .bin (default BootCamp)
 #   ROOTDIR=/opt/toolchains/sega        Chilly Willy's Sega toolchain (sh-elf, m68k-elf, ldscripts, bootblocks)
 #   SEGA_TOOLCHAIN=<folder>             the same, plus <folder>/usr/bin on PATH (genisoimage)
 #   DIAG=1                              the diagnostic disc: the stack's boot text on (docs/09_ERROR_CODES.md)
 #   REGION=US | EU | JP                 the boot block for the console's region (default US; only US is tested)
 #   STREAM= CARTW= FMVRING= SLOTS= CART= the Sub-CPU's build switches (stack/subcpu/Makefile; all off by default)
+# Every switch is listed in README.md, "How to build".
 #
 # A game folder holds:  Makefile (makes <game>.32x, a normal 32X cartridge ROM), splash.png (the boot
 # picture), cd/ (data files for the disc, named as in stack/subcpu/game_files.h), music/TrackNN.wav
