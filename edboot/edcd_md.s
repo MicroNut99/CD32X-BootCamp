@@ -26,7 +26,7 @@
         .equ    ED_W0, 0
         .endif
         .ifndef ED_CTRL0
-        .equ    ED_CTRL0, 0xA000
+        .equ    ED_CTRL0, 0x8000
         .endif
 
         .text
@@ -178,6 +178,7 @@ _start:
 w0_move:
         move.b  #1,0xA15107
         move.w  #ED_W0,0xA130F2         /* window 1 = the new bank */
+        move.w  #ED_CTRL0|0x2000,0xA130F0 /* W on for this copy only (no other 68000 write until off) */
         lea     0x000100,a0
         lea     0x080100,a1
         move.w  #(0x800-0x100)/2-1,d0
@@ -189,7 +190,7 @@ w0_move:
 2:      move.l  #0x000003F0,(a1)+
         dbra    d0,2b
         move.w  #1,0xA130F2             /* window 1 = bank 1 again */
-        move.w  #ED_CTRL0+ED_W0,0xA130F0 /* window 0 = the new bank, writes on */
+        move.w  #ED_CTRL0+ED_W0,0xA130F0 /* window 0 = the new bank, W off again */
         move.b  #0,0xA15107
         jmp     0x600000
 w0_move_end:
@@ -231,8 +232,10 @@ ed_regs:
         addq.w  #1,d0
         cmpi.w  #8,d0
         bne.b   1b
-        move.w  #ED_CTRL0,0xA130F0      /* CTRL0: P + W (0xA000) or P + X + W (0xE000, EDCD_X=1): both
-                                           console-proven by edtest; X = the EverDrive's 32X mode */
+        move.w  #ED_CTRL0,0xA130F0      /* CTRL0: P (0x8000; P + X with EDCD_X=1).  W stays OFF: console,
+                                           25 Oct 2026 (edw0) - with W on, the 68000's writes elsewhere
+                                           corrupt the cart and the SH2's reads of it.  The listener
+                                           turns W on only inside a copy into the cart. */
         move.b  #0,0xA15107             /* RV off: the cart back at 0x880000, the SH2s may read it */
         rts
 ed_regs_end:

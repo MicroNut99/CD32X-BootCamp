@@ -25,7 +25,8 @@ $AS -o "$B/edcd_sp.o" edcd_sp.s
 "${P}objcopy" -O binary "$B/edcd_sp.elf" "$B/edcd_sp.bin"
 # EDCD_W0=<bank>: the EverDrive bank in window 0 after the hand-over (edcd_md.s ED_W0; default 0)
 # EDCD_X=1: CTRL0 = 0xE000 (P + X + W, the EverDrive's 32X mode) instead of 0xA000; both edtest-proven
-CTRL0=0xA000; [ "${EDCD_X:-0}" = 1 ] && CTRL0=0xE000
+# MODE1-6: W (bit 13) stays OFF: the listener turns it on only inside a copy into the cart (hw_md.s)
+CTRL0=0x8000; [ "${EDCD_X:-0}" = 1 ] && CTRL0=0xC000
 $AS --defsym ED_W0=${EDCD_W0:-0} --defsym ED_CTRL0=$CTRL0 -o "$B/edcd_md.o" edcd_md.s
 $AS -o "$B/kos.o" ../stack/subcpu/kos.s
 "${P}ld" -Ttext 0x880800 -e _start -o "$B/edcd_md.elf" "$B/edcd_md.o" "$B/kos.o"

@@ -52,6 +52,17 @@
         .ifndef OL_M1W0BANK
         .equ    OL_M1W0BANK, 0
         .endif
+| MODE1-6: the EverDrive's write-enable bit (CTRL0 bit 13, W) is OFF except inside a copy INTO the
+| cart.  Console, 25 Oct 2026 (edw0): with W on, some of the 68000's writes to OTHER addresses (work
+| RAM, the VDP, the gate array - what a listener does all the time) land in the cart, and the SH2's
+| reads of the cart come back as zeros meanwhile; with W off, none of that.  So W goes on after the
+| call's own stack push, with RV already holding the SH2 off the cart, and off again before any other
+| write.  M1CTRL0 = the launcher's CTRL0 without W (default 0x8000: P; 0xC000 with the X bit).
+        .ifndef OL_M1CTRL0
+        .equ    OL_M1CTRL0, 0x8000
+        .endif
+        .equ    OL_M1CTRL0_W1, OL_M1CTRL0 + 0x2000 + OL_M1W0BANK   /* + not |: | starts a comment here */
+        .equ    OL_M1CTRL0_W0, OL_M1CTRL0 + OL_M1W0BANK
         .ifndef OL_M1NOVINT
         .equ    OL_M1NOVINT, 0
         .endif
@@ -1555,25 +1566,38 @@ m1_cart:
         tst.w   d4
         bne.b   3f
         adda.l  #0x080000,a1
-        bsr.b   m1_cpy
+        bsr.b   m1_cpy_w                /* a write into the cart: W on inside */
         suba.l  #0x080000,a1
         bra.b   4f
 3:      adda.l  #0x080000,a0
-        bsr.b   m1_cpy
+        bsr.b   m1_cpy                  /* a read from the cart: W stays off */
         suba.l  #0x080000,a0
 4:      move.w  #1,0xA130F2             /* window 1 = bank 1 again */
         bclr    #0,0xA15107
         move.w  (sp)+,sr
         rts
 
-| d2 bytes (a0)+ -> (a1)+, in bytes (d3 = 0) or words (d3 = 1); with RV = 1 and no interrupt
+| d2 bytes (a0)+ -> (a1)+, in bytes (d3 = 0) or words (d3 = 1); with RV = 1 and no interrupt.
+| d4 = 0: the cart is the destination (W on inside the copy); else a read of the cart (W off).
 m1_rvcpy:
         move.w  sr,-(sp)
         move.w  #0x2700,sr
         bset    #0,0xA15107
-        bsr.b   m1_cpy
-        bclr    #0,0xA15107
+        tst.w   d4
+        bne.b   1f
+        bsr.b   m1_cpy_w
+        bra.b   2f
+1:      bsr.b   m1_cpy
+2:      bclr    #0,0xA15107
         move.w  (sp)+,sr
+        rts
+
+| MODE1-6: m1_cpy with the EverDrive's W on for the copy only - no other write by the 68000 between
+| the two CTRL0 writes (the call's push is before, the return is a read).  RV = 1 already.
+m1_cpy_w:
+        move.w  #OL_M1CTRL0_W1,0xA130F0
+        bsr.b   m1_cpy
+        move.w  #OL_M1CTRL0_W0,0xA130F0
         rts
 | d2 bytes (a0)+ -> (a1)+, in bytes (d3 = 0) or words (d3 = 1, d2 rounded up to a word)
 m1_cpy:

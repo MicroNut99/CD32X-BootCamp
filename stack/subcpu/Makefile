@@ -66,6 +66,9 @@ endif
 ifneq ($(M1W0BANK),)
 ASFLAGS += --defsym OL_M1W0BANK=$(M1W0BANK)
 endif
+ifneq ($(M1CTRL0),)
+ASFLAGS += --defsym OL_M1CTRL0=$(M1CTRL0)
+endif
 endif
 
 PREFIX = $(ROOTDIR)/m68k-elf/bin/m68k-elf-
