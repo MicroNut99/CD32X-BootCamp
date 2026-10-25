@@ -12,7 +12,7 @@ af969044811079df7b9e4ff77f367363  stack/subcpu/files.h
 b979f95f122b4a71770f1ec595d81dc3  stack/subcpu/files.s
 358b7bc04a82c9b508ee04551018d356  stack/subcpu/font.s
 0bf506694f4123316b70d70e574387bd  stack/subcpu/hw_md.h
-5ba3865f6c49acc1b90c0a94086fc1b3  stack/subcpu/hw_md.s
+0e1b9c359be61ba87ca4d88af9bea96e  stack/subcpu/hw_md.s
 59ddb6c8154f98101e90697fec7b38ba  stack/subcpu/kos.s
 2d4baf5d9434f353d8774d1744f45905  stack/subcpu/main.c
 463ff58dcc02ea41e6f1155bfbad2d77  stack/subcpu/make_mixed_cd2.py

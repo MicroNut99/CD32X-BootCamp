@@ -1160,6 +1160,17 @@ copy_to_cart:
         rts
 
 safe_cart_xfer:
+        .if OL_MODE1
+        movem.l d3,-(sp)                /* MODE1-1: (src, dst, len), bytes, through m1_xfer */
+        movea.l 8(sp),a0
+        movea.l 12(sp),a1
+        move.l  16(sp),d0
+        moveq   #0,d3
+        bsr     m1_xfer
+        movem.l (sp)+,d3
+        moveq   #0,d0
+        rts
+        .endif
         movem.l d2-d3/a2,-(sp)
         movea.l 16(sp),a2
         move.l  20(sp),d2
@@ -1188,6 +1199,17 @@ safe_cart_xfer:
         rts
 
 safe_cart_xfer_w:
+        .if OL_MODE1
+        movem.l d3,-(sp)                /* MODE1-1: (src, dst, len), words, through m1_xfer */
+        movea.l 8(sp),a0
+        movea.l 12(sp),a1
+        move.l  16(sp),d0
+        moveq   #1,d3
+        bsr     m1_xfer
+        movem.l (sp)+,d3
+        moveq   #0,d0
+        rts
+        .endif
         movem.l d2-d3/a2,-(sp)
         movea.l 16(sp),a2
         move.l  20(sp),d2
@@ -1213,6 +1235,10 @@ safe_cart_xfer_w:
         rts
 
 bram_put:
+        .if OL_MODE1
+        moveq   #-1,d0                  /* MODE1-1: not in a cartridge boot (Word RAM with RV = 1) */
+        rts
+        .endif
         movem.l d2-d3/a2,-(sp)
         movea.l 16(sp),a2
         move.l  20(sp),d2
@@ -1237,6 +1263,10 @@ bram_put:
         rts
 
 bram_get:
+        .if OL_MODE1
+        moveq   #-1,d0                  /* MODE1-1: not in a cartridge boot (Word RAM with RV = 1) */
+        rts
+        .endif
         movem.l d2-d3/a2,-(sp)
         movea.l 16(sp),a2
         move.l  20(sp),d2
@@ -1399,27 +1429,100 @@ chilly_memcpy:
 
 chilly_rv_memcpy:
         .if OL_MODE1
-| MODE1-1: with RV = 1 the 68000's vectors are not the RAM jump table, so no interrupt may come then.
-| The copy goes in 1 KB blocks (about 5 ms each), interrupts off and RV on for each block only: a
-| vblank waits at most one block, as in a CD boot the vblank and the Sub-CPU's level 2 keep coming.
-        movea.l 4(sp),a1
-        movea.l 8(sp),a0
-        move.l  12(sp),d0
+        movem.l d3,-(sp)                /* MODE1-1: (dst, src, len), bytes, through m1_xfer */
+        movea.l 8(sp),a1
+        movea.l 12(sp),a0
+        move.l  16(sp),d0
+        moveq   #0,d3
+        bsr     m1_xfer
+        movem.l (sp)+,d3
+        moveq.l #0,d0
+        rts
+
+| MODE1-1: m1_xfer - a copy to or from the cart for the cartridge boot.  a0 = src, a1 = dst, d0 = bytes,
+| d3 = 0 bytes / 1 words.  The cart (0x000000-0x3FFFFF) and its registers (0xA130xx) take RV = 1; the
+| Sega CD (0x400000-0x7FFFFF: Word RAM) may not be touched while RV = 1.  Console, 25 Oct 2026: copies
+| from Word RAM made with RV = 1 came out garbled in cartridge mode (the game "03" became "01", 5AA5
+| read back 4880), the same copies with RV = 0 (the splash) did not.  So every block of up to 1 KB
+| goes through a buffer in work RAM: the Sega CD side with RV = 0, the cart side with RV = 1 and
+| interrupts off (about 5 ms: a vblank waits at most that long).
+m1_xfer:
+        movem.l d2/a2-a4,-(sp)
+        lea     m1_buf(pc),a4
 1:
+        tst.l   d0
+        ble     9f
+        move.l  d0,d2
+        cmpi.l  #1024,d2
+        bls.b   2f
+        move.l  #1024,d2
+2:
+        sub.l   d2,d0
+        cmpa.l  #0x400000,a0
+        blo.b   4f
+        cmpa.l  #0x800000,a0
+        bhs.b   4f
+        movea.l a1,a2                   /* the source is the Sega CD: to the buffer with RV = 0 */
+        movea.l a4,a1
+        bsr     m1_cpy
+        movea.l a2,a1
+        movea.l a0,a2
+        movea.l a4,a0                   /* then the buffer to the cart side with RV = 1 */
+        bsr     m1_rvcpy
+        movea.l a2,a0
+        bra.b   1b
+4:
+        cmpa.l  #0x400000,a1
+        blo.b   6f
+        cmpa.l  #0x800000,a1
+        bhs.b   6f
+        movea.l a1,a2                   /* the destination is the Sega CD: the cart to the buffer */
+        movea.l a4,a1                   /* with RV = 1 ... */
+        bsr     m1_rvcpy
+        movea.l a2,a1
+        movea.l a0,a2
+        movea.l a4,a0                   /* ... then the buffer there with RV = 0 */
+        bsr     m1_cpy
+        movea.l a2,a0
+        bra.b   1b
+6:
+        bsr     m1_rvcpy                /* neither side is the Sega CD: straight, RV = 1 */
+        bra.b   1b
+9:
+        movem.l (sp)+,d2/a2-a4
+        rts
+
+| d2 bytes (a0)+ -> (a1)+, in bytes (d3 = 0) or words (d3 = 1); with RV = 1 and no interrupt
+m1_rvcpy:
         move.w  sr,-(sp)
         move.w  #0x2700,sr
         bset    #0,0xA15107
-        move.w  #1023,d1
-2:
-        move.b  (a0)+,(a1)+
-        subq.l  #1,d0
-        dble    d1,2b                   /* until the end, or 1 KB */
+        bsr.b   m1_cpy
         bclr    #0,0xA15107
-        move.w  (sp)+,sr                /* a waiting vblank is taken here */
-        tst.l   d0
-        bgt.b   1b
-        moveq.l #0,d0
+        move.w  (sp)+,sr
         rts
+| d2 bytes (a0)+ -> (a1)+, in bytes (d3 = 0) or words (d3 = 1, d2 rounded up to a word)
+m1_cpy:
+        move.l  d2,d1
+        tst.w   d3
+        bne.b   2f
+        subq.l  #1,d1
+1:
+        move.b  (a0)+,(a1)+
+        dbra    d1,1b
+        rts
+2:
+        addq.l  #1,d1
+        lsr.l   #1,d1
+        subq.l  #1,d1
+3:
+        move.w  (a0)+,(a1)+
+        dbra    d1,3b
+        rts
+
+        .align  2
+m1_buf:
+        .space  1024
         .else
         bset    #0,0xA15107
         movea.l 4(sp),a1

@@ -36,7 +36,10 @@ From there the stack runs unchanged except for **one switch**, `MODE1=1` (`stack
 - every address argument it gets from the Sub-CPU is moved to the cartridge-boot map (Word RAM
   `0x2xxxxx` → `0x6xxxxx`, the cart `0x4xxxxx`–`0x7xxxxx` → `0x0xxxxx`–`0x3xxxxx`); 32X register
   values (commands 19–22) are left alone;
-- interrupts are off while RV = 1 (the 68000's vectors are then the cart's);
+- every copy to or from the cart goes through a 1 KB buffer in work RAM: the Sega CD side (Word RAM) is
+  read and written with RV = 0, the cart side with RV = 1 and interrupts off. On the console, reads of
+  Word RAM made with RV = 1 came out garbled in cartridge mode (the same copies with RV = 0 did not);
+  the 68000's vectors are the cart's while RV = 1, so no interrupt may come then either;
 - the 32X is not reset and gets no CD boot table (it is running already).
 
 Without `MODE1`, `hw_md.s` assembles to the same bytes as before (checked: the Sub-CPU program's md5 is
