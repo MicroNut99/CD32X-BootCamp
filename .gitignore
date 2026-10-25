@@ -20,3 +20,4 @@ __pycache__/
 edtest/EDTEST_*.32X
 edboot/EDBOOT.BIN
 edboot/build/
+edboot/EDPROBE.BIN

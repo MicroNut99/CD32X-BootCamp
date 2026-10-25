@@ -1,7 +1,8 @@
 #!/bin/bash
 # edboot/build.sh - the Mega EverDrive PRO launchers for CD32X discs (docs/10_EVERDRIVE_TEST.md)
 #   bash edboot/build.sh    -> edboot/EDBOOT.BIN   the launcher: the EverDrive as the RAM cart, then the CD
-#                              edboot/EDBOOTD.BIN  the diagnostic: what the EverDrive does after the C bit
+#                              edboot/EDBOOTD.BIN  the first diagnostic (superseded by EDPROBE)
+#                              edboot/EDPROBE.BIN  the probe: what the console sees after ONE write of the C bit
 #   ROOTDIR= / SEGA_TOOLCHAIN=  the toolchain, as for the main build.sh (only m68k-elf is used)
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -36,4 +37,11 @@ rom edboot.s EDBOOT.BIN
 "${P}objcopy" -O binary -j .text "$B/edbootd_ram.elf" "$B/edbootd_ram.bin"
 SZ=$(stat -c %s "$B/edbootd_ram.bin"); [ "$SZ" -le 28672 ] || { echo "*** the RAM program is $SZ bytes (28 KB at most)"; exit 1; }
 rom edbootd_rom.s EDBOOTD.BIN
+# EDPROBE: the same way
+"${P}gcc" -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -fno-delete-null-pointer-checks --param=min-pagesize=0 -Wall -c -o "$B/edprobe.o" edprobe.c
+"${P}as" -m68000 --register-prefix-optional -o "$B/edprobe_crt.o" edprobe_crt.s
+"${P}gcc" -m68000 -nostdlib -T edbootd.ld -o "$B/edprobe_ram.elf" "$B/edprobe_crt.o" "$B/edprobe.o" -lgcc
+"${P}objcopy" -O binary -j .text "$B/edprobe_ram.elf" "$B/edprobe_ram.bin"
+SZ=$(stat -c %s "$B/edprobe_ram.bin"); [ "$SZ" -le 28672 ] || { echo "*** the RAM program is $SZ bytes (28 KB at most)"; exit 1; }
+rom edprobe_rom.s EDPROBE.BIN
 rm -rf "$B"
