@@ -166,3 +166,12 @@ written.
 In ares v148 this ROM shows `MAPPER: SWITCHES BANKS` and `W` for every bank: plain ares emulates the standard
 SSF mapper (bank switching, read only), not the EverDrive's write bit. With the EverDrive board
 ([docs/11](11_ARES_16MB_RAM_CART.md)) it shows the console's result.
+
+## Afterwards: `edw0/` (25 Oct 2026)
+
+edtest proved the memory with the 68000 idle between its commands. The cartridge boot then showed what
+edtest could not: with the EverDrive's write-enable bit on, a 68000 **write to any other address** (work RAM,
+the VDP, the gate array) can land in the cart and change it, and the SH2's read of the cart at that moment
+comes back as zeros. `edw0/` (built from edtest: `bash edw0/build.sh`) is the probe that measured it - the SH2
+reads window 0 while the 68000 does one thing at a time, under the write-enable bit on and off. The result
+and the rule it gave the listener are in [docs/12](12_CARTRIDGE_BOOT.md). `EDW0E_W.32X` is the one to run.
