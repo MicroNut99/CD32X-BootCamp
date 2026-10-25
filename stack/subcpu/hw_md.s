@@ -1399,19 +1399,25 @@ chilly_memcpy:
 
 chilly_rv_memcpy:
         .if OL_MODE1
-        move.w  sr,-(sp)                /* MODE1-1: with RV = 1 the vectors are the cart's: no interrupt */
+| MODE1-1: with RV = 1 the 68000's vectors are not the RAM jump table, so no interrupt may come then.
+| The copy goes in 1 KB blocks (about 5 ms each), interrupts off and RV on for each block only: a
+| vblank waits at most one block, as in a CD boot the vblank and the Sub-CPU's level 2 keep coming.
+        movea.l 4(sp),a1
+        movea.l 8(sp),a0
+        move.l  12(sp),d0
+1:
+        move.w  sr,-(sp)
         move.w  #0x2700,sr
         bset    #0,0xA15107
-        movea.l 6(sp),a1
-        movea.l 10(sp),a0
-        move.l  14(sp),d0
-0:
-        move.b  (a0)+,d1
-        move.b  d1,(a1)+
-        subi.l  #1,d0
-        bgt.b   0b
+        move.w  #1023,d1
+2:
+        move.b  (a0)+,(a1)+
+        subq.l  #1,d0
+        dble    d1,2b                   /* until the end, or 1 KB */
         bclr    #0,0xA15107
-        move.w  (sp)+,sr
+        move.w  (sp)+,sr                /* a waiting vblank is taken here */
+        tst.l   d0
+        bgt.b   1b
         moveq.l #0,d0
         rts
         .else

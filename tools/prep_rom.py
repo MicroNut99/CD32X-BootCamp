@@ -88,6 +88,12 @@ def main():
                 fail("--mode1: the 68000 jump table entry at 0x%03X is not a jmp/jsr (%04X)" % (o, op))
             rom[o:o + 6] = struct.pack(">HI", 0x4EF9, VECTOR_RAM.get(n, 0xFFFDA8))
         print("mode1       : 68000 jump table -> the RAM jump table at 0xFFFD00")
+        # and the vectors as every 32X cartridge's (EDCD.32X's too), so it does not matter whether a
+        # 68000 write with RV = 1 reaches cart 0x000000-0x0000FF or not (in ares it does not)
+        std = struct.pack(">I", 0x01000000) + struct.pack(">I", 0x3F0) * 63
+        if bytes(rom[0:0x100]) != std:
+            rom[0:0x100] = std
+            print("mode1       : vectors set to the 32X standard (SSP 0x01000000, all 0x3F0)")
 
     # trim: drop the zero padding at the end (keeps the SDRAM image, rounded to 2 KB)
     end = len(rom)

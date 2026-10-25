@@ -1,12 +1,15 @@
 #!/bin/bash
 # edboot/build_edcd.sh - EDCD.32X, a CD32X disc started from a Mega EverDrive PRO (docs/12_CARTRIDGE_BOOT.md)
-#   bash edboot/build_edcd.sh <the stack's Sub-CPU program built with MODE1=1> <stack/sh2/CDLOADER.32x>
-# build.sh runs it with EDCD=1; it needs nothing else.  ROOTDIR= / SEGA_TOOLCHAIN= as for build.sh.
+#   bash edboot/build_edcd.sh <the stack's Sub-CPU program built with MODE1=1> <stack/sh2/CDLOADER.32x> [<out>]
+# build.sh runs it with EDCD=1 (so do other CD32X games' builds: OpenLara CD32X REV); <out> defaults to
+# edboot/EDCD.32X.  It needs nothing else.  ROOTDIR= / SEGA_TOOLCHAIN= as for build.sh.
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
-[ $# = 2 ] || { echo "usage: bash edboot/build_edcd.sh <app_mode1.bin> <CDLOADER.32x>"; exit 1; }
+[ $# = 2 ] || [ $# = 3 ] || { echo "usage: bash edboot/build_edcd.sh <app_mode1.bin> <CDLOADER.32x> [<out.32X>]"; exit 1; }
 APP="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 CDL="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
+OUT="$HERE/EDCD.32X"
+if [ $# = 3 ]; then OUT="$(cd "$(dirname "$3")" && pwd)/$(basename "$3")"; fi
 if [ -n "${SEGA_TOOLCHAIN:-}" ]; then ROOTDIR="$SEGA_TOOLCHAIN"; fi
 ROOTDIR="${ROOTDIR:-/opt/toolchains/sega}"
 P="$ROOTDIR/m68k-elf/bin/m68k-elf-"
@@ -25,5 +28,5 @@ $AS -o "$B/kos.o" ../stack/subcpu/kos.s
 "${P}ld" -Ttext 0x880800 -e _start -o "$B/edcd_md.elf" "$B/edcd_md.o" "$B/kos.o"
 "${P}objcopy" -O binary "$B/edcd_md.elf" "$B/edcd_md.bin"
 "${P}nm" "$B/edcd_md.elf" > "$B/edcd_md.sym"
-python3 make_edcd.py "$B/edcd_md.bin" "$B/edcd_md.sym" "$CDL" ../edtest/src/crt0.s "$HERE/EDCD.32X"
+python3 make_edcd.py "$B/edcd_md.bin" "$B/edcd_md.sym" "$CDL" ../edtest/src/crt0.s "$OUT"
 rm -rf "$B"
