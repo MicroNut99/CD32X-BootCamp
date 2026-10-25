@@ -140,12 +140,15 @@ static char *dec(char *d, uint32_t v)
 
 /* ---- the probe ---- */
 typedef struct { uint32_t bad, passes_bad, first, want, got; const char *name; } Phase;
-static Phase ph[5] = {
-    { 0, 0, 0, 0, 0, "A W0  SH2 CT  68K IDLE   " },
-    { 0, 0, 0, 0, 0, "B W0  SH2 CT  68K READS W0" },
-    { 0, 0, 0, 0, 0, "C W1=B8 SH2 CT 68K IDLE  " },
-    { 0, 0, 0, 0, 0, "D W1=B8 SH2 CT 68K RDS W0" },
-    { 0, 0, 0, 0, 0, "E W0  SH2 CACHED 68K IDLE" },
+static Phase ph[8] = {
+    { 0, 0, 0, 0, 0, "A W0 CT  68K IDLE        " },
+    { 0, 0, 0, 0, 0, "B W0 CT  68K READS CART  " },
+    { 0, 0, 0, 0, 0, "C W1 CT  68K IDLE        " },
+    { 0, 0, 0, 0, 0, "D W1 CT  68K READS CART  " },
+    { 0, 0, 0, 0, 0, "E W0 CACHED 68K IDLE     " },
+    { 0, 0, 0, 0, 0, "F W0 CT  68K READS SEGACD" },
+    { 0, 0, 0, 0, 0, "G W0 CT  68K READS VDP   " },
+    { 0, 0, 0, 0, 0, "H W0 CT  68K READS WORKRAM" },
 };
 static uint32_t pass_no;
 static const char *phase = "START";
@@ -188,10 +191,10 @@ static void draw(void)
     text(8, 16, "CTRL0", C_GREY); text(56, 16, hexn(b, ED_CTRL0, 4), C_YELLOW);
     text(120, 16, "PASS", C_GREY); text(160, 16, dec(b, pass_no), C_WHITE);
     text(216, 16, "PHASE", C_GREY); text(264, 16, phase, C_WHITE);
-    text(8 + 26 * 8, 32, "ERRORS  BAD", C_GREY);
-    for (int i = 0; i < 5; i++)
+    text(8 + 26 * 8, 28, "ERRORS  BAD", C_GREY);
+    for (int i = 0; i < 8; i++)
     {
-        int y = 44 + i * 28;
+        int y = 38 + i * 20;
         Phase *p = &ph[i];
         text(8, y, p->name, p->bad ? C_RED : C_GREEN);
         text(8 + 26 * 8, y, dec(b, p->bad), p->bad ? C_RED : C_WHITE);
@@ -203,12 +206,13 @@ static void draw(void)
             text(208, y + 12, "GOT", C_GREY); text(240, y + 12, hexn(b, p->got, 4), C_RED);
         }
     }
-    text(8, 196, "A,E: WINDOW 0 = THE GAME'S HOME.  C,D: CONTROL.", C_GREY);
-    text(8, 208, "B,D: 68000 READING 0x880200 MEANWHILE.", C_GREY);
+    text(8, 200, "SH2 READS THE CART WHILE THE 68000 READS...", C_GREY);
+    text(8, 210, "CART 880200 / SEGA CD 400100 / VDP C00004 / RAM", C_GREY);
     flip();
 }
 
 static void hammer_start(void) { MARS_SYS_COMM2 = 120; MARS_SYS_COMM0 = 0x0B00; }   /* ~1 s of 68000 reads */
+static void hammer_start_cmd(uint16_t cmd) { MARS_SYS_COMM2 = 120; MARS_SYS_COMM0 = cmd; }
 static void hammer_wait(void)  { uint32_t t0 = gTicks; while (MARS_SYS_COMM0 != 0 && gTicks - t0 < 600) { } }
 
 int main(void)
@@ -248,6 +252,15 @@ int main(void)
         if (!md_cmd(0x0601, 1)) fail_stop("68000 NOT ANSWERING");
         phase = "E"; draw();
         verify_cached(0, seed0, FROM, TO, &bad, &first, &got); note(&ph[4], bad, first, pat(first / 2, seed0), got);
+        phase = "F"; draw();
+        hammer_start_cmd(0x0C00); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[5], bad, first, pat(first / 2, seed0), got);
+        phase = "G"; draw();
+        hammer_start_cmd(0x0D00); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[6], bad, first, pat(first / 2, seed0), got);
+        phase = "H"; draw();
+        hammer_start_cmd(0x0E00); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[7], bad, first, pat(first / 2, seed0), got);
         draw();
     }
 }

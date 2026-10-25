@@ -29,3 +29,4 @@ edw0/src-md/*.o
 edw0/src-md/*.bin
 edw0/src-md/*.elf
 edw0/src-md/*.map
+edw0/EDW0B_*.32X

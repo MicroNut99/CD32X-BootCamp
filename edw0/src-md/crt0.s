@@ -234,6 +234,12 @@ handle_req:
         bls     ed_fill_hi
         cmpi.w  #0x0BFF,d0
         bls     ed_hammer
+        cmpi.w  #0x0CFF,d0
+        bls     ed_hammer_cd
+        cmpi.w  #0x0DFF,d0
+        bls     ed_hammer_vdp
+        cmpi.w  #0x0EFF,d0
+        bls     ed_hammer_wram
 | unknown command
         move.w  #0,0xA15120         /* done */
         bra.b   main_loop
@@ -302,6 +308,52 @@ ed_hammer:
         move.w  0xA15122,d1
         mulu.w  #1000,d1
         lea     0x880200,a0
+1:      move.w  (a0),d0
+        move.w  2(a0),d0
+        move.w  4(a0),d0
+        move.w  6(a0),d0
+        move.w  8(a0),d0
+        move.w  10(a0),d0
+        move.w  12(a0),d0
+        move.w  14(a0),d0
+        subq.l  #1,d1
+        bne.b   1b
+        move.w  #0,0xA15120         /* done */
+        bra     main_loop
+
+| 0x0C00: edw0 - the 68000 reads the Sega CD's side of the bus (the BIOS ROM at 0x400000, as the
+| cartridge boot has it), COMM2 x 1000 times 8 words, while the SH2 reads the cart
+ed_hammer_cd:
+        moveq   #0,d1
+        move.w  0xA15122,d1
+        mulu.w  #1000,d1
+        lea     0x400100,a0
+        bra.b   ed_hammer_loop
+| 0x0D00: edw0 - the 68000 reads the Genesis VDP's status port meanwhile
+ed_hammer_vdp:
+        moveq   #0,d1
+        move.w  0xA15122,d1
+        mulu.w  #1000,d1
+        lea     0xC00004,a0
+1:      move.w  (a0),d0
+        move.w  (a0),d0
+        move.w  (a0),d0
+        move.w  (a0),d0
+        move.w  (a0),d0
+        move.w  (a0),d0
+        move.w  (a0),d0
+        move.w  (a0),d0
+        subq.l  #1,d1
+        bne.b   1b
+        move.w  #0,0xA15120         /* done */
+        bra     main_loop
+| 0x0E00: edw0 - the 68000 reads its work RAM meanwhile
+ed_hammer_wram:
+        moveq   #0,d1
+        move.w  0xA15122,d1
+        mulu.w  #1000,d1
+        lea     0xFF0100,a0
+ed_hammer_loop:
 1:      move.w  (a0),d0
         move.w  2(a0),d0
         move.w  4(a0),d0
