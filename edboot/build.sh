@@ -1,27 +1,39 @@
 #!/bin/bash
-# edboot/build.sh - EDBOOT.BIN, the launcher that makes a Mega EverDrive PRO the RAM cart of a CD32X disc
-#   bash edboot/build.sh           -> edboot/EDBOOT.BIN (32 KB, header "SEGA SSF")
-#   ROOTDIR= / SEGA_TOOLCHAIN=     the toolchain, as for the main build.sh (only m68k-elf is used)
-# Copy EDBOOT.BIN to the EverDrive's SD card; docs/10_EVERDRIVE_TEST.md says how to use it.
+# edboot/build.sh - the Mega EverDrive PRO launchers for CD32X discs (docs/10_EVERDRIVE_TEST.md)
+#   bash edboot/build.sh    -> edboot/EDBOOT.BIN   the launcher: the EverDrive as the RAM cart, then the CD
+#                              edboot/EDBOOTD.BIN  the diagnostic: what the EverDrive does after the C bit
+#   ROOTDIR= / SEGA_TOOLCHAIN=  the toolchain, as for the main build.sh (only m68k-elf is used)
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 if [ -n "${SEGA_TOOLCHAIN:-}" ]; then ROOTDIR="$SEGA_TOOLCHAIN"; fi
 ROOTDIR="${ROOTDIR:-/opt/toolchains/sega}"
 P="$ROOTDIR/m68k-elf/bin/m68k-elf-"
 [ -x "${P}as" ] || { echo "*** no m68k-elf toolchain at $ROOTDIR (set ROOTDIR= or SEGA_TOOLCHAIN=)"; exit 1; }
-B="$HERE/build"; mkdir -p "$B"
-"${P}as" -m68000 --register-prefix-optional -o "$B/edboot.o" "$HERE/edboot.s"
-"${P}ld" -Ttext 0 -o "$B/edboot.elf" "$B/edboot.o"
-"${P}objcopy" -O binary "$B/edboot.elf" "$B/edboot.bin"
-python3 - "$B/edboot.bin" "$HERE/EDBOOT.BIN" <<'EOF'
+B="$HERE/build"; rm -rf "$B"; mkdir -p "$B"
+cd "$HERE"
+# a ROM: assemble, link at 0, binary; then the header checksum
+rom() {   # rom <source.s> <OUT.BIN>
+  "${P}as" -m68000 --register-prefix-optional -o "$B/$1.o" "$1"
+  "${P}ld" -Ttext 0 -e 0 -o "$B/$1.elf" "$B/$1.o"
+  "${P}objcopy" -O binary "$B/$1.elf" "$B/$1.bin"
+  python3 - "$B/$1.bin" "$HERE/$2" <<'EOF'
 import sys
 d = bytearray(open(sys.argv[1], 'rb').read())
-assert len(d) == 0x8000, "EDBOOT.BIN must be 32 KB, it is %d bytes" % len(d)
+assert len(d) == 0x8000, "%s must be 32 KB, it is %d bytes" % (sys.argv[2], len(d))
 assert d[0x100:0x108] == b"SEGA SSF", "the header must start with SEGA SSF"
 assert d[0x1F0:0x1F3] == b"JUE", "the header fields are out of place"
 s = sum(int.from_bytes(d[i:i + 2], 'big') for i in range(0x200, len(d), 2)) & 0xFFFF
 d[0x18E:0x190] = s.to_bytes(2, 'big')
 open(sys.argv[2], 'wb').write(d)
-print("EDBOOT.BIN: %d bytes, checksum %04X" % (len(d), s))
+print("%s: %d bytes, checksum %04X" % (sys.argv[2].split('/')[-1], len(d), s))
 EOF
+}
+rom edboot.s EDBOOT.BIN
+# EDBOOTD: the C program, linked at 0xFF0000, built into the ROM
+"${P}gcc" -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -fno-delete-null-pointer-checks --param=min-pagesize=0 -Wall -c -o "$B/edbootd.o" edbootd.c
+"${P}as" -m68000 --register-prefix-optional -o "$B/edbootd_crt.o" edbootd_crt.s
+"${P}gcc" -m68000 -nostdlib -T edbootd.ld -o "$B/edbootd_ram.elf" "$B/edbootd_crt.o" "$B/edbootd.o" -lgcc
+"${P}objcopy" -O binary -j .text "$B/edbootd_ram.elf" "$B/edbootd_ram.bin"
+SZ=$(stat -c %s "$B/edbootd_ram.bin"); [ "$SZ" -le 28672 ] || { echo "*** the RAM program is $SZ bytes (28 KB at most)"; exit 1; }
+rom edbootd_rom.s EDBOOTD.BIN
 rm -rf "$B"

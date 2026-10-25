@@ -95,8 +95,9 @@ no_cd_h:
         move.w  #0x0E00,d1                  | blue
 colour:
         lea     0xC00004,a1
+        tst.w   (a1)                        | a half-written VDP command word is dropped
         move.w  #0x8004,(a1)                | mode 5, no H-int
-        move.w  #0x8144,(a1)                | display on, no V-int
+        move.w  #0x8104,(a1)                | display off: the whole screen is the backdrop colour
         move.w  #0x8700,(a1)                | background = colour 0
         move.l  #0xC0000000,(a1)            | CRAM 0
         move.w  d1,0xC00000
