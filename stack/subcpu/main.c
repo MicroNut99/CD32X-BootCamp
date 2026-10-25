@@ -727,10 +727,34 @@ int main(void)
         {   /* HW1 SUB-CPU HEARTBEAT (K29): every 16 passes the pass counter goes to COMM14.  Only
                the Sub-CPU writes COMM14; the SH2 only reads it (hardware readout "P"). */
             static uint16_t hb_pass = 0;
+#if KOBO_DIAG_TEXT
+            /* EDCD trace: the history of COMM12 (the SH2's status) - every pass, the last 10
+               distinct values, oldest first.  The cartridge boot's restart cycle overwrites
+               COMM12 (4D05, 0), so a snapshot never shows the game's last step; this does. */
+            static uint16_t st_hist[10], st_last = 0xFFFF; static int st_n = 0;
+            {
+                uint16_t v = (uint16_t)do_md_cmd1(MD_CMD_READ_32X_16, 0xA1512C);
+                if (v != st_last) {
+                    st_last = v;
+                    if (st_n < 10) st_hist[st_n++] = v;
+                    else { int i; for (i = 0; i < 9; i++) st_hist[i] = st_hist[i + 1]; st_hist[9] = v; }
+                }
+            }
+#endif
             /* HW8: top digit = the CD drive's status (CDD status register 0xFF8038, first
                nibble: 0 stopped, 1 playing, 2 seeking, 3 scanning, 4 paused, 5 tray open,
                9 reading TOC, 0xB no disc / error ...), lower 3 digits = pass count / 64 */
             if ((++hb_pass & 63) == 0) {
+#if KOBO_DIAG_TEXT
+                {
+                    int i, n = 0;
+                    n += sprintf(tbuf, "HIST:");
+                    for (i = st_n > 6 ? st_n - 6 : 0; i < st_n; i++) n += sprintf(tbuf + n, " %04X", st_hist[i]);
+                    while (n < 38) tbuf[n++] = ' ';
+                    tbuf[n] = 0;
+                    if (!ol_game_running) print_diag(temp, tbuf, 2, 23);
+                }
+#endif
                 do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512E,
                            ((read_byte(0xFF8038) & 0x0F) << 12) | ((hb_pass >> 6) & 0x0FFF));
 #if KOBO_DIAG_TEXT   /* OL-5 */
