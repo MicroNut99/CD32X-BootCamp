@@ -84,4 +84,5 @@ written.
 | `SH2 READS DIFFER FROM 68000` | the memory works, but the SH2s see something else: timing or the 32X's cart path |
 | `68000 NOT ANSWERING` | the 68000 side stopped. The screen shows the command that did not come back, its argument and the eight COMM registers. (A 68000 stuck while it holds the cart, RV = 1, freezes the screen instead: the SH2s wait for the cart.) |
 
-In ares this ROM shows `W` for every bank: ares does not emulate the EverDrive's mapper. That is expected.
+In ares this ROM shows `MAPPER: SWITCHES BANKS` and `W` for every bank: ares emulates the standard SSF mapper
+(bank switching, read only), not the EverDrive's write bit. That is expected.
