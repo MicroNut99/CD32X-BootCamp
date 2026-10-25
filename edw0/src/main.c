@@ -141,16 +141,15 @@ static char *dec(char *d, uint32_t v)
 /* ---- the probe ---- */
 typedef struct { uint32_t bad, passes_bad, first, want, got; const char *name; } Phase;
 static Phase ph[8] = {
-    { 0, 0, 0, 0, 0, "A000 P+W    68K WRITES RAM" },
-    { 0, 0, 0, 0, 0, "A000 P+W    68K VBLANK IRQ" },
-    { 0, 0, 0, 0, 0, "E000 P+X+W  68K WRITES RAM" },
-    { 0, 0, 0, 0, 0, "E000 P+X+W  68K VBLANK IRQ" },
-    { 0, 0, 0, 0, 0, "8000 P      68K WRITES RAM" },
-    { 0, 0, 0, 0, 0, "8000 P      68K VBLANK IRQ" },
-    { 0, 0, 0, 0, 0, "C000 P+X    68K WRITES RAM" },
-    { 0, 0, 0, 0, 0, "C000 P+X    68K VBLANK IRQ" },
+    { 0, 0, 0, 0, 0, "8000 W=0 68K WRITES RAM  " },
+    { 0, 0, 0, 0, 0, "8000 W=0 68K VBLANK IRQS " },
+    { 0, 0, 0, 0, 0, "8000 W=0 68K WRITES GATE " },
+    { 0, 0, 0, 0, 0, "8000 W=0 IDLE (DAMAGE?)  " },
+    { 0, 0, 0, 0, 0, "A000 W=1 IDLE (W 0>1 OK?)" },
+    { 0, 0, 0, 0, 0, "A000 W=1 68K WRITES RAM  " },
+    { 0, 0, 0, 0, 0, "A000 W=1 IDLE (DAMAGE?)  " },
+    { 0, 0, 0, 0, 0, "8000 W=0 68K VBLANK CACHED" },
 };
-static const uint16_t ctrl0_of[4] = { 0xA000, 0xE000, 0x8000, 0xC000 };
 static uint32_t pass_no;
 static const char *phase = "START";
 
@@ -206,8 +205,8 @@ static void draw(void)
             text(72, y + 10, hexn(b, p->want, 4), C_WHITE); text(112, y + 10, hexn(b, p->got, 4), C_RED);
         }
     }
-    text(8, 200, "SH2 READS WINDOW 0 WHILE THE 68000 WRITES ITS RAM /", C_GREY);
-    text(8, 210, "TAKES VBLANK IRQS, UNDER EACH CTRL0 (P X W BITS).", C_GREY);
+    text(8, 200, "W = THE EVERDRIVE'S WRITE-ENABLE BIT (CTRL0).", C_GREY);
+    text(8, 210, "IDLE ROWS: IS THE PATTERN STILL INTACT?", C_GREY);
     flip();
 }
 
@@ -238,19 +237,30 @@ int main(void)
     while (1)
     {
         pass_no++;
-        for (int c = 0; c < 4; c++)
-        {
-            static char ph_name[2][3] = { "K0", "I0" };
-            ph_name[0][1] = ph_name[1][1] = (char)('0' + c);
-            if (!md_cmd(0x0600, ctrl0_of[c])) fail_stop("68000 NOT ANSWERING");   /* CTRL0 */
-            phase = ph_name[0]; draw();
-            hammer_start_cmd(0x1100); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
-            note(&ph[c * 2], bad, first, pat(first / 2, seed0), got);
-            phase = ph_name[1]; draw();
-            hammer_start_cmd(0x0F00); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
-            note(&ph[c * 2 + 1], bad, first, pat(first / 2, seed0), got);
-        }
-        if (!md_cmd(0x0600, ED_CTRL0)) fail_stop("68000 NOT ANSWERING");
+        if (!md_cmd(0x0600, 0x8000)) fail_stop("68000 NOT ANSWERING");       /* W = 0 */
+        phase = "1"; draw();
+        hammer_start_cmd(0x1100); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[0], bad, first, pat(first / 2, seed0), got);
+        phase = "2"; draw();
+        hammer_start_cmd(0x0F00); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[1], bad, first, pat(first / 2, seed0), got);
+        phase = "3"; draw();
+        hammer_start_cmd(0x1200); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[2], bad, first, pat(first / 2, seed0), got);
+        phase = "4"; draw();
+        verify_range(0, seed0, FROM, TO, &bad, &first, &got); note(&ph[3], bad, first, pat(first / 2, seed0), got);
+        if (!md_cmd(0x0600, 0xA000)) fail_stop("68000 NOT ANSWERING");       /* W = 1 */
+        phase = "5"; draw();
+        verify_range(0, seed0, FROM, TO, &bad, &first, &got); note(&ph[4], bad, first, pat(first / 2, seed0), got);
+        phase = "6"; draw();
+        hammer_start_cmd(0x1100); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[5], bad, first, pat(first / 2, seed0), got);
+        phase = "7"; draw();
+        verify_range(0, seed0, FROM, TO, &bad, &first, &got); note(&ph[6], bad, first, pat(first / 2, seed0), got);
+        if (!md_cmd(0x0600, 0x8000)) fail_stop("68000 NOT ANSWERING");       /* W = 0 */
+        phase = "8"; draw();
+        hammer_start_cmd(0x0F00); verify_cached(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[7], bad, first, pat(first / 2, seed0), got);
         draw();
     }
 }
