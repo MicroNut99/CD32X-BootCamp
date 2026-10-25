@@ -224,15 +224,33 @@ int main(void)
     int view_text = HELLO_DIAG_TEXT;        /* 1: the Sub-CPU's green text shows (diagnostic disc) */
     cd_genesis_display(view_text);          /* 0: only the 32X picture */
 
+    /* EDCD trace (diagnostic disc only): a status code after each start-up step, so the Sub-CPU's
+       live ST: field shows the last step that finished (cartridge boot, 25 Oct 2026: the SH2 went
+       silent between the Genesis-display command and the first save). */
+#if HELLO_DIAG_TEXT
+#define STEP(c) cd_status(c)
+#else
+#define STEP(c) ((void)0)
+#endif
+    STEP(0x4E10);                           /* 4E10: display command done, setting the 32X mode */
     MARS_VDP_DISPMODE = MARS_224_LINES | MARS_VDP_MODE_256;
+    STEP(0x4E11);                           /* 4E11: mode set, waiting for the palette window (PEN) */
     palette();
-    for (int i = 0; i < 2; i++) { line_table(); clear(C_BLACK); flip(); }
+    STEP(0x4E12);                           /* 4E12: palette written */
+    for (int i = 0; i < 2; i++) {
+        line_table(); clear(C_BLACK);
+        STEP(0x4E13 + i * 2);               /* 4E13 / 4E15: frame buffer written, flipping */
+        flip();
+        STEP(0x4E14 + i * 2);               /* 4E14 / 4E16: flipped */
+    }
 
     /* the save: boot counter in cart save piece 12 (battery-backed, read straight from the cart) */
     const volatile uint16_t *sv = (const volatile uint16_t *)CART_SAVE(SAVE_PIECE);
+    STEP(0x4E17);                           /* 4E17: reading the save area from the cart */
     if (sv[0] == SAVE_MAGIC)
         boots = sv[1];
     boots++;
+    STEP(0x4E18);                           /* 4E18: cart read done, saving */
     uint16_t words[2] = { SAVE_MAGIC, (uint16_t)boots };
     int saved = cart_save(SAVE_PIECE, words, 2);
     if (saved)

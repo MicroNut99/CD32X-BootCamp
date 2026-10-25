@@ -741,6 +741,14 @@ int main(void)
                         do_md_cmd1(MD_CMD_READ_32X_16, 0xA15126),
                         do_md_cmd1(MD_CMD_READ_32X_16, 0xA1512A));
                 if (!ol_game_running) print_diag(temp, tbuf, 2, 19);   /* OL-2b */
+                /* EDCD trace: the 32X as the 68000 sees it, live.  A15100: bit 15 FM (the SH2 owns the
+                   VDP), bit 1 RES, bit 0 ADEN.  A15106: bit 0 RV.  A1510A: FBCTL (FS bit 0, PEN bit
+                   13, FEN bit 1) - valid for the 68000 only while FM = 0. */
+                sprintf(tbuf, "32X: A15100 %04X RV %04X FBCTL %04X ",
+                        do_md_cmd1(MD_CMD_READ_32X_16, 0xA15100),
+                        do_md_cmd1(MD_CMD_READ_32X_16, 0xA15106),
+                        do_md_cmd1(MD_CMD_READ_32X_16, 0xA1510A));
+                if (!ol_game_running) print_diag(temp, tbuf, 2, 22);
 #endif
             }
         }
@@ -1148,6 +1156,10 @@ int main(void)
             if (cmd == 58) {
                 int v = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15128);
                 bram_buf[wi * 2] = (uint8_t)(v >> 8); bram_buf[wi * 2 + 1] = (uint8_t)v;
+#if KOBO_DIAG_TEXT
+                sprintf(tbuf, "TRACE: 58 WORD %d = %04X          ", wi, v & 0xFFFF);   /* EDCD trace */
+                print_diag(temp, tbuf, 2, 21);
+#endif
             } else {
                 do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15128, (bram_buf[wi * 2] << 8) | bram_buf[wi * 2 + 1]);
             }
@@ -1172,17 +1184,35 @@ int main(void)
 #endif
             int k, ok = 1;
             volatile uint8_t *wr = (volatile uint8_t *)0x0C0000;
+#if KOBO_DIAG_TEXT
+            sprintf(tbuf, "TRACE: 61 IN  CART %06lX         ", (unsigned long)coff);   /* EDCD trace */
+            print_diag(temp, tbuf, 2, 21);
+#endif
             for (k = 0; k < 4096; k++) wr[k] = bram_buf[k];
             switch_banks();
             do_md_cmd3(MD_CMD_CHILLY_RV_MEMCPY, 0x400000 + coff, 0x200000, 4096);
+#if KOBO_DIAG_TEXT
+            print_diag(temp, "TRACE: 61 WROTE (68K BACK)      ", 2, 21);
+#endif
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15104, (int)(coff >> 20) & 3);
             do_md_cmd3(MD_CMD_CHILLY_MEMCPY, 0x208000, 0x900000 + (coff & 0xFFFFF), 4096);
+#if KOBO_DIAG_TEXT
+            print_diag(temp, "TRACE: 61 READ BACK (68K BACK)  ", 2, 21);
+#endif
             switch_banks();
             {
                 volatile uint8_t *cart = (volatile uint8_t *)0x0C8000;
                 for (k = 0; k < 4096; k++)
                     if (cart[k] != bram_buf[k]) { ok = 0; break; }
             }
+#if KOBO_DIAG_TEXT
+            if (ok) print_diag(temp, "TRACE: 61 OK - SAVE VERIFIED    ", 2, 21);
+            else {
+                sprintf(tbuf, "TRACE: 61 BAD +%04X %02X/%02X        ", k,
+                        bram_buf[k], ((volatile uint8_t *)0x0C8000)[k]);
+                print_diag(temp, tbuf, 2, 21);
+            }
+#endif
 #if OL_SLOTS
             if (ok && slot_area) ok = 0x101;        /* SLOTS-1 */
 #endif
@@ -1226,6 +1256,9 @@ int main(void)
                WHY: the 32X priority bit alone did not hide the text reliably (K17/K18). */
             int on = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 1;
             do_md_cmd1(MD_CMD_SET_VDP_REG, on ? 0x8174 : 0x8134);
+#if KOBO_DIAG_TEXT
+            print_diag(temp, on ? "TRACE: 52 TEXT ON               " : "TRACE: 52 TEXT OFF              ", 2, 21);   /* EDCD trace */
+#endif
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
         else if (cmd == 48) {
