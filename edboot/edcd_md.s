@@ -13,8 +13,9 @@
 |      'I' / 'B' / 'M', then into Word RAM - at 0x600000 here - where the listener starts.
 | The 32X was started before this ran: the cartridge's 32X header (0x3C0) has the boot ROMs load the
 | stack's SH2 loader (CDLOADER), which waits for the listener, as in a CD boot.
-| If it stops, the screen colour says where: BLUE no Sega CD, MAGENTA no Sub-CPU BIOS found in the Sega
-| CD's ROM, RED the Sub-CPU did not start, YELLOW the Sub-CPU program did not hand over.
+| If it stops, the screen colour says where: CYAN the 32X did not start the SH2 loader, BLUE no Sega CD,
+| MAGENTA no Sub-CPU BIOS found in the Sega CD's ROM, RED the Sub-CPU did not start, YELLOW the Sub-CPU
+| program did not hand over.
 | Runs at 0x880800 (cart 0x800 through the 32X window).
 
         .text
@@ -23,6 +24,21 @@ _start:
         move.w  #0x2700,sr
         lea     0xFFFD00,sp
         move.b  #0,0xA15107             /* RV off: the SH2 boot ROMs read this cart */
+
+| 0. first the 32X: its boot ROMs load the stack's SH2 loader from this cart (the 32X header at 0x3C0),
+|    then write M_OK / S_OK.  Nothing may touch RV or the mapper before that (console, 25 Oct 2026:
+|    RV = 1 for the mapper writes while they loaded it -> the SH2s never started).  edtest also writes
+|    the mapper only once the SH2s run.
+        move.l  #1000000,d2             /* about 6 s */
+20:     cmpi.l  #0x4D5F4F4B,0xA15120    /* M_OK */
+        bne.b   21f
+        cmpi.l  #0x535F4F4B,0xA15124    /* S_OK */
+        beq.b   22f
+21:     subq.l  #1,d2
+        bne.b   20b
+        move.w  #0x0EE0,d1              /* CYAN: the 32X did not start the SH2 loader */
+        bra     fail
+22:
 
 | 1. the RAM cart: windows 1-7 = banks 1-7, then writes on (window 0 = bank 0 = this ROM).
 |    With the 32X on, a write to the cart's registers (0xA130xx) only reaches the cart while RV = 1

@@ -26,6 +26,11 @@ the disc's boot block do in a CD boot, then hands over to the **same** stack:
    `0x8000`, then run. EDCD gives the Sub-CPU BIOS its level 2 interrupt every frame meanwhile.
 5. The boot block's main-CPU program: the `I` / `B` / `M` handshake, then into Word RAM (`0x600000`).
 
+Order matters on the console (25 Oct 2026): EDCD waits for the 32X boot ROMs' `M_OK` / `S_OK` before it
+touches RV, and makes the mapper writes with RV = 1 (with the 32X on, register writes reach the cart only
+then). Writing the mapper with RV = 0 left the EverDrive write-protected (`STATE:4DE2`); setting RV
+while the boot ROMs were loading CDLOADER kept the SH2s from starting.
+
 From there the stack runs unchanged except for **one switch**, `MODE1=1` (`stack/subcpu/Makefile`,
 `hw_md.s`). It only changes the 68000 listener:
 - every address argument it gets from the Sub-CPU is moved to the cartridge-boot map (Word RAM
@@ -51,6 +56,7 @@ the SD card and start it from the EverDrive menu (not "Run Mega-CD").
 | You see | Meaning |
 |---|---|
 | The game | It works |
+| **Cyan** screen | the 32X did not start the stack's SH2 loader (6 s) |
 | **Blue** screen | no Sega CD found |
 | **Magenta** | no Sub-CPU BIOS found in the Sega CD's ROM |
 | **Red** | the Sub-CPU did not start (10 s) |
