@@ -41,21 +41,25 @@ void pri_vbi_handler(void) { gTicks++; }   /* the master's vertical blank interr
    status codes ~20 ms apart (the Sub-CPU's history row keeps the last six): EC<step>, the offset,
    the cart's word (high, low), the SDRAM word (high, low); then the game stops. */
 static void post_slow(uint16_t v) { cd_status(v); for (volatile int i = 0; i < 300000; i++) { } }
+static void ints_off(void) { __asm__ __volatile__("ldc %0,sr" : : "r"(0xF0) : "memory"); }
 static void sdram_check(int step)
 {
     const volatile uint32_t *hdr = (const volatile uint32_t *)0x22000000u;
     uint32_t src = hdr[0x3D4 / 4], size = hdr[0x3DC / 4];
     const volatile uint32_t *rom = (const volatile uint32_t *)(0x22000000u + src);
-    const volatile uint32_t *ram = (const volatile uint32_t *)0x26000000u;
+    const volatile uint32_t *ram = (const volatile uint32_t *)0x26000000u;   /* SDRAM, cache-through */
+    const volatile uint32_t *cch = (const volatile uint32_t *)0x06000000u;   /* SDRAM, through the cache */
     for (uint32_t i = 0; i < size / 4; i++)
     {
-        uint32_t a = rom[i], b = ram[i];
-        if (a != b)
-        {
-            post_slow((uint16_t)(0xEC00 | step));
+        uint32_t a = rom[i], b = ram[i], c = cch[i];
+        if (a != b || a != c)
+        {   /* EC<step> (SDRAM differs) or ED<step> (SDRAM right, the cache not), the offset,
+               the cart's word (high, low), the SDRAM word, the cached word (low words) */
+            ints_off();                         /* the report must not be interrupted */
+            post_slow((uint16_t)((a != b ? 0xEC00 : 0xED00) | step));
             post_slow((uint16_t)(i * 4));
             post_slow((uint16_t)(a >> 16)); post_slow((uint16_t)a);
-            post_slow((uint16_t)(b >> 16)); post_slow((uint16_t)b);
+            post_slow((uint16_t)b); post_slow((uint16_t)c);
             while (1) { }
         }
     }
@@ -249,7 +253,6 @@ int main(void)
 
     cd_status(0x4E00);                      /* 4E00: hello started */
 #if HELLO_DIAG_TEXT
-    sdram_check(0);                         /* EDCD trace: the image as handed over */
     {   /* EDCD trace: the master SH2's bus controller and cache, as the 32X boot ROM left them -
            six status values ~20 ms apart: BCR1, BCR2, WCR, MCR, RTCSR:RTCOR, CCR:SR[7:4] */
         uint32_t sr;
@@ -261,6 +264,7 @@ int main(void)
         post_slow((uint16_t)((*(volatile uint16_t *)0xFFFFFFF0 & 0xFF) << 8 | (*(volatile uint16_t *)0xFFFFFFF8 & 0xFF)));
         post_slow((uint16_t)((*(volatile uint8_t *)0xFFFFFE92) << 8 | ((sr >> 4) & 0xF)));
     }
+    sdram_check(0);                         /* EDCD trace: the image as handed over */
 #endif
     int view_text = HELLO_DIAG_TEXT;        /* 1: the Sub-CPU's green text shows (diagnostic disc) */
     cd_genesis_display(view_text);          /* 0: only the 32X picture */
