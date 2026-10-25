@@ -1452,8 +1452,13 @@ chilly_rv_memcpy:
 | read back 4880), the same copies with RV = 0 (the splash) did not.  So every block of up to 1 KB
 | goes through a buffer in work RAM: the Sega CD side with RV = 0, the cart side with RV = 1 and
 | interrupts off (about 5 ms: a vblank waits at most that long).
+| MODE1-3: the cart's window 0 (0x000000-0x07FFFF) is reached through window 1.  Console, 25 Oct 2026:
+| copies to the cart's first bytes never landed (chunk 0 +6: 03 read back 01, 5AA5 read back 4880; the
+| same with bytes, words, bank 8 in window 0, the buffer).  With the 32X on, its adapter answers the
+| 68000 there.  edtest only ever wrote 0x080000 and up, so: window 1 = bank 0 for the block, the copy at
+| 0x080000 + offset, window 1 = bank 1 again (EDCD's w0_move does the same).  d4: 0 the cart is a1.
 m1_xfer:
-        movem.l d2/a2-a4,-(sp)
+        movem.l d2/d4/a2-a4,-(sp)
         .if OL_M1WORDS
         tst.w   d3                      /* MODE1-2: bytes, but all even -> words */
         bne.b   0f
@@ -1486,7 +1491,8 @@ m1_xfer:
         movea.l a2,a1
         movea.l a0,a2
         movea.l a4,a0                   /* then the buffer to the cart side with RV = 1 */
-        bsr     m1_rvcpy
+        moveq   #0,d4
+        bsr     m1_cart
         movea.l a2,a0
         bra.b   1b
 4:
@@ -1496,7 +1502,8 @@ m1_xfer:
         bhs.b   6f
         movea.l a1,a2                   /* the destination is the Sega CD: the cart to the buffer */
         movea.l a4,a1                   /* with RV = 1 ... */
-        bsr     m1_rvcpy
+        moveq   #1,d4
+        bsr     m1_cart
         movea.l a2,a1
         movea.l a0,a2
         movea.l a4,a0                   /* ... then the buffer there with RV = 0 */
@@ -1504,10 +1511,37 @@ m1_xfer:
         movea.l a2,a0
         bra.b   1b
 6:
-        bsr     m1_rvcpy                /* neither side is the Sega CD: straight, RV = 1 */
+        moveq   #0,d4
+        bsr     m1_cart                 /* neither side is the Sega CD: straight, RV = 1 */
         bra.b   1b
 9:
-        movem.l (sp)+,d2/a2-a4
+        movem.l (sp)+,d2/d4/a2-a4
+        rts
+
+| the cart side of a block: d4 = 0 the cart is a1, else a0.  In window 0 -> through window 1.
+m1_cart:
+        tst.w   d4
+        bne.b   1f
+        cmpa.l  #0x080000,a1
+        bra.b   2f
+1:      cmpa.l  #0x080000,a0
+2:      bhs     m1_rvcpy
+        move.w  sr,-(sp)
+        move.w  #0x2700,sr
+        bset    #0,0xA15107
+        move.w  #0,0xA130F2             /* window 1 = bank 0 */
+        tst.w   d4
+        bne.b   3f
+        adda.l  #0x080000,a1
+        bsr.b   m1_cpy
+        suba.l  #0x080000,a1
+        bra.b   4f
+3:      adda.l  #0x080000,a0
+        bsr.b   m1_cpy
+        suba.l  #0x080000,a0
+4:      move.w  #1,0xA130F2             /* window 1 = bank 1 again */
+        bclr    #0,0xA15107
+        move.w  (sp)+,sr
         rts
 
 | d2 bytes (a0)+ -> (a1)+, in bytes (d3 = 0) or words (d3 = 1); with RV = 1 and no interrupt
