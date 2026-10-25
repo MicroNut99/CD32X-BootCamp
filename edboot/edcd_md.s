@@ -25,6 +25,9 @@
         .ifndef ED_W0
         .equ    ED_W0, 0
         .endif
+        .ifndef ED_CTRL0
+        .equ    ED_CTRL0, 0xA000
+        .endif
 
         .text
         .global _start
@@ -186,7 +189,7 @@ w0_move:
 2:      move.l  #0x000003F0,(a1)+
         dbra    d0,2b
         move.w  #1,0xA130F2             /* window 1 = bank 1 again */
-        move.w  #0xA000+ED_W0,0xA130F0  /* window 0 = the new bank, writes on */
+        move.w  #ED_CTRL0+ED_W0,0xA130F0 /* window 0 = the new bank, writes on */
         move.b  #0,0xA15107
         jmp     0x600000
 w0_move_end:
@@ -228,7 +231,8 @@ ed_regs:
         addq.w  #1,d0
         cmpi.w  #8,d0
         bne.b   1b
-        move.w  #0xA000,0xA130F0        /* CTRL0: P + W, as edtest, console-proven */
+        move.w  #ED_CTRL0,0xA130F0      /* CTRL0: P + W (0xA000) or P + X + W (0xE000, EDCD_X=1): both
+                                           console-proven by edtest; X = the EverDrive's 32X mode */
         move.b  #0,0xA15107             /* RV off: the cart back at 0x880000, the SH2s may read it */
         rts
 ed_regs_end:
