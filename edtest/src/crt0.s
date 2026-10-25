@@ -37,11 +37,8 @@
         .long   0x00000000,0x005FFFFF   /* ROM start, end */
         .long   0x00FF0000,0x00FFFFFF   /* RAM start, end */
 
-! 2KB of save ram on odd byte lane
-        .ascii  "RA"                    /* External RAM */
-        .byte   0xF8                    /* don't clear + odd bytes */
-        .byte   0x20                    /* SRAM */
-        .long   0x00200001,0x00200FFF   /* SRAM start, end */
+! edtest: no save RAM declared (an "RA" entry could make the EverDrive map its save area into window 4)
+        .ascii  "            "          /* no SRAM */
 
 !       .ascii  "            "          /* no SRAM */
 

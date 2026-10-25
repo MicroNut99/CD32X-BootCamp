@@ -28,8 +28,8 @@ be touched.
 
 | ROM | CTRL0 | From |
 |---|---|---|
+| `EDTEST_W.32X` (run first) | `0xA000` = P + W | the Pro write-up, which shows no X bit: the documented value for the Pro |
 | `EDTEST_X.32X` | `0xE000` = P + X + W | the X-series notes, which list an X (32X) bit |
-| `EDTEST_W.32X` | `0xA000` = P + W | the Pro write-up, which shows no X bit |
 
 Build them with `bash edtest/build.sh` (`ROOTDIR=` / `SEGA_TOOLCHAIN=` as for the main build).
 
@@ -38,9 +38,12 @@ Build them with `bash edtest/build.sh` (`ROOTDIR=` / `SEGA_TOOLCHAIN=` as for th
 1. Copy both `.32X` files to the EverDrive's SD card.
 2. Genesis + **32X** with the EverDrive PRO in the 32X slot. The Sega CD is not needed: take it off, or leave
    it, it is not used.
-3. Start `EDTEST_X.32X` from the EverDrive menu. Leave it for at least one full pass (`PASS DONE`, about 3–5
-   minutes), better two or three. Photograph the screen.
-4. Power off, then do the same with `EDTEST_W.32X`.
+3. Start `EDTEST_W.32X` from the EverDrive menu. Leave it for at least one full pass (`PASS DONE`), better two
+   or three. Photograph the screen.
+4. **Power off** (not reset), then do the same with `EDTEST_X.32X`.
+
+Each run mixes its own number (`RUN xxxx` on screen) into the patterns, so data an earlier run left in the
+EverDrive's RAM can never pass for this run's writes.
 
 ## What it does
 
@@ -65,6 +68,10 @@ written.
 | `A` | written, but lost or overwritten after the other banks were written: the banks share memory, or the mapper does not switch |
 | `S` | the 68000 reads it right, an SH2 does not |
 
+- **`MAPPER`:** checked before any bank is written. Bank 0 (this ROM) is mapped into window 1, and then bank 1.
+  `SWITCHES BANKS` = the mapper responds. `DOES NOT RESPOND` or `NO CHANGE AFTER CTRL1 WRITE` = the
+  EverDrive did not turn its SSF mapper on for this ROM, or the register writes do not reach it through the
+  32X. So any `W` then means "no mapper", not "no RAM".
 - **`BAD WORDS 68K / SH2`:** totals over all passes.
 - **`FIRST ERROR`:** the bank, the offset in it, the word expected, the word read, and who read it.
 - **The verdict line** sums it up.
@@ -72,9 +79,9 @@ written.
 | Verdict | What it means for the games |
 |---|---|
 | `ALL TESTED BANKS OK` (after several passes, in one of the ROMs) | the EverDrive can be a 16 MB cart for a 32X program in **cartridge mode**. Next: boot the CD stack from it (a separate step, since the CD boot needs the cart to step aside). |
-| `NOT WRITABLE: NO RAM CART HERE` | that CTRL0 value does not enable writing with the 32X. Try the other ROM. |
-| `BANKS LOSE DATA OR ALIAS: MAPPER?` | the writes land, but the mapper's banks do not switch under the 32X. The `GOT` word tells which bank's pattern was found. |
+| `NOT WRITABLE WITH THIS CTRL0` | with `MAPPER: SWITCHES BANKS`: that CTRL0 value does not enable writing with the 32X; try the other ROM. Without it: see `MAPPER`. |
+| `BANKS LOSE DATA OR ALIAS` | the writes land, but the mapper's banks do not switch under the 32X. The `GOT` word tells which bank's pattern was found. |
 | `SH2 READS DIFFER FROM 68000` | the memory works, but the SH2s see something else: timing or the 32X's cart path |
-| `68000 NOT ANSWERING` | the 68000 side stopped. It is stuck in a command. |
+| `68000 NOT ANSWERING` | the 68000 side stopped. The screen shows the command that did not come back, its argument and the eight COMM registers. (A 68000 stuck while it holds the cart, RV = 1, freezes the screen instead: the SH2s wait for the cart.) |
 
 In ares this ROM shows `W` for every bank: ares does not emulate the EverDrive's mapper. That is expected.

@@ -1,6 +1,5 @@
 # edtest - the EverDrive PRO 16 MB RAM test: a 32X cartridge ROM with "SEGA SSF" (CD32X BootCamp)
-#   make ROOTDIR=/opt/toolchains/sega        -> hello.32x (a normal 32X ROM)
-# then tools/prep_rom.py hello.32x GAME.32X  (disc/build.sh does both)
+#   make ROOTDIR=/opt/toolchains/sega ED_CTRL0=0xA000   -> edtest.32x   (edtest/build.sh makes both ROMs)
 ROOTDIR ?= /opt/toolchains/sega
 SHROOT  ?= $(ROOTDIR)
 MDROOT  ?= $(ROOTDIR)
@@ -18,9 +17,9 @@ LIBPATH  = -L$(SHROOT)/sh-elf/lib -L$(SHROOT)/sh-elf/lib/gcc/sh-elf/$(CC_VER) -L
 INCPATH  = -Isrc -I$(SHROOT)/sh-elf/include -I$(SHROOT)/sh-elf/sh-elf/include
 CCFLAGS  = -D__32X__ -m2 -mb -O2 -Wall -c -fomit-frame-pointer -std=gnu99
 # ED_CTRL0: the value written to the EverDrive's mapper register CTRL0 (0xA130F0)
+#   0xA000 = P + W, as the Pro write-ups show it (run this one first)
 #   0xE000 = P + X (32X mode) + W (write), as the EverDrive X-series notes give it
-#   0xA000 = P + W, as the Pro write-ups show it
-ED_CTRL0 ?= 0xE000
+ED_CTRL0 ?= 0xA000
 CCFLAGS += -DED_CTRL0=$(ED_CTRL0)
 LDFLAGS  = -T $(SHROOT)/ldscripts/mars.ld -Wl,-Map=$(BUILD)/output.map -nostdlib
 ASFLAGS  = --big

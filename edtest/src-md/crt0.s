@@ -309,6 +309,9 @@ ed_verify:
 ed_setup:
         moveq   #0,d1
         move.b  d0,d1
+        beq.b   9f                  /* window 0 = this program: never */
+        cmpi.b  #7,d1
+        bhi.b   9f
         moveq   #19,d2
         lsl.l   d2,d1
         movea.l d1,a0
@@ -316,6 +319,9 @@ ed_setup:
         moveq   #0,d4
         move.w  #0x2700,sr
         move.b  #1,0xA15107         /* set RV: the 68000 sees the cart at 0x000000 */
+9:      addq.l  #4,sp               /* a bad window number: drop the caller's return, answer "done" */
+        move.w  #0,0xA15120
+        bra     main_loop
 | d5 = seed ^ (quarter << 12), d6 = 0, d7 = 65535 (one quarter = 65536 words)
 ed_quarter:
         move.w  d4,d5

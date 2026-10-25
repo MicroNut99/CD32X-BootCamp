@@ -40,7 +40,7 @@ volatile unsigned mars_swdt_ovf_count = 0;
 void pri_vbi_handler(void) { gTicks++; }
 
 /* ---- the slave's job: verify the second half of a window (shared through cache-through SDRAM) ---- */
-typedef struct { uint32_t go, window, seed, bad, first, got; } Job;
+typedef struct { uint32_t go, seq, window, seed, bad, first, got, done_seq; } Job;
 static Job job_mem;
 #define JOB ((volatile Job *)((uint32_t)&job_mem | 0x20000000u))
 
@@ -75,6 +75,7 @@ void secondary(void)                        /* the slave SH2: verifies words 131
         uint32_t bad, first, got;
         verify_range((int)JOB->window, (uint16_t)JOB->seed, WORDS / 2, WORDS, &bad, &first, &got);
         JOB->bad = bad; JOB->first = first; JOB->got = got;
+        JOB->done_seq = JOB->seq;           /* the master accepts only the answer to its own job */
         JOB->go = 2;
     }
 }
@@ -174,12 +175,18 @@ static void note_first(int bank, uint32_t off, uint16_t want, uint16_t got, cons
     first_bank = (uint32_t)bank; first_off = off; first_want = want; first_got = got; first_who = who;
 }
 
+static uint16_t nonce;                      /* new every run: a pattern left in the EverDrive's RAM by an
+                                               earlier run (it keeps its RAM across a return to the menu)
+                                               can never pass for this run's writes */
 static uint16_t seed_of(int bank, uint32_t pass)
 {
-    uint16_t s = (uint16_t)(bank * 0x1F3D) ^ (uint16_t)(pass * 0xA5A5);
+    uint16_t s = (uint16_t)(bank * 0x1F3D) ^ (uint16_t)(pass * 0xA5A5) ^ nonce;
     return (pass & 1) ? (uint16_t)~s : s;   /* every other pass: the bits inverted */
 }
 
+static const char *mapper_text = "NOT CHECKED";
+static int      mapper_ok;
+static int      slave_dead;
 static uint16_t stuck_comm[8];
 static int      stuck;
 
@@ -190,8 +197,8 @@ static void draw(void)
     text(8, 4, "EVERDRIVE PRO RAM TEST  CTRL0", C_YELLOW);
     text(248, 4, hexn(b, ED_CTRL0, 4), C_YELLOW);
     text(8, 16, "PASS", C_GREY); text(48, 16, dec(b, pass_no), C_WHITE);
-    text(96, 16, phase, C_CYAN);
-    if (cur_bank) { text(200, 16, "BANK", C_GREY); text(240, 16, dec(b, (uint32_t)cur_bank), C_WHITE); }
+    text(80, 16, phase, C_CYAN);
+    if (cur_bank && !stuck) { text(200, 16, "BANK", C_GREY); text(240, 16, dec(b, (uint32_t)cur_bank), C_WHITE); }
     text(280, 16, dec(b, gTicks / 60), C_GREY);
 
     for (int bank = FIRST_BANK; bank <= LAST_BANK; bank++)
@@ -221,10 +228,14 @@ static void draw(void)
         ok += status[bank] == ST_OK; w += status[bank] == ST_W; a += status[bank] == ST_A; s += status[bank] == ST_S;
     }
     const char *v = !done ? "TESTING..." :
-                    w == done ? "NOT WRITABLE: NO RAM CART HERE" :
-                    a ? "BANKS LOSE DATA OR ALIAS: MAPPER?" :
+                    w == done ? "NOT WRITABLE WITH THIS CTRL0" :
+                    a ? "BANKS LOSE DATA OR ALIAS" :
                     s ? "SH2 READS DIFFER FROM 68000" :
                     w ? "SOME BANKS NOT WRITABLE" : "ALL TESTED BANKS OK";
+    text(8, 164, "MAPPER:", C_GREY);
+    text(72, 164, mapper_text, mapper_ok ? C_GREEN : C_RED);
+    text(248, 164, "RUN", C_GREY); text(280, 164, hexn(b, nonce, 4), C_GREY);
+    if (slave_dead) text(208, 148, "SLAVE SH2 NO ANSWER", C_RED);
     text(8, 176, "VERDICT:", C_GREY); text(80, 176, v, (ok == done && done) ? C_GREEN : C_YELLOW);
     if (stuck)                              /* which 68000 command did not come back, and the COMM registers */
     {
@@ -256,8 +267,26 @@ int main(void)
     for (int i = 0; i < 2; i++) { line_table(); clear(); flip(); }
     draw();
 
+    /* this run's number: the SH2's free-running timer and the time it took to get here */
+    nonce = (uint16_t)((*(volatile uint8_t *)0xFFFFFE12 << 8) | *(volatile uint8_t *)0xFFFFFE13) ^ (uint16_t)(gTicks * 0x9E37);
+    if (!nonce) nonce = 0x1234;
+
     /* CTRL0: protection + (32X) + write, bank 0 stays in window 0 (this program) */
     if (!md_cmd(0x0600, ED_CTRL0)) fail_stop("68000 NOT ANSWERING");
+
+    /* does the mapper switch banks at all?  Map bank 0 (this ROM) into window 1 as well: the two windows
+       must then read the same; then bank 1 into window 1: they must differ.  Checked over 16 KB. */
+    {
+        const volatile uint16_t *w0 = (const volatile uint16_t *)0x22000000u;
+        const volatile uint16_t *w1 = (const volatile uint16_t *)0x22080000u;
+        int same0 = 1, same1 = 1;
+        if (!md_cmd(0x0601, 0)) fail_stop("68000 NOT ANSWERING");
+        for (int i = 0; i < 8192; i++) if (w0[i] != w1[i]) { same0 = 0; break; }
+        if (!md_cmd(0x0601, 1)) fail_stop("68000 NOT ANSWERING");
+        for (int i = 0; i < 8192; i++) if (w0[i] != w1[i]) { same1 = 0; break; }
+        mapper_ok = same0 && !same1;
+        mapper_text = mapper_ok ? "SWITCHES BANKS" : same0 ? "NO CHANGE AFTER CTRL1 WRITE" : "DOES NOT RESPOND";
+    }
 
     for (pass_no = 1;; pass_no++)
     {
@@ -293,12 +322,15 @@ int main(void)
             uint32_t bad68 = COMM8_32, off68 = COMM12_32;
             uint16_t got68 = (uint16_t)MARS_SYS_COMM2;
 
-            JOB->window = (uint32_t)w; JOB->seed = seed; JOB->go = 1;  /* the slave: second half */
+            static uint32_t seq;
+            JOB->window = (uint32_t)w; JOB->seed = seed; JOB->seq = ++seq; JOB->go = 1;  /* the slave: second half */
             uint32_t badm, firstm, gotm;
             verify_range(w, seed, 0, WORDS / 2, &badm, &firstm, &gotm);
             uint32_t t0 = gTicks;
             while (JOB->go != 2 && gTicks - t0 < 600) { }
-            uint32_t bads = JOB->go == 2 ? JOB->bad : WORDS / 2, firsts = JOB->first, gots = JOB->got;
+            int slave_ok = JOB->go == 2 && JOB->done_seq == seq;
+            uint32_t bads = slave_ok ? JOB->bad : 0, firsts = JOB->first, gots = JOB->got;
+            if (!slave_ok) slave_dead = 1;
             JOB->go = 0;
 
             if (status[bank] == ST_W) { }
