@@ -51,11 +51,20 @@ never uses that table (its vectors are the BIOS's), so **the same disc boots bot
 way with a RAM cart, and from the EverDrive with `EDCD.32X`. The Sub-CPU program inside `EDCD.32X` is a
 second build of the stack with `MODE1=1`; the disc keeps the normal one.
 
-**Two switches for the console's unknowns** (both off by default):
-- `M1WORDS=1`: EDCD's listener writes the cart in words wherever source, destination and length are even,
-  as edtest wrote the EverDrive (byte writes to it with the 32X on were never tried on a console).
-- `EDCD_W0=<bank>`: after the hand-over, window 0 (the cart's first 512 KB, where the game goes) is that
-  EverDrive bank instead of bank 0 (EDCD copies its 68000 jump table there first). edtest never wrote bank 0.
+**Two more things the console taught (25 Oct 2026), both in the listener's cart copies:**
+- The cart's first 512 KB (window 0) cannot be written by the 68000 directly with the 32X on: the copy
+  routes window 0's addresses through window 1 (CTRL1 = window 0's bank for the block, then bank 1 again).
+- **The EverDrive's write-enable bit (CTRL0 bit 13, W) is off except inside a copy into the cart.**
+  With W on, some of the 68000's writes to *other* addresses (work RAM, the VDP, the gate array - what a
+  listener does all the time) land in the cart and change it, and the SH2's reads of the cart come back as
+  zeros meanwhile (`edw0`, below).  So EDCD sets CTRL0 = `0x8000` (P only), and the listener turns W on
+  right before a copy into the cart and off right after - with RV = 1 (the SH2 off the cart) and no other
+  68000 write in between.  Reads of the cart leave W off.  Turning W on and off does no harm by itself.
+
+**Switches** (all off by default): `M1WORDS=1` word copies; `EDCD_W0=<bank>` the game in that EverDrive bank
+(window 0 shows it; the listener's window-1 route follows); `EDCD_X=1` CTRL0 with the EverDrive's X bit
+(`0xC000`; it changed nothing on the console).  The diagnostic build has more (`M1MINVB`, `M1NOVINT`,
+`EDCD_QUIET`), described in `build.sh`.
 
 ## Run it
 
@@ -87,4 +96,18 @@ RV = 1, so the diagnostic disc's cart probe (it writes cart offset 0) says `SAFE
 The game's first 256 bytes are the same as EDCD's (both from Chilly Willy's template), so loading is not
 affected.
 
-**Console:** not yet.
+**Console (25 Oct 2026, Genesis + Sega CD + 32X, Mega EverDrive PRO):** the BootCamp disc boots from
+`EDCD.32X` end to end - the 32X starts CDLOADER from the cart, the Sub-CPU comes up, the game is copied into
+the EverDrive and verified, the hand-over, the game runs (`STATE:4B10`), it saves to the cart and loads its
+data file from the CD into the cart; the pad works.  The release disc and the diagnostic disc both.
+
+How it got there, for the record: with the 68000 writing window 0 directly the copy never landed
+(`4DE2`); through window 1 it did, and the game started (`4E00`) but died within its first frames at random
+places - a CPU exception in the SH2's interrupt code each time (the game's vector table now reports those
+instead of swallowing them).  The SH2 image copied into SDRAM at the hand-over differed from the cart.  The
+no-disc probe `edw0/` (from edtest) then measured the EverDrive's window 0 as the SH2 reads it: perfect with
+the 68000 idle or reading anything, and failing - zeros, and the stored words changing - as soon as the
+68000 *writes* anything with the write-enable bit on.  `edw0/EDW0E_W.32X` shows it in one screen.
+
+**ares** does not model that EverDrive behaviour (its reads were right all along), which is why every
+launcher passed there first.
