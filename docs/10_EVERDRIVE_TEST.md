@@ -64,6 +64,17 @@ for a 32X program:
 
 ## EDBOOT.BIN: the EverDrive as the RAM cart of a CD32X disc
 
+> **Result on the console (25 Oct 2026): the C bit does nothing.** `edboot/EDPROBE.BIN` writes CTRL0 = `0xA800`
+> once, as EDBOOT does, then shows the header text and reset PC at `0x000000` and `0x400000` and looks for
+> signatures it wrote into the eight windows. Right after the write, one second later, after a 68000 RESET and
+> after a second write: `000100 SEGA SSF` (still the EverDrive, PC `0200`), `400100 SEGA MEGA DRIVE` (still
+> the Sega CD BIOS, PC `0426`), all eight signatures at `0x0xxxxx`, none at `0x4xxxxx`, writes stick only
+> low. The console stays in cartridge mode. (EDBOOTD's earlier "CART OFF" was wrong: its check compared only
+> "SEGA", which the EverDrive's own header has too.) EDBOOT was never run on the console: the disc tests of
+> 24 Oct were started with "Run Mega-CD".
+>
+> **What works instead:** the disc started from the cartridge, `edboot/EDCD.32X` ([docs/12](12_CARTRIDGE_BOOT.md)).
+
 A CD32X disc boots from the Sega CD, with **no** cartridge seen by the console (CART_IN released), and its stack
 copies the game into the RAM cart at `0x400000`. `edboot/EDBOOT.BIN` (32 KB, header `SEGA SSF`) sets the
 EverDrive up as that cart:

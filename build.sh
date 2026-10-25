@@ -9,6 +9,9 @@
 #   DIAG=1                              the diagnostic disc: the stack's boot text on (docs/09_ERROR_CODES.md)
 #   REGION=US | EU | JP                 the boot block for the console's region (default US; only US is tested)
 #   STREAM= CARTW= FMVRING= SLOTS= CART= the Sub-CPU's build switches (stack/subcpu/Makefile; all off by default)
+#   EDCD=1                              also edboot/EDCD.32X: the disc started from a Mega EverDrive PRO, which
+#                                       stays the cartridge (docs/12_CARTRIDGE_BOOT.md).  The disc still boots
+#                                       the normal way too (its game ROM's 68000 jump table is the only change)
 # Every switch is listed in README.md, "How to build".
 #
 # A game folder holds:  Makefile (makes <game>.32x, a normal 32X cartridge ROM), splash.png (the boot
@@ -52,7 +55,11 @@ ROMLIST=$(ls "$G"/*.32x 2>/dev/null || true)
 [ "$(echo "$ROMLIST" | wc -l)" = 1 ] || { echo "*** more than one .32x in $G - keep only the game's ROM there"; exit 1; }
 ROM="$ROMLIST"
 rm -rf "$ROMS"; mkdir -p "$ROMS"                  # stack/subcpu/ROMS is made by this script: keep nothing of yours there
-python3 "$HERE/tools/prep_rom.py" "$ROM" "$ROMS/$ROMNAME"
+if [ "${EDCD:-0}" = 1 ]; then
+  python3 "$HERE/tools/prep_rom.py" --mode1 "$ROM" "$ROMS/$ROMNAME"
+else
+  python3 "$HERE/tools/prep_rom.py" "$ROM" "$ROMS/$ROMNAME"
+fi
 [ "$(stat -c %s "$ROMS/$ROMNAME")" -le "$ROM_MAX" ] || { echo "*** $ROMNAME is over $((ROM_MAX >> 10)) KB: it would overlap the first data slot (game_files.h)"; exit 1; }
 
 echo "==> 2. the boot picture"
@@ -110,3 +117,16 @@ fi
 python3 -c "import os,sys; p=sys.argv[1]; n=os.path.getsize(p)//2048; open(p,'ab').write(bytes(2048*(600-n))) if n<600 else None" "$ISO"
 python3 "$HERE/stack/subcpu/make_mixed_cd2.py" "$ISO" $TRACKS --out "$OUT/$NAME"
 echo "==> done: burn $OUT/$NAME.cue (with its .bin).  Needs a Sega CD + 32X + a 4 MB RAM cart."
+
+# EDCD=1: the same stack's Sub-CPU program with the cartridge-boot listener (MODE1=1), built in a copy of
+# stack/ (the disc keeps the normal one), then edboot/EDCD.32X around it (docs/12_CARTRIDGE_BOOT.md)
+if [ "${EDCD:-0}" = 1 ]; then
+  echo "==> 7. EDCD.32X: the disc from a Mega EverDrive PRO (cartridge boot)"
+  T=$(mktemp -d)                                   # (no trap: DIAG=1 keeps its own on EXIT)
+  cp -r "$HERE/stack" "$T/"
+  ( cd "$T/stack/subcpu" && make clean > /dev/null && make CDROMPlayer.bin ROOTDIR="$ROOTDIR" MODE1=1 > "$T/mode1.log" 2>&1 ) \
+    || { tail -20 "$T/mode1.log"; echo "*** the MODE1 Sub-CPU program did not build"; exit 1; }
+  ROOTDIR="$ROOTDIR" bash "$HERE/edboot/build_edcd.sh" "$T/stack/subcpu/CDROMPlayer.bin" "$HERE/stack/sh2/CDLOADER.32x"
+  rm -rf "$T"
+  echo "==> EDCD.32X: copy edboot/EDCD.32X to the EverDrive's SD card; start it with this disc in the Sega CD"
+fi

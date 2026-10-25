@@ -43,6 +43,12 @@ CARTW ?= 0
 HWFLAGS += -DOL_CARTW=$(CARTW)
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional
+# MODE1-1: make CDROMPlayer.bin MODE1=1 - the listener for a cartridge boot (hw_md.s, OL_MODE1), the
+# program edboot/EDCD.32X loads into the Sega CD itself.  Without MODE1: unchanged.  build.sh EDCD=1
+# builds it in a copy of this folder; the disc always gets the normal program.
+ifeq ($(MODE1),1)
+ASFLAGS += --defsym OL_MODE1=1
+endif
 
 PREFIX = $(ROOTDIR)/m68k-elf/bin/m68k-elf-
 CC = $(PREFIX)gcc

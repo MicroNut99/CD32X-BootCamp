@@ -21,3 +21,4 @@ edtest/EDTEST_*.32X
 edboot/EDBOOT.BIN
 edboot/build/
 edboot/EDPROBE.BIN
+edboot/EDCD.32X

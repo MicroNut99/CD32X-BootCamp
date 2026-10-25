@@ -26,6 +26,16 @@
         .equ    MD_CMD_SAFE_CART_XFER, 26
         .equ    MD_CMD_END, 36              /* KOBO K19: + set_vdp_reg (34); D32X M1: + start_d32xr (35) */
 
+| MODE1-1 (Makefile MODE1=1, docs/12): the listener for a CARTRIDGE boot (the Sega CD's "mode 1"), started
+| by edboot/EDCD.32X from a Mega EverDrive PRO.  There the cart is at 0x000000 and the Sega CD at 0x400000
+| (Word RAM at 0x600000), the reverse of a CD boot.  The Sub-CPU program is unchanged: the listener moves
+| each address argument it is given (Word RAM 0x2xxxxx -> 0x6xxxxx, the cart 0x4xxxxx-0x7xxxxx ->
+| 0x0xxxxx-0x3xxxxx), keeps interrupts off while RV = 1 (the 68000's vectors are then the cart's), and
+| starts the 32X the cartridge way.  Not set: this file assembles exactly as before.
+        .ifndef OL_MODE1
+        .equ    OL_MODE1, 0
+        .endif
+
 
         .text
 
@@ -223,17 +233,36 @@ md_check:
         move.b  d0,0xA1200E
 
         /* push args on stack */
+        .if OL_MODE1
+        move.l  0xA1202C,d1             /* MODE1-1: each argument moved to the cartridge-boot map */
+        bsr     m1_arg
+        move.l  d1,-(sp)
+        move.l  0xA12028,d1
+        bsr     m1_arg
+        move.l  d1,-(sp)
+        move.l  0xA12024,d1
+        bsr     m1_arg
+        move.l  d1,-(sp)
+        move.l  0xA12020,d1
+        bsr     m1_arg
+        move.l  d1,-(sp)
+        .else
         move.l  0xA1202C,-(sp)
         move.l  0xA12028,-(sp)
         move.l  0xA12024,-(sp)
         move.l  0xA12020,-(sp)
+        .endif
 
         cmpi.b  #'M,d0
         bne.b   2f
 1:
         btst    #0,0xA12003
         beq.b   1b
+        .if OL_MODE1
+        jmp     0x600000                /* MODE1-1: Word RAM in a cartridge boot */
+        .else
         jmp     0x200000
+        .endif
 2:
         move.l  #-1,0xA12010
         cmpi.b  #MD_CMD_END,d0
@@ -246,6 +275,31 @@ md_check:
 3:
         lea     16(sp),sp
         bra     cmd_done
+
+        .if OL_MODE1
+| MODE1-1: d1 = an argument of command d0, as the Sub-CPU gives it (CD-boot addresses) -> d1 for a
+| cartridge boot.  Word RAM 0x200000-0x3FFFFF -> 0x600000-0x7FFFFF; the cart 0x400000-0x7FFFFF ->
+| 0x000000-0x3FFFFF (with RV = 1, as every cart routine here sets it).  Commands 19-22 (32X register
+| reads and writes) are left alone: their values are data (pads, lengths, chunk numbers), not addresses.
+m1_arg:
+        cmpi.b  #19,d0
+        blo.b   1f
+        cmpi.b  #22,d0
+        bls.b   9f
+1:
+        cmpi.l  #0x200000,d1
+        blo.b   9f
+        cmpi.l  #0x800000,d1
+        bhs.b   9f
+        cmpi.l  #0x400000,d1
+        bhs.b   2f
+        addi.l  #0x400000,d1            /* Word RAM */
+        rts
+2:
+        subi.l  #0x400000,d1            /* the cart */
+9:
+        rts
+        .endif
 
 cmd_table:
         .word   cmd_done - cmd_table
@@ -891,6 +945,12 @@ init_32x:
         bsr     put_str
         lea     16(sp),sp
 
+        .if OL_MODE1
+| MODE1-1: the cartridge boot already started the 32X: its boot ROMs loaded this loader from the cart
+| (EDCD.32X's 32X header) and wrote M_OK / S_OK.  No SH2 reset here: after one the boot ROMs would
+| look for the cartridge's start-up again.
+        move.w  #0x2700,sr
+        .else
         lea     0xA15000,a0
         move.l  #500000,d1
 1:
@@ -906,6 +966,7 @@ init_32x:
         move.w  #19170,d1
 1:
         dbra    d1,1b
+        .endif
 
         pea     21.l
         pea     12.l
@@ -916,9 +977,11 @@ init_32x:
         lea     0xA15000,a0
 
         moveq   #0,d0
+        .if OL_MODE1 == 0                   /* MODE1-1: M_OK / S_OK stay; the 32X is on already */
         move.l  d0,0x0120(a0)
         move.l  d0,0x0124(a0)
         move.b  #3,0x0101(a0)
+        .endif
 2:
         bclr    #7,0x0100(a0)
         bne.b   2b
@@ -967,6 +1030,7 @@ init_32x:
         lea     16(sp),sp
         lea     0xA15000,a0
 
+        .if OL_MODE1 == 0                   /* MODE1-1: no CD boot table, no "_CD_" */
         move.l  0x0120(a0),d0
         cmpi.l  #0x53444552,d0
         bne.b   8f
@@ -998,11 +1062,14 @@ init_32x:
         lea     16(sp),sp
 
         lea     0xA15000,a0
+        .endif
 10:
         bset    #7,0x0100(a0)
         beq.b   10b
 
+        .if OL_MODE1 == 0
         move.l  #0x5F43445F,0x0120(a0)
+        .endif
 
         pea     25.l
         pea     12.l
@@ -1270,7 +1337,11 @@ copy_words:
         rts
 
 message0:
+        .if OL_MODE1
+        .asciz  "Init 32X M1"           /* MODE1-1: the cartridge-boot listener */
+        .else
         .asciz  "Init 32X V2.9"
+        .endif
 message1:
         .asciz  "Found 32X"
 message2:
@@ -1327,6 +1398,23 @@ chilly_memcpy:
         rts
 
 chilly_rv_memcpy:
+        .if OL_MODE1
+        move.w  sr,-(sp)                /* MODE1-1: with RV = 1 the vectors are the cart's: no interrupt */
+        move.w  #0x2700,sr
+        bset    #0,0xA15107
+        movea.l 6(sp),a1
+        movea.l 10(sp),a0
+        move.l  14(sp),d0
+0:
+        move.b  (a0)+,d1
+        move.b  d1,(a1)+
+        subi.l  #1,d0
+        bgt.b   0b
+        bclr    #0,0xA15107
+        move.w  (sp)+,sr
+        moveq.l #0,d0
+        rts
+        .else
         bset    #0,0xA15107
         movea.l 4(sp),a1
         movea.l 8(sp),a0
@@ -1339,6 +1427,7 @@ chilly_rv_memcpy:
         bclr    #0,0xA15107
         moveq.l #0,d0
         rts
+        .endif
 
 | =============================================================================
 | 68K EXCEPTION TRAP (V71, restored in K29) - DIAGNOSTIC, changes nothing unless the 68K

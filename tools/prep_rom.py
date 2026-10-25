@@ -3,6 +3,7 @@
 prep_rom.py  -  make a 32X cartridge ROM ready to boot from a CD32X disc (CD32X BootCamp)
 
     python3 tools/prep_rom.py hello/hello.32x stack/subcpu/ROMS/GAME.32X
+    python3 tools/prep_rom.py --mode1 ...     (build.sh EDCD=1) also step 4 below
 
 From OpenLara CD32X's prep_openlara_cd.py (unchanged checks).
 
@@ -14,7 +15,12 @@ What it does:
      reserved, unused part of the 68000 jump table (all zeros in Chilly Willy's crt0.s); the
      68000 never runs the cartridge's Genesis code on the CD32X (it runs the CD listener);
   3. trims the zero padding at the end (fewer chunks to load) and writes the result under the
-     name the Sub-CPU gives file 20 (stack/subcpu/game_files.h: GAME_ROM_NAME, GAME.32X).
+     name the Sub-CPU gives file 20 (stack/subcpu/game_files.h: GAME_ROM_NAME, GAME.32X);
+  4. --mode1 only (MODE1-1, docs/12_CARTRIDGE_BOOT.md): points the 68000 jump table (0x206-0x319,
+     vectors 2-47) at the RAM jump table a CD boot's BIOS leaves at 0xFFFD00.  In a cartridge boot
+     (edboot/EDCD.32X) the 32X sends the 68000's vectors to the cart's table at 0x200 - where this
+     ROM is copied - and the stack's listener has its vblank in that RAM table.  In a CD boot the
+     table is never used (the vectors are the BIOS's), so the same disc boots both ways.
 """
 import struct
 import sys
@@ -22,15 +28,25 @@ import sys
 MARKER_OFS = 0x3BC
 MARKER = b"CDB2"
 
+# --mode1: vector n (2..47) -> the Sega CD BIOS's RAM jump table entry (the same in the US, EU and JP
+# BIOSes); the vectors the BIOS sends to its ROM go to 0xFFFDA8.  As edboot/make_edcd.py.
+VECTOR_RAM = {3: 0xFFFD7E, 4: 0xFFFD7E, 5: 0xFFFD84, 6: 0xFFFD78, 7: 0xFFFD8A, 8: 0xFFFD9C,
+              9: 0xFFFDA2, 10: 0xFFFD90, 11: 0xFFFD96, 26: 0xFFFD12, 28: 0xFFFD0C, 30: 0xFFFD06}
+for _t in range(16):
+    VECTOR_RAM[32 + _t] = 0xFFFD18 + 6 * _t
+
 
 def fail(msg):
     sys.exit("ERROR: " + msg)
 
 
 def main():
-    if len(sys.argv) != 3:
+    args = sys.argv[1:]
+    mode1 = "--mode1" in args
+    args = [a for a in args if a != "--mode1"]
+    if len(args) != 2:
         sys.exit(__doc__)
-    src, dst = sys.argv[1], sys.argv[2]
+    src, dst = args
     rom = bytearray(open(src, "rb").read())
 
     if len(rom) < 0x800:
@@ -63,6 +79,15 @@ def main():
         print("marker      : 'CDB2' written at 0x%03X" % MARKER_OFS)
     else:
         fail("bytes at 0x3BC are not free (%s) - unexpected ROM layout" % old.hex())
+
+    if mode1:
+        for n in range(2, 48):
+            o = 0x200 + 6 * (n - 1)
+            op = struct.unpack(">H", rom[o:o + 2])[0]
+            if op not in (0x4EF9, 0x4EB9) and rom[o:o + 6] != bytes(6):    # jmp, jsr, or reserved
+                fail("--mode1: the 68000 jump table entry at 0x%03X is not a jmp/jsr (%04X)" % (o, op))
+            rom[o:o + 6] = struct.pack(">HI", 0x4EF9, VECTOR_RAM.get(n, 0xFFFDA8))
+        print("mode1       : 68000 jump table -> the RAM jump table at 0xFFFD00")
 
     # trim: drop the zero padding at the end (keeps the SDRAM image, rounded to 2 KB)
     end = len(rom)
