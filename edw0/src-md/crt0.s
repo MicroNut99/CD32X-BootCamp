@@ -210,7 +210,7 @@ main_loop:
         bne.b   handle_req
 
         nop
-        bra.b   main_loop
+        bra     main_loop
 
 | process request from Master SH2
 handle_req:
@@ -240,9 +240,17 @@ handle_req:
         bls     ed_hammer_vdp
         cmpi.w  #0x0EFF,d0
         bls     ed_hammer_wram
+        cmpi.w  #0x0FFF,d0
+        bls     ed_vint_on
+        cmpi.w  #0x10FF,d0
+        bls     ed_write_vdp
+        cmpi.w  #0x11FF,d0
+        bls     ed_write_wram
+        cmpi.w  #0x12FF,d0
+        bls     ed_write_gate
 | unknown command
         move.w  #0,0xA15120         /* done */
-        bra.b   main_loop
+        bra     main_loop
 
 | ---- edtest: the EverDrive extended SSF mapper as RAM -------------------------------------------
 | 0x06nn: mapper register nn (0 = CTRL0 0xA130F0, 1..7 = CTRL1..7 0xA130F2..FE) = COMM2
@@ -362,6 +370,56 @@ ed_hammer_loop:
         move.w  10(a0),d0
         move.w  12(a0),d0
         move.w  14(a0),d0
+        subq.l  #1,d1
+        bne.b   1b
+        move.w  #0,0xA15120         /* done */
+        bra     main_loop
+
+| 0x0F00: edw0 - the 68000 takes its vertical blank interrupt (vert_blank: pads) for about a second,
+| as the cartridge boot's listener does every frame: the vector comes through the 32X's vector shadow
+ed_vint_on:
+        moveq   #0,d1
+        move.w  0xA15122,d1
+        mulu.w  #4000,d1
+        move.w  #0x2000,sr
+1:      nop
+        subq.l  #1,d1
+        bne.b   1b
+        move.w  #0x2700,sr
+        move.w  #0,0xA15120         /* done */
+        bra     main_loop
+| 0x1000: edw0 - the 68000 writes the VDP's control port (register 15 = 2, its value already)
+ed_write_vdp:
+        moveq   #0,d1
+        move.w  0xA15122,d1
+        mulu.w  #1000,d1
+        lea     0xC00004,a0
+        move.w  #0x8F02,d0
+        bra.b   ed_write_loop
+| 0x1100: edw0 - the 68000 writes its work RAM
+ed_write_wram:
+        moveq   #0,d1
+        move.w  0xA15122,d1
+        mulu.w  #1000,d1
+        lea     0xFF0100,a0
+        moveq   #0,d0
+        bra.b   ed_write_loop
+| 0x1200: edw0 - the 68000 writes the Sega CD gate array's main comm register 0 (0xA12010)
+ed_write_gate:
+        moveq   #0,d1
+        move.w  0xA15122,d1
+        mulu.w  #1000,d1
+        lea     0xA12010,a0
+        moveq   #0,d0
+ed_write_loop:
+1:      move.w  d0,(a0)
+        move.w  d0,(a0)
+        move.w  d0,(a0)
+        move.w  d0,(a0)
+        move.w  d0,(a0)
+        move.w  d0,(a0)
+        move.w  d0,(a0)
+        move.w  d0,(a0)
         subq.l  #1,d1
         bne.b   1b
         move.w  #0,0xA15120         /* done */

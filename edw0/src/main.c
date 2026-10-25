@@ -140,15 +140,17 @@ static char *dec(char *d, uint32_t v)
 
 /* ---- the probe ---- */
 typedef struct { uint32_t bad, passes_bad, first, want, got; const char *name; } Phase;
-static Phase ph[8] = {
+static Phase ph[10] = {
     { 0, 0, 0, 0, 0, "A W0 CT  68K IDLE        " },
     { 0, 0, 0, 0, 0, "B W0 CT  68K READS CART  " },
-    { 0, 0, 0, 0, 0, "C W1 CT  68K IDLE        " },
-    { 0, 0, 0, 0, 0, "D W1 CT  68K READS CART  " },
     { 0, 0, 0, 0, 0, "E W0 CACHED 68K IDLE     " },
     { 0, 0, 0, 0, 0, "F W0 CT  68K READS SEGACD" },
     { 0, 0, 0, 0, 0, "G W0 CT  68K READS VDP   " },
-    { 0, 0, 0, 0, 0, "H W0 CT  68K READS WORKRAM" },
+    { 0, 0, 0, 0, 0, "I W0 CT  68K VBLANK IRQS " },
+    { 0, 0, 0, 0, 0, "J W0 CT  68K WRITES VDP  " },
+    { 0, 0, 0, 0, 0, "K W0 CT  68K WRITES RAM  " },
+    { 0, 0, 0, 0, 0, "L W0 CT  68K WRITES GATE " },
+    { 0, 0, 0, 0, 0, "M W0 CACHED 68K VBLANK   " },
 };
 static uint32_t pass_no;
 static const char *phase = "START";
@@ -192,22 +194,20 @@ static void draw(void)
     text(120, 16, "PASS", C_GREY); text(160, 16, dec(b, pass_no), C_WHITE);
     text(216, 16, "PHASE", C_GREY); text(264, 16, phase, C_WHITE);
     text(8 + 26 * 8, 28, "ERRORS  BAD", C_GREY);
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 10; i++)
     {
-        int y = 38 + i * 20;
+        int y = 38 + i * 16;
         Phase *p = &ph[i];
         text(8, y, p->name, p->bad ? C_RED : C_GREEN);
         text(8 + 26 * 8, y, dec(b, p->bad), p->bad ? C_RED : C_WHITE);
         text(8 + 34 * 8, y, dec(b, p->passes_bad), C_WHITE);
         if (p->bad)
         {
-            text(16, y + 12, "FIRST +", C_GREY); text(72, y + 12, hexn(b, p->first, 5), C_WHITE);
-            text(128, y + 12, "WANT", C_GREY); text(168, y + 12, hexn(b, p->want, 4), C_WHITE);
-            text(208, y + 12, "GOT", C_GREY); text(240, y + 12, hexn(b, p->got, 4), C_RED);
+            text(16, y + 8, "+", C_GREY); text(24, y + 8, hexn(b, p->first, 5), C_WHITE);
+            text(72, y + 8, hexn(b, p->want, 4), C_WHITE); text(112, y + 8, hexn(b, p->got, 4), C_RED);
         }
     }
-    text(8, 200, "SH2 READS THE CART WHILE THE 68000 READS...", C_GREY);
-    text(8, 210, "CART 880200 / SEGA CD 400100 / VDP C00004 / RAM", C_GREY);
+    text(8, 204, "THE SH2 READS THE CART WHILE THE 68000 ...", C_GREY);
     flip();
 }
 
@@ -243,24 +243,29 @@ int main(void)
         phase = "B"; draw();
         hammer_start(); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
         note(&ph[1], bad, first, pat(first / 2, seed0), got);
-        if (!md_cmd(0x0601, 8)) fail_stop("68000 NOT ANSWERING");
-        phase = "C"; draw();
-        verify_range(1, seed8, FROM, TO, &bad, &first, &got); note(&ph[2], bad, first, pat(first / 2, seed8), got);
-        phase = "D"; draw();
-        hammer_start(); verify_range(1, seed8, FROM, TO, &bad, &first, &got); hammer_wait();
-        note(&ph[3], bad, first, pat(first / 2, seed8), got);
-        if (!md_cmd(0x0601, 1)) fail_stop("68000 NOT ANSWERING");
         phase = "E"; draw();
-        verify_cached(0, seed0, FROM, TO, &bad, &first, &got); note(&ph[4], bad, first, pat(first / 2, seed0), got);
+        verify_cached(0, seed0, FROM, TO, &bad, &first, &got); note(&ph[2], bad, first, pat(first / 2, seed0), got);
         phase = "F"; draw();
         hammer_start_cmd(0x0C00); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
-        note(&ph[5], bad, first, pat(first / 2, seed0), got);
+        note(&ph[3], bad, first, pat(first / 2, seed0), got);
         phase = "G"; draw();
         hammer_start_cmd(0x0D00); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[4], bad, first, pat(first / 2, seed0), got);
+        phase = "I"; draw();
+        hammer_start_cmd(0x0F00); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[5], bad, first, pat(first / 2, seed0), got);
+        phase = "J"; draw();
+        hammer_start_cmd(0x1000); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
         note(&ph[6], bad, first, pat(first / 2, seed0), got);
-        phase = "H"; draw();
-        hammer_start_cmd(0x0E00); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        phase = "K"; draw();
+        hammer_start_cmd(0x1100); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
         note(&ph[7], bad, first, pat(first / 2, seed0), got);
+        phase = "L"; draw();
+        hammer_start_cmd(0x1200); verify_range(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[8], bad, first, pat(first / 2, seed0), got);
+        phase = "M"; draw();
+        hammer_start_cmd(0x0F00); verify_cached(0, seed0, FROM, TO, &bad, &first, &got); hammer_wait();
+        note(&ph[9], bad, first, pat(first / 2, seed0), got);
         draw();
     }
 }

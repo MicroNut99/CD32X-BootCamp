@@ -8,7 +8,7 @@ ROOTDIR="${ROOTDIR:-/opt/toolchains/sega}"
 for v in W:0xA000 X:0xE000; do
   make -C "$HERE" clean > /dev/null
   make -C "$HERE" ROOTDIR="$ROOTDIR" ED_CTRL0="${v#*:}" > /dev/null
-  cp "$HERE/edw0.32x" "$HERE/EDW0B_${v%%:*}.32X"
+  cp "$HERE/edw0.32x" "$HERE/EDW0C_${v%%:*}.32X"
 done
 make -C "$HERE" clean > /dev/null
-ls -l "$HERE"/EDW0B_*.32X
+ls -l "$HERE"/EDW0C_*.32X
