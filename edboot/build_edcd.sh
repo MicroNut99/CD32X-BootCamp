@@ -23,7 +23,8 @@ AS="${P}as -m68000 --register-prefix-optional"
 $AS -o "$B/edcd_sp.o" edcd_sp.s
 "${P}ld" -Ttext 0x6000 -e 0x6000 -o "$B/edcd_sp.elf" "$B/edcd_sp.o"
 "${P}objcopy" -O binary "$B/edcd_sp.elf" "$B/edcd_sp.bin"
-$AS -o "$B/edcd_md.o" edcd_md.s
+# EDCD_W0=<bank>: the EverDrive bank in window 0 after the hand-over (edcd_md.s ED_W0; default 0)
+$AS --defsym ED_W0=${EDCD_W0:-0} -o "$B/edcd_md.o" edcd_md.s
 $AS -o "$B/kos.o" ../stack/subcpu/kos.s
 "${P}ld" -Ttext 0x880800 -e _start -o "$B/edcd_md.elf" "$B/edcd_md.o" "$B/kos.o"
 "${P}objcopy" -O binary "$B/edcd_md.elf" "$B/edcd_md.bin"

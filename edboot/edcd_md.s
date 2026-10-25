@@ -18,6 +18,14 @@
 | program did not hand over.
 | Runs at 0x880800 (cart 0x800 through the 32X window).
 
+| ED_W0 (build_edcd.sh: EDCD_W0=<bank>, default 0): the EverDrive bank in window 0 once EDCD hands over.
+| 0 = bank 0, where the EverDrive loaded this ROM.  Not 0: EDCD's first 2 KB (its 68000 jump table, the
+| vblank's way to the listener) go to that bank and window 0 becomes it, so the game is copied there
+| (edtest never wrote bank 0: its program was in it).
+        .ifndef ED_W0
+        .equ    ED_W0, 0
+        .endif
+
         .text
         .global _start
 _start:
@@ -150,7 +158,39 @@ _start:
         beq.b   16b
         move.w  #0x2700,sr
         lea     0xFFFD00,sp
+        .if ED_W0
+        lea     w0_move(pc),a0          /* from work RAM: window 0 changes under this code */
+        lea     0xFF8100,a1
+        move.w  #(w0_move_end-w0_move)/2-1,d0
+17:     move.w  (a0)+,(a1)+
+        dbra    d0,17b
+        jmp     0xFF8100
+        .else
         jmp     0x600000
+        .endif
+
+        .if ED_W0
+| run at 0xFF8100: EDCD's 0x100-0x7FF to bank ED_W0 (through window 1 for a moment), the standard 32X
+| vectors in front, then window 0 = that bank; all with RV = 1 (cart and registers), in words, as edtest
+w0_move:
+        move.b  #1,0xA15107
+        move.w  #ED_W0,0xA130F2         /* window 1 = the new bank */
+        lea     0x000100,a0
+        lea     0x080100,a1
+        move.w  #(0x800-0x100)/2-1,d0
+1:      move.w  (a0)+,(a1)+
+        dbra    d0,1b
+        lea     0x080000,a1
+        move.l  #0x01000000,(a1)+
+        moveq   #62,d0
+2:      move.l  #0x000003F0,(a1)+
+        dbra    d0,2b
+        move.w  #1,0xA130F2             /* window 1 = bank 1 again */
+        move.w  #0xA000+ED_W0,0xA130F0  /* window 0 = the new bank, writes on */
+        move.b  #0,0xA15107
+        jmp     0x600000
+w0_move_end:
+        .endif
 
 | one frame (about 1/60 s of 68000 time - the VDP's blank flag is stuck at 1 while the display is off),
 | then the Sub-CPU's level 2 interrupt: what a CD boot's BIOS (and the stack's listener) does every

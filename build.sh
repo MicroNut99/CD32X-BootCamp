@@ -11,7 +11,9 @@
 #   STREAM= CARTW= FMVRING= SLOTS= CART= the Sub-CPU's build switches (stack/subcpu/Makefile; all off by default)
 #   EDCD=1                              also edboot/EDCD.32X: the disc started from a Mega EverDrive PRO, which
 #                                       stays the cartridge (docs/12_CARTRIDGE_BOOT.md).  The disc still boots
-#                                       the normal way too (its game ROM's 68000 jump table is the only change)
+#                                       the normal way too (its game ROM's 68000 jump table is the only change).
+#                                       With it: M1WORDS=1 (EDCD's listener writes the cart in words), EDCD_W0=<bank>
+#                                       (the EverDrive bank for the cart's first 512 KB; default 0)
 # Every switch is listed in README.md, "How to build".
 #
 # A game folder holds:  Makefile (makes <game>.32x, a normal 32X cartridge ROM), splash.png (the boot
@@ -124,7 +126,7 @@ if [ "${EDCD:-0}" = 1 ]; then
   echo "==> 7. EDCD.32X: the disc from a Mega EverDrive PRO (cartridge boot)"
   T=$(mktemp -d)                                   # (no trap: DIAG=1 keeps its own on EXIT)
   cp -r "$HERE/stack" "$T/"
-  ( cd "$T/stack/subcpu" && make clean > /dev/null && make CDROMPlayer.bin ROOTDIR="$ROOTDIR" MODE1=1 > "$T/mode1.log" 2>&1 ) \
+  ( cd "$T/stack/subcpu" && make clean > /dev/null && make CDROMPlayer.bin ROOTDIR="$ROOTDIR" MODE1=1 ${M1WORDS:+M1WORDS=$M1WORDS} > "$T/mode1.log" 2>&1 ) \
     || { tail -20 "$T/mode1.log"; echo "*** the MODE1 Sub-CPU program did not build"; exit 1; }
   ROOTDIR="$ROOTDIR" bash "$HERE/edboot/build_edcd.sh" "$T/stack/subcpu/CDROMPlayer.bin" "$HERE/stack/sh2/CDLOADER.32x"
   rm -rf "$T"

@@ -35,6 +35,12 @@
         .ifndef OL_MODE1
         .equ    OL_MODE1, 0
         .endif
+| MODE1-2 (Makefile M1WORDS=1, with MODE1=1): every copy to or from the cart whose source, destination and
+| length are even goes in words, as edtest wrote the EverDrive (byte writes to it with the 32X on were
+| never tried on a console).
+        .ifndef OL_M1WORDS
+        .equ    OL_M1WORDS, 0
+        .endif
 
 
         .text
@@ -1448,6 +1454,18 @@ chilly_rv_memcpy:
 | interrupts off (about 5 ms: a vblank waits at most that long).
 m1_xfer:
         movem.l d2/a2-a4,-(sp)
+        .if OL_M1WORDS
+        tst.w   d3                      /* MODE1-2: bytes, but all even -> words */
+        bne.b   0f
+        move.l  a0,d1
+        move.l  a1,d2
+        or.l    d2,d1
+        or.l    d0,d1
+        btst    #0,d1
+        bne.b   0f
+        moveq   #1,d3
+0:
+        .endif
         lea     m1_buf(pc),a4
 1:
         tst.l   d0

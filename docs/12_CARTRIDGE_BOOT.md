@@ -51,6 +51,12 @@ never uses that table (its vectors are the BIOS's), so **the same disc boots bot
 way with a RAM cart, and from the EverDrive with `EDCD.32X`. The Sub-CPU program inside `EDCD.32X` is a
 second build of the stack with `MODE1=1`; the disc keeps the normal one.
 
+**Two switches for the console's unknowns** (both off by default):
+- `M1WORDS=1`: EDCD's listener writes the cart in words wherever source, destination and length are even,
+  as edtest wrote the EverDrive (byte writes to it with the 32X on were never tried on a console).
+- `EDCD_W0=<bank>`: after the hand-over, window 0 (the cart's first 512 KB, where the game goes) is that
+  EverDrive bank instead of bank 0 (EDCD copies its 68000 jump table there first). edtest never wrote bank 0.
+
 ## Run it
 
 Genesis + Sega CD + 32X, the EverDrive PRO in the 32X slot, the disc in the Sega CD. Copy `EDCD.32X` to

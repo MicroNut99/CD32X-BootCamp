@@ -48,6 +48,10 @@ ASFLAGS = -m68000 --register-prefix-optional
 # builds it in a copy of this folder; the disc always gets the normal program.
 ifeq ($(MODE1),1)
 ASFLAGS += --defsym OL_MODE1=1
+# MODE1-2: M1WORDS=1 - the cartridge-boot listener writes the cart in words wherever it can
+ifeq ($(M1WORDS),1)
+ASFLAGS += --defsym OL_M1WORDS=1
+endif
 endif
 
 PREFIX = $(ROOTDIR)/m68k-elf/bin/m68k-elf-
