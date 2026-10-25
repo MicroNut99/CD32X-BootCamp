@@ -117,6 +117,40 @@ It stops with a message at the first problem:
 
 Each step is explained in [docs/05_BUILD_TEST_BURN.md](docs/05_BUILD_TEST_BURN.md).
 
+## Mega EverDrive PRO as a 16 MB 32X RAM cart: tested on the console
+
+**Result.** On a Genesis + 32X, a Mega EverDrive PRO in its "extended SSF" mode works as **16 MB of writable
+RAM for a 32X program, set up in software**. The test ROM (`edtest/`, details in
+[docs/10](docs/10_EVERDRIVE_TEST.md)):
+
+1. turns on the EverDrive's mapper (`SEGA SSF` in the header, write bit in `0xA130F0`);
+2. writes 27 banks of 512 KB (13.5 MB) with the 68000, with RV = 1, as the CD32X stack writes its RAM cart;
+3. reads every bank back with the 68000 and with both SH2s, after all the others have been switched in and
+   out.
+
+| Test (console) | CTRL0 | Result |
+|---|---|---|
+| `EDTEST_W.32X` | `0xA000` (P + W) | pass 1: all 27 banks OK, 0 bad words (68000 and SH2s); pass 2 under way, no failure |
+| `EDTEST_X.32X` | `0xE000` (P + X + W) | pass 1: all 27 banks OK, 0 bad words; pass 2 under way, no failure |
+| Newest build (per-run pattern number, mapper check) | both | running |
+
+**How the 32X program uses it:**
+
+| Register | Value | What it does |
+|---|---|---|
+| `0xA130F0` (CTRL0) | `0xA000` | protection + write enable, bank 0 in window 0 |
+| `0xA130F2`–`0xA130FE` (CTRL1–7) | the bank, 1–27 | selects the bank in each 512 KB window, `0x080000`–`0x3FFFFF` |
+
+- The 68000 writes these registers, and writes and reads the cart, with RV = 1.
+- The SH2s read the cart at `0x22000000` (cache-through), as from any cart.
+- Never write banks 28–31: they hold the EverDrive's save area and its own software.
+
+**What this does not yet cover.** The CD32X games boot from the CD, with the cart out of the way. The test ran
+in cartridge mode, started from the EverDrive menu. Using the EverDrive as the CD stack's RAM cart needs one
+more step: set up the mapper, then let the CD boot. The EverDrive's #CART bit may do that; it is not tested
+yet. Booting the CD with "Run Mega-CD" instead finds no writable memory at the cart (diagnostic disc: `SAFE
+CART: NOT FOUND`).
+
 ## How it boots, in one picture
 
 ```
