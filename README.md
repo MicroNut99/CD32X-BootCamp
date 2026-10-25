@@ -139,6 +139,7 @@ The details are in [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md).
 | `stack/subcpu/` | The Sega CD Sub-CPU program (APP.BIN) and the Genesis 68000 listener | Only `game_files.h`: your file names |
 | `stack/sh2/` | CDLOADER, the SH2 program that loads your ROM into the cart | No (it is byte-identical to OpenLara's) |
 | `hello/` | The example game: a 32X ROM using `cdapi.c` for every CD service | Copy it and make it yours |
+| `edtest/` | The EverDrive PRO 16 MB RAM test: two 32X cartridge ROMs (`bash edtest/build.sh`) | No |
 | `tools/` | `prep_rom.py` (checks and marks the ROM), the boot picture, a test music track, the font | No |
 | `docs/` | How it works, the commands, memory maps, rules learned on the console, how the existing games differ | Read it |
 | `build.sh` | Builds the game, the loader, the Sub-CPU program and the disc | `GAME=yourfolder` |
@@ -173,6 +174,7 @@ The full checklist is in [docs/02_PORTING_YOUR_GAME.md](docs/02_PORTING_YOUR_GAM
 | [07 The methods compared](docs/07_METHODS_COMPARED.md) | How OpenLara, OpenJazz REV, Hurrican, SuperTux REV and Sonic CD 2011 use the stack |
 | [08 Research index](docs/08_RESEARCH_INDEX.md) | Where to read more: MicroNut99's repositories and documents |
 | [09 Error codes](docs/09_ERROR_CODES.md) | **Look up any number the disc shows**: the error box, the loader's codes, the green and white diagnostic text, the screen you are stuck on |
+| [10 EverDrive PRO test](docs/10_EVERDRIVE_TEST.md) | Can a Mega EverDrive PRO be a 16 MB RAM cart? The test ROMs and how to read them |
 
 ## Status
 
