@@ -250,6 +250,17 @@ int main(void)
     cd_status(0x4E00);                      /* 4E00: hello started */
 #if HELLO_DIAG_TEXT
     sdram_check(0);                         /* EDCD trace: the image as handed over */
+    {   /* EDCD trace: the master SH2's bus controller and cache, as the 32X boot ROM left them -
+           six status values ~20 ms apart: BCR1, BCR2, WCR, MCR, RTCSR:RTCOR, CCR:SR[7:4] */
+        uint32_t sr;
+        __asm__ __volatile__("stc sr,%0" : "=r"(sr));
+        post_slow(*(volatile uint16_t *)0xFFFFFFE0);                       /* BCR1 */
+        post_slow(*(volatile uint16_t *)0xFFFFFFE4);                       /* BCR2 */
+        post_slow(*(volatile uint16_t *)0xFFFFFFE8);                       /* WCR */
+        post_slow(*(volatile uint16_t *)0xFFFFFFEC);                       /* MCR */
+        post_slow((uint16_t)((*(volatile uint16_t *)0xFFFFFFF0 & 0xFF) << 8 | (*(volatile uint16_t *)0xFFFFFFF8 & 0xFF)));
+        post_slow((uint16_t)((*(volatile uint8_t *)0xFFFFFE92) << 8 | ((sr >> 4) & 0xF)));
+    }
 #endif
     int view_text = HELLO_DIAG_TEXT;        /* 1: the Sub-CPU's green text shows (diagnostic disc) */
     cd_genesis_display(view_text);          /* 0: only the 32X picture */

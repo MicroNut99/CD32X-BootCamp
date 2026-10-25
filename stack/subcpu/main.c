@@ -752,13 +752,13 @@ int main(void)
             /* EDCD trace: the history of COMM12 (the SH2's status) - every pass, the last 10
                distinct values, oldest first.  The cartridge boot's restart cycle overwrites
                COMM12 (4D05, 0), so a snapshot never shows the game's last step; this does. */
-            static uint16_t st_hist[10], st_last = 0xFFFF; static int st_n = 0;
+            static uint16_t st_hist[18], st_last = 0xFFFF; static int st_n = 0;
             {
                 uint16_t v = (uint16_t)do_md_cmd1(MD_CMD_READ_32X_16, 0xA1512C);
                 if (v != st_last) {
                     st_last = v;
-                    if (st_n < 10) st_hist[st_n++] = v;
-                    else { int i; for (i = 0; i < 9; i++) st_hist[i] = st_hist[i + 1]; st_hist[9] = v; }
+                    if (st_n < 18) st_hist[st_n++] = v;
+                    else { int i; for (i = 0; i < 17; i++) st_hist[i] = st_hist[i + 1]; st_hist[17] = v; }
                 }
             }
 #endif
@@ -767,13 +767,16 @@ int main(void)
                9 reading TOC, 0xB no disc / error ...), lower 3 digits = pass count / 64 */
             if ((++hb_pass & 63) == 0) {
 #if KOBO_DIAG_TEXT
-                {
-                    int i, n = 0;
-                    n += sprintf(tbuf, "HIST:");
-                    for (i = st_n > 6 ? st_n - 6 : 0; i < st_n; i++) n += sprintf(tbuf + n, " %04X", st_hist[i]);
-                    while (n < 38) tbuf[n++] = ' ';
-                    tbuf[n] = 0;
-                    if (!ol_game_running) print_diag(temp, tbuf, 2, 23);
+                {   /* 18 values, oldest first, six a row on rows 23-25 */
+                    int i, r, n;
+                    for (r = 0; r < 3; r++) {
+                        n = sprintf(tbuf, r == 0 ? "HIST:" : "     ");
+                        for (i = r * 6; i < r * 6 + 6; i++)
+                            n += (i < st_n) ? sprintf(tbuf + n, " %04X", st_hist[i]) : sprintf(tbuf + n, "     ");
+                        while (n < 38) tbuf[n++] = ' ';
+                        tbuf[n] = 0;
+                        if (!ol_game_running) print_diag(temp, tbuf, 2, 23 + r);
+                    }
                 }
 #endif
                 do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512E,
