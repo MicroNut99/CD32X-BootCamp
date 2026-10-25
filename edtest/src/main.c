@@ -80,8 +80,10 @@ void secondary(void)                        /* the slave SH2: verifies words 131
 }
 
 /* ---- the 68000 side's commands (src-md/crt0.s) ---- */
+static uint16_t last_cmd, last_arg;    /* the last 68000 command (for the stuck screen) */
 static int md_cmd(uint16_t cmd, uint16_t arg)
 {
+    last_cmd = cmd; last_arg = arg;
     uint32_t t0 = gTicks;
     while (MARS_SYS_COMM0 != 0 && gTicks - t0 < 600) { }
     MARS_SYS_COMM2 = (short)arg;
@@ -178,6 +180,9 @@ static uint16_t seed_of(int bank, uint32_t pass)
     return (pass & 1) ? (uint16_t)~s : s;   /* every other pass: the bits inverted */
 }
 
+static uint16_t stuck_comm[8];
+static int      stuck;
+
 static void draw(void)
 {
     char b[16];
@@ -221,6 +226,15 @@ static void draw(void)
                     s ? "SH2 READS DIFFER FROM 68000" :
                     w ? "SOME BANKS NOT WRITABLE" : "ALL TESTED BANKS OK";
     text(8, 176, "VERDICT:", C_GREY); text(80, 176, v, (ok == done && done) ? C_GREEN : C_YELLOW);
+    if (stuck)                              /* which 68000 command did not come back, and the COMM registers */
+    {
+        text(8, 186, "CMD", C_RED); text(40, 186, hexn(b, last_cmd, 4), C_WHITE);
+        text(88, 186, "ARG", C_RED); text(120, 186, hexn(b, last_arg, 4), C_WHITE);
+        for (int i = 0; i < 8; i++)
+            text(8 + (i & 3) * 80, 196 + (i >> 2) * 10, hexn(b, stuck_comm[i], 4), C_WHITE);
+        flip();
+        return;
+    }
     text(8, 194, "W=NOT WRITABLE A=LOST S=SH2 BAD", C_GREY);
     text(8, 206, "BANKS 0 AND 28-31 ARE NEVER WRITTEN", C_GREY);
     flip();
@@ -229,6 +243,9 @@ static void draw(void)
 static void fail_stop(const char *why)
 {
     phase = why;
+    stuck = 1;
+    for (int i = 0; i < 8; i++)             /* COMM0 ... COMM14 when the 68000 stopped answering */
+        stuck_comm[i] = ((volatile uint16_t *)0x20004020)[i];
     while (1) draw();
 }
 

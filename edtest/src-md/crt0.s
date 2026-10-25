@@ -196,6 +196,9 @@ read_long:
         .global do_main
 do_main:
 | (edtest: no write to 0xA130F1 here - on the EverDrive that is the low byte of its mapper register CTRL0)
+| edtest: interrupts stay OFF for the whole test.  The vertical blank handler (vert_blank) uses d0/a0
+| without saving them and writes the pads into COMM8/COMM10 - the registers that carry this test's replies.
+        move.w  #0x2700,sr
 
         move.w  0xA15100,d0
         or.w    #0x8000,d0
@@ -243,7 +246,7 @@ ed_mapper:
         move.b  #1,0xA15107         /* set RV, as Chilly's SRAM code does for 0xA130F1 */
         move.w  d2,0(a0,d1.w)
         move.b  #0,0xA15107         /* clear RV */
-        move.w  #0x2000,sr
+        move.w  #0x2700,sr         /* (interrupts stay off: see do_main) */
         move.w  #0,0xA15120         /* done */
         bra     main_loop
 
@@ -262,7 +265,7 @@ ed_fill:
         bsr     ed_quarter
         bra.b   2b
 3:      move.b  #0,0xA15107         /* clear RV */
-        move.w  #0x2000,sr
+        move.w  #0x2700,sr         /* (interrupts stay off: see do_main) */
         move.w  #0,0xA15120         /* done */
         bra     main_loop
 
@@ -291,7 +294,7 @@ ed_verify:
         bsr     ed_quarter
         bra.b   2b
 3:      move.b  #0,0xA15107         /* clear RV */
-        move.w  #0x2000,sr
+        move.w  #0x2700,sr         /* (interrupts stay off: see do_main) */
         move.l  d2,0xA15128
         move.l  a1,d1
         cmpi.l  #-1,d1
