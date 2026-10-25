@@ -212,15 +212,15 @@ pri_vbr:
         .long   pri_stack       /* Cold Start SP */
         .long   pri_start       /* Manual Reset PC */
         .long   pri_stack       /* Manual Reset SP */
-        .long   pri_err         /* Illegal instruction */
+        .long   pri_exc_ill     /* Illegal instruction      -> STATE EE01, M:/SL: = the PC */
         .long   0x00000000      /* reserved */
-        .long   pri_err         /* Invalid slot instruction */
+        .long   pri_exc_slot    /* Invalid slot instruction -> EE02 */
         .long   0x00000000      /* reserved */
         .long   0x00000000      /* reserved */
-        .long   pri_err         /* CPU address error */
-        .long   pri_err         /* DMA address error */
-        .long   pri_err         /* NMI vector */
-        .long   pri_err         /* User break vector */
+        .long   pri_exc_addr    /* CPU address error        -> EE03 */
+        .long   pri_exc_dma     /* DMA address error        -> EE04 */
+        .long   pri_exc_nmi     /* NMI vector               -> EE05 */
+        .long   pri_exc_ubc     /* User break vector        -> EE06 */
         .space  76              /* reserved */
         .long   pri_err         /* TRAPA #32 */
         .long   pri_err         /* TRAPA #33 */
@@ -436,6 +436,58 @@ _bss_end:
 pri_err:
         rte
         nop
+
+! A CPU exception on the master: report it and stop, instead of returning into whatever follows
+! (cartridge boot, 25 Oct 2026: the game died silently at random points early on).  COMM12 = 0xEE0n
+! (the Sub-CPU's diagnostic text shows it as STATE / ST:), COMM6 = the faulting PC's high word
+! (shown as M:), COMM10 = its low word (shown as SL:).
+pri_exc_ill:
+        mov     #1,r0
+        bra     pri_exc
+        nop
+pri_exc_slot:
+        mov     #2,r0
+        bra     pri_exc
+        nop
+pri_exc_addr:
+        mov     #3,r0
+        bra     pri_exc
+        nop
+pri_exc_dma:
+        mov     #4,r0
+        bra     pri_exc
+        nop
+pri_exc_nmi:
+        mov     #5,r0
+        bra     pri_exc
+        nop
+pri_exc_ubc:
+        mov     #6,r0
+pri_exc:
+        mov.w   pexc_ee,r2
+        or      r2,r0
+        mov.l   pexc_comm12,r1
+        mov.w   r0,@r1                  /* COMM12 = 0xEE0n */
+        mov.l   @r15,r2                 /* the PC the exception pushed */
+        swap.w  r2,r3
+        mov.l   pexc_comm6,r1
+        mov.w   r3,@r1                  /* COMM6 = PC high word */
+        mov.l   pexc_comm10,r1
+        mov.w   r2,@r1                  /* COMM10 = PC low word */
+9:
+        bra     9b
+        nop
+
+        .align  2
+pexc_ee:
+        .word   0xEE00
+        .align  2
+pexc_comm12:
+        .long   0x2000402C
+pexc_comm6:
+        .long   0x20004026
+pexc_comm10:
+        .long   0x2000402A
 
 !-----------------------------------------------------------------------
 ! Primary IRQ handler
