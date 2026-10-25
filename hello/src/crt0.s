@@ -465,23 +465,49 @@ pri_exc_ubc:
         mov     #6,r0
 pri_exc:
         mov.w   pexc_ee,r2
-        or      r2,r0
+        or      r2,r0                   /* r0 = 0xEE0n */
+        mov     #0xF0,r1
+        ldc     r1,sr                   /* no more interrupts: the report must stay */
+        mov.l   @r15,r8                 /* the PC the exception pushed */
+        mov     r15,r9                  /* the stack pointer */
         mov.l   pexc_comm12,r1
-        mov.w   r0,@r1                  /* COMM12 = 0xEE0n */
-        mov.l   @r15,r2                 /* the PC the exception pushed */
-        swap.w  r2,r3
+        mov.w   r0,@r1                  /* COMM12 = 0xEE0n ... then, each ~20 ms apart (the Sub-CPU's */
+        bsr     pexc_delay              /* history row keeps the last six distinct values): */
+        nop
+        swap.w  r8,r0
+        mov.w   r0,@r1                  /* PC high word */
+        bsr     pexc_delay
+        nop
+        mov.w   r8,@r1                  /* PC low word */
+        bsr     pexc_delay
+        nop
+        swap.w  r9,r0
+        mov.w   r0,@r1                  /* SP high word */
+        bsr     pexc_delay
+        nop
+        mov.w   r9,@r1                  /* SP low word */
+        swap.w  r8,r3
         mov.l   pexc_comm6,r1
-        mov.w   r3,@r1                  /* COMM6 = PC high word */
+        mov.w   r3,@r1                  /* COMM6 = PC high word (M:) */
         mov.l   pexc_comm10,r1
-        mov.w   r2,@r1                  /* COMM10 = PC low word */
+        mov.w   r8,@r1                  /* COMM10 = PC low word (SL:) */
 9:
         bra     9b
+        nop
+pexc_delay:
+        mov.l   pexc_dly,r4
+1:
+        dt      r4
+        bf      1b
+        rts
         nop
 
         .align  2
 pexc_ee:
         .word   0xEE00
         .align  2
+pexc_dly:
+        .long   0x00080000
 pexc_comm12:
         .long   0x2000402C
 pexc_comm6:

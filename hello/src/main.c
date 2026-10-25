@@ -34,6 +34,33 @@ volatile uint32_t gTicks = 0;
 volatile unsigned mars_pwdt_ovf_count = 0;
 volatile unsigned mars_swdt_ovf_count = 0;
 void pri_vbi_handler(void) { gTicks++; }   /* the master's vertical blank interrupt */
+
+#if HELLO_DIAG_TEXT
+/* EDCD trace: is the SDRAM image (vectors, interrupt tables, start-up code) still what the cart
+   holds?  Compared cache-through at every start-up step.  A difference is reported as a run of
+   status codes ~20 ms apart (the Sub-CPU's history row keeps the last six): EC<step>, the offset,
+   the cart's word (high, low), the SDRAM word (high, low); then the game stops. */
+static void post_slow(uint16_t v) { cd_status(v); for (volatile int i = 0; i < 300000; i++) { } }
+static void sdram_check(int step)
+{
+    const volatile uint32_t *hdr = (const volatile uint32_t *)0x22000000u;
+    uint32_t src = hdr[0x3D4 / 4], size = hdr[0x3DC / 4];
+    const volatile uint32_t *rom = (const volatile uint32_t *)(0x22000000u + src);
+    const volatile uint32_t *ram = (const volatile uint32_t *)0x26000000u;
+    for (uint32_t i = 0; i < size / 4; i++)
+    {
+        uint32_t a = rom[i], b = ram[i];
+        if (a != b)
+        {
+            post_slow((uint16_t)(0xEC00 | step));
+            post_slow((uint16_t)(i * 4));
+            post_slow((uint16_t)(a >> 16)); post_slow((uint16_t)a);
+            post_slow((uint16_t)(b >> 16)); post_slow((uint16_t)b);
+            while (1) { }
+        }
+    }
+}
+#endif
 void sec_dma1_handler(void) { }
 void secondary(void)                        /* the slave SH2: idle in this example */
 {
@@ -221,6 +248,9 @@ int main(void)
     uint16_t chord = 0;                     /* the buttons pressed since all were last released */
 
     cd_status(0x4E00);                      /* 4E00: hello started */
+#if HELLO_DIAG_TEXT
+    sdram_check(0);                         /* EDCD trace: the image as handed over */
+#endif
     int view_text = HELLO_DIAG_TEXT;        /* 1: the Sub-CPU's green text shows (diagnostic disc) */
     cd_genesis_display(view_text);          /* 0: only the 32X picture */
 
@@ -228,7 +258,7 @@ int main(void)
        live ST: field shows the last step that finished (cartridge boot, 25 Oct 2026: the SH2 went
        silent between the Genesis-display command and the first save). */
 #if HELLO_DIAG_TEXT
-#define STEP(c) cd_status(c)
+#define STEP(c) do { cd_status(c); sdram_check((c) & 0xFF); } while (0)
 #else
 #define STEP(c) ((void)0)
 #endif
