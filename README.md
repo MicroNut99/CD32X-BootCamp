@@ -128,11 +128,13 @@ RAM for a 32X program, set up in software**. The test ROM (`edtest/`, details in
 3. reads every bank back with the 68000 and with both SH2s, after all the others have been switched in and
    out.
 
-| Test (console) | CTRL0 | Result |
+| Test (console, Genesis + 32X + Mega EverDrive PRO) | CTRL0 | Result |
 |---|---|---|
-| `EDTEST_W.32X` | `0xA000` (P + W) | pass 1: all 27 banks OK, 0 bad words (68000 and SH2s); pass 2 under way, no failure |
-| `EDTEST_X.32X` | `0xE000` (P + X + W) | pass 1: all 27 banks OK, 0 bad words; pass 2 under way, no failure |
-| Newest build (per-run pattern number, mapper check) | both | running |
+| `EDTEST_W.32X` | `0xA000` (P + W) | **2 full passes** (the second with every bit inverted), pass 3 under way at 226 s: all 27 banks OK, **0 bad words** (68000 and both SH2s) |
+| `EDTEST_X.32X` | `0xE000` (P + X + W) | **1 full pass**, pass 2 under way: all 27 banks OK, **0 bad words** |
+
+Both values work. `0xA000` is the one the Pro's documentation describes; the X bit (32X mode, from the older
+EverDrive notes) changed nothing measurable.
 
 **How the 32X program uses it:**
 

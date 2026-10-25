@@ -24,6 +24,34 @@ EverDrive menu.
 Banks are 512 KB each, 0–31. Banks 28 (saves) and 30–31 (the EverDrive OS; 31 is SRAM on the Pro) must not
 be touched.
 
+## Results on the console (24 Oct 2026)
+
+Genesis + 32X + Mega EverDrive PRO, started from the EverDrive menu.
+
+| ROM | CTRL0 | Result |
+|---|---|---|
+| `EDTEST_W.32X` | `0xA000` | 2 full passes (the second with every bit inverted), pass 3 under way at 226 s: all 27 banks `OK`, 0 bad words from the 68000 and from both SH2s |
+| `EDTEST_X.32X` | `0xE000` | 1 full pass, pass 2 under way: all 27 banks `OK`, 0 bad words |
+
+**Verdict: `ALL TESTED BANKS OK` with both values.** In SSF mode the EverDrive PRO is 16 MB of writable RAM
+for a 32X program:
+
+- the 68000 writes it with RV = 1;
+- the mapper switches banks with the 32X on;
+- the SH2s read back exactly what the 68000 wrote.
+
+**Earlier attempts, for the record:**
+- **"Run Mega-CD" with the diagnostic disc:** no writable memory at the cart (`SAFE CART: NOT FOUND`).
+- **The first build of this test** stopped with `68000 NOT ANSWERING`. A bug in the test: the 68000's vertical
+  blank handler clobbered `d0`/`a0` and wrote the pads into COMM8/10. It was fixed by keeping the 68000's
+  interrupts off for the whole test.
+
+**Next:**
+1. Use it as the CD stack's RAM cart: the mapper must be set up before the CD boots, with the cart out of the
+   way (the #CART bit?).
+2. An "EverDrive PRO" cart type in ares.
+3. An EverDrive form of the games' paging command (CMD 68).
+
 ## The two ROMs
 
 | ROM | CTRL0 | From |
