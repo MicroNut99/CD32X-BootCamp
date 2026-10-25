@@ -22,3 +22,10 @@ edboot/EDBOOT.BIN
 edboot/build/
 edboot/EDPROBE.BIN
 edboot/EDCD.32X
+edw0/EDW0_*.32X
+edw0/edw0.32x
+edw0/build/
+edw0/src-md/*.o
+edw0/src-md/*.bin
+edw0/src-md/*.elf
+edw0/src-md/*.map
