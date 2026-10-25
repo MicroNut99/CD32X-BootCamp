@@ -41,6 +41,15 @@
         .ifndef OL_M1WORDS
         .equ    OL_M1WORDS, 0
         .endif
+| MODE1-4 (diagnostics, EDCD only): M1MINVB=1 - the vblank handler does only the Sub-CPU's level 2
+| interrupt (no pads, no gate-array writes); M1NOVINT=1 - the vblank handler skips the Sub-CPU's level 2
+| interrupt (its BIOS then gets none: CD reads will stall later, which is expected).
+        .ifndef OL_M1MINVB
+        .equ    OL_M1MINVB, 0
+        .endif
+        .ifndef OL_M1NOVINT
+        .equ    OL_M1NOVINT, 0
+        .endif
 
 
         .text
@@ -1395,6 +1404,9 @@ message6:
 
 vblank_int:
         movem.l d0-d1/a0-a1,-(sp)
+        .if OL_MODE1 && OL_M1MINVB
+        bra.b   vb_ifl2                 /* MODE1-4: level 2 to the Sub-CPU only */
+        .endif
 
         pea     0.w
         bsr.w   get_pad
@@ -1413,10 +1425,15 @@ vblank_int:
         beq.b   1f
         nop                     | OpenLara: COMM6 belongs to the renderer (was: move.w d0,0xA15126)             /* HW7: 68K heartbeat -> 32X COMM6 (SH2 reads it 1x/s) */
 1:
+vb_ifl2:
+        .if OL_MODE1 && OL_M1NOVINT
+        bra.b   vb_out                  /* MODE1-4: no level 2 to the Sub-CPU */
+        .endif
 
         move.w  0xA12000,d0
         ori.w   #0x0100,d0
         move.w  d0,0xA12000
+vb_out:
 
         movem.l (sp)+,d0-d1/a0-a1
         rte

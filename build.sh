@@ -126,7 +126,7 @@ if [ "${EDCD:-0}" = 1 ]; then
   echo "==> 7. EDCD.32X: the disc from a Mega EverDrive PRO (cartridge boot)"
   T=$(mktemp -d)                                   # (no trap: DIAG=1 keeps its own on EXIT)
   cp -r "$HERE/stack" "$T/"
-  ( cd "$T/stack/subcpu" && make clean > /dev/null && make CDROMPlayer.bin ROOTDIR="$ROOTDIR" MODE1=1 ${M1WORDS:+M1WORDS=$M1WORDS} > "$T/mode1.log" 2>&1 ) \
+  ( cd "$T/stack/subcpu" && make clean > /dev/null && make CDROMPlayer.bin ROOTDIR="$ROOTDIR" MODE1=1 ${M1WORDS:+M1WORDS=$M1WORDS} ${M1MINVB:+M1MINVB=$M1MINVB} ${M1NOVINT:+M1NOVINT=$M1NOVINT} ${EDCD_QUIET:+QUIET=$EDCD_QUIET} > "$T/mode1.log" 2>&1 ) \
     || { tail -20 "$T/mode1.log"; echo "*** the MODE1 Sub-CPU program did not build"; exit 1; }
   ROOTDIR="$ROOTDIR" bash "$HERE/edboot/build_edcd.sh" "$T/stack/subcpu/CDROMPlayer.bin" "$HERE/stack/sh2/CDLOADER.32x"
   rm -rf "$T"

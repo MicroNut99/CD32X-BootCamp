@@ -261,6 +261,9 @@ static void cd_chunk_read(uint8_t *dst, int lba, int n, int file_end)
    neither the green text nor Chilly's white 32X start-up messages appear (dev request): the
    SEGA logo is followed by the splash.  The text is still written to video RAM, so setting 1
    (or pressing C in the game) shows it.  Set 1 when debugging a start-up problem. */
+#ifndef EDCD_QUIET
+#define EDCD_QUIET            0          /* EDCD diagnostics (Makefile QUIET=1): quiet from 4E00 */
+#endif
 #define KOBO_HW_QUIET         0          /* HW9: 1 = once the game reports 4B10, the Sub-CPU stops polling
                                                    the 68K; it only writes its heartbeat twice a second. */
 static int sub_quiet = 0;
@@ -710,7 +713,7 @@ int main(void)
 
         bump_fm();
 
-#if KOBO_HW_QUIET
+#if KOBO_HW_QUIET || EDCD_QUIET
         if (sub_quiet) {                 /* HW9 QUIET TEST: no 68K traffic except this heartbeat */
             static unsigned int t_last = 0;
             static uint16_t q_count = 0;
@@ -720,13 +723,31 @@ int main(void)
                 q_count++;
                 do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512E,
                            ((read_byte(0xFF8038) & 0x0F) << 12) | (q_count & 0x0FFF));
+#if EDCD_QUIET && KOBO_DIAG_TEXT
+                {   /* EDCD trace, quiet variant: COMM12 history sampled here only (every 0.5 s) */
+                    static uint16_t qh[6]; static int qn = 0; static uint16_t ql = 0xFFFF;
+                    uint16_t v = (uint16_t)do_md_cmd1(MD_CMD_READ_32X_16, 0xA1512C);
+                    int i, n;
+                    if (v != ql) { ql = v; if (qn < 6) qh[qn++] = v; else { for (i = 0; i < 5; i++) qh[i] = qh[i + 1]; qh[5] = v; } }
+                    n = sprintf(tbuf, "QHIST:");
+                    for (i = 0; i < qn; i++) n += sprintf(tbuf + n, " %04X", qh[i]);
+                    while (n < 38) tbuf[n++] = ' ';
+                    tbuf[n] = 0;
+                    print_diag(temp, tbuf, 2, 23);
+                }
+#endif
             }
-            continue;
+#if !EDCD_QUIET
+            continue;                    /* (EDCD_QUIET: commands are still served below) */
+#endif
         }
 #endif
         {   /* HW1 SUB-CPU HEARTBEAT (K29): every 16 passes the pass counter goes to COMM14.  Only
                the Sub-CPU writes COMM14; the SH2 only reads it (hardware readout "P"). */
             static uint16_t hb_pass = 0;
+#if EDCD_QUIET
+            if (sub_quiet) goto hb_done;  /* quiet: no per-pass 68000 traffic, no regular heartbeat */
+#endif
 #if KOBO_DIAG_TEXT
             /* EDCD trace: the history of COMM12 (the SH2's status) - every pass, the last 10
                distinct values, oldest first.  The cartridge boot's restart cycle overwrites
@@ -775,6 +796,9 @@ int main(void)
                 if (!ol_game_running) print_diag(temp, tbuf, 2, 22);
 #endif
             }
+#if EDCD_QUIET
+hb_done:    ;
+#endif
         }
         /* SFXVOL-1: COMM0 (command) and COMM2 (its parameter) in ONE read - the effect's
            volume comes in COMM2 with the pad request, at no extra round trip through the 68K */
@@ -824,6 +848,9 @@ int main(void)
                 sprintf(tbuf, "32X:%X 32XReg:%X STATE:%X CKPT:%04X     ", cmd, comm4, sh2_state, (unsigned int)(ckpt >> 16));
                 print_diag(temp, tbuf, 2, 10);
                 if (sh2_state == 0x4B10) { running = 1; ol_game_running = 1; sub_quiet = KOBO_HW_QUIET; }   /* HW9 */
+#if EDCD_QUIET
+                if (sh2_state == 0x4E00) sub_quiet = 1;   /* EDCD diagnostics: quiet from the game's start */
+#endif
             }
         }
 

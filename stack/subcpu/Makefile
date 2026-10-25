@@ -52,6 +52,17 @@ ASFLAGS += --defsym OL_MODE1=1
 ifeq ($(M1WORDS),1)
 ASFLAGS += --defsym OL_M1WORDS=1
 endif
+# MODE1-4 (diagnostics): M1MINVB=1 vblank = level 2 only; M1NOVINT=1 no 68000 interrupts; QUIET=1 the
+# Sub-CPU stops its 68000 traffic once the game starts (4E00), history + heartbeat every 0.5 s only
+ifeq ($(M1MINVB),1)
+ASFLAGS += --defsym OL_M1MINVB=1
+endif
+ifeq ($(M1NOVINT),1)
+ASFLAGS += --defsym OL_M1NOVINT=1
+endif
+ifeq ($(QUIET),1)
+HWFLAGS += -DEDCD_QUIET=1
+endif
 endif
 
 PREFIX = $(ROOTDIR)/m68k-elf/bin/m68k-elf-
