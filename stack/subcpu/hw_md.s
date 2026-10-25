@@ -47,6 +47,11 @@
         .ifndef OL_M1MINVB
         .equ    OL_M1MINVB, 0
         .endif
+| MODE1-5: M1W0BANK=<n> - the EverDrive bank that window 0 shows (EDCD_W0): the window-1 route to
+| window 0's addresses maps that bank, not bank 0.
+        .ifndef OL_M1W0BANK
+        .equ    OL_M1W0BANK, 0
+        .endif
         .ifndef OL_M1NOVINT
         .equ    OL_M1NOVINT, 0
         .endif
@@ -1546,7 +1551,7 @@ m1_cart:
         move.w  sr,-(sp)
         move.w  #0x2700,sr
         bset    #0,0xA15107
-        move.w  #0,0xA130F2             /* window 1 = bank 0 */
+        move.w  #OL_M1W0BANK,0xA130F2   /* window 1 = the bank window 0 shows (bank 0, or EDCD_W0) */
         tst.w   d4
         bne.b   3f
         adda.l  #0x080000,a1

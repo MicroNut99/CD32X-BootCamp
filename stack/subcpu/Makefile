@@ -63,6 +63,9 @@ endif
 ifeq ($(QUIET),1)
 HWFLAGS += -DEDCD_QUIET=1
 endif
+ifneq ($(M1W0BANK),)
+ASFLAGS += --defsym OL_M1W0BANK=$(M1W0BANK)
+endif
 endif
 
 PREFIX = $(ROOTDIR)/m68k-elf/bin/m68k-elf-
