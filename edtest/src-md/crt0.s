@@ -319,6 +319,7 @@ ed_setup:
         moveq   #0,d4
         move.w  #0x2700,sr
         move.b  #1,0xA15107         /* set RV: the 68000 sees the cart at 0x000000 */
+        bra.b   ed_quarter          /* d5 d6 d7 for quarter 0, then back to the caller (fill or verify) */
 9:      addq.l  #4,sp               /* a bad window number: drop the caller's return, answer "done" */
         move.w  #0,0xA15120
         bra     main_loop

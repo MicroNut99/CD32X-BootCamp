@@ -10,7 +10,8 @@ in the 32X slot) found **no writable memory** at the cart:
 - `SAFE CART: NOT FOUND`
 - the first ROM chunk did not stick (`CMP I0 C0 @400000 BAD`)
 
-So in that mode the EverDrive is not a RAM cart.
+So in that mode the EverDrive is not a RAM cart. (Its manual says why: "Run Mega-CD" releases the cartridge and
+starts the external Sega CD with the EverDrive's *backup RAM* cart function on, not its SSF RAM.)
 
 **What this tests.** The EverDrive's **extended SSF mapper**. Per Krikzz's notes, it can make its memory
 writable and has a 32X mode, but it only turns on for a ROM whose header says `SEGA SSF`, started from the
@@ -28,10 +29,18 @@ be touched.
 
 Genesis + 32X + Mega EverDrive PRO, started from the EverDrive menu.
 
-| ROM | CTRL0 | Result |
-|---|---|---|
-| `EDTEST_W.32X` | `0xA000` | 2 full passes (the second with every bit inverted), pass 3 under way at 226 s: all 27 banks `OK`, 0 bad words from the 68000 and from both SH2s |
-| `EDTEST_X.32X` | `0xE000` | 1 full pass, pass 2 under way: all 27 banks `OK`, 0 bad words |
+| ROM | CTRL0 | Result | Photo |
+|---|---|---|---|
+| `EDTEST_W.32X` | `0xA000` | 2 full passes (the second with every bit inverted), pass 3 under way at 226 s: all 27 banks `OK`, 0 bad words from the 68000 and from both SH2s | [`edtest/results/EDTEST_W_A000_pass3.jpg`](../edtest/results/EDTEST_W_A000_pass3.jpg) |
+| `EDTEST_X.32X` | `0xE000` | 1 full pass, pass 2 under way: all 27 banks `OK`, 0 bad words | [`edtest/results/EDTEST_X_E000_pass2.jpg`](../edtest/results/EDTEST_X_E000_pass2.jpg) |
+
+**Which build:** the photos show the build of 24 Oct, 23:16 (commit `fdf5e0e`). It has no `MAPPER` or `RUN`
+line; it writes and checks every bank exactly as described below.
+
+The build sent at 23:22 (`09204ba`, the review's additions: the run number, the mapper check) had a bug of
+ours. `ed_setup` fell through into its own error exit, so every fill and every 68000 check returned at once
+without touching the cart; on a console it would have shown `S` for every bank. It was fixed on 25 Oct (a
+missing `bra.b ed_quarter`). In ares, the fixed ROMs give the console's result, and the 23:22 build did no work.
 
 **Verdict: `ALL TESTED BANKS OK` with both values.** In SSF mode the EverDrive PRO is 16 MB of writable RAM
 for a 32X program:
@@ -47,10 +56,41 @@ for a 32X program:
   interrupts off for the whole test.
 
 **Next:**
-1. Use it as the CD stack's RAM cart: the mapper must be set up before the CD boots, with the cart out of the
-   way (the #CART bit?).
-2. An "EverDrive PRO" cart type in ares.
-3. An EverDrive form of the games' paging command (CMD 68).
+1. **Done in ares, next on the console:** the EverDrive as the CD stack's RAM cart, with `EDBOOT.BIN`
+   ([below](#edbootbin-the-everdrive-as-the-ram-cart-of-a-cd32x-disc)).
+2. **Done:** the ares cart type, [docs/11](11_ARES_16MB_RAM_CART.md). In it, both ROMs give the console's
+   result: 2 full passes, all banks `OK`, 0 bad words.
+3. The games' paging command (CMD 68) in an EverDrive form.
+
+## EDBOOT.BIN: the EverDrive as the RAM cart of a CD32X disc
+
+A CD32X disc boots from the Sega CD, with **no** cartridge seen by the console (CART_IN released), and its stack
+copies the game into the RAM cart at `0x400000`. `edboot/EDBOOT.BIN` (32 KB, header `SEGA SSF`) sets the
+EverDrive up as that cart:
+
+1. Checks that a Sega CD is there (its BIOS at `0x400000` while a cartridge runs).
+2. Sets the mapper as a 4 MB RAM cart: banks 0–7 in windows 0–7, then CTRL0 = `0xA000` (P + W).
+3. From work RAM, sets CTRL0's C bit (`0xA800`): CART_IN is released, so the Sega CD BIOS is at `0x000000` and
+   the EverDrive's memory at `0x400000`.
+4. Checks that the BIOS really is at `0x000000`, and starts it as a reset would: the BIOS boots the disc.
+
+Nothing in the disc or its boot stack changes: the stack finds a 4 MB RAM cart (16 MB behind the mapper).
+
+**How to run it:** Genesis + Sega CD + 32X, the EverDrive in the 32X slot, the CD32X disc (burned) in the Sega
+CD. Copy `EDBOOT.BIN` to the SD card and start it from the EverDrive menu.
+
+| What you see | Meaning |
+|---|---|
+| The Sega CD logo, then the disc's boot picture, then the game | It works: the C bit releases CART_IN and the EverDrive is the RAM cart |
+| A **red** screen | C = 1 did not release the cartridge (the BIOS did not appear at `0x000000`); CART_IN is back on |
+| A **blue** screen | no Sega CD found |
+| The Sega CD logo, then the disc stops at its boot picture | the BIOS booted, but the stack found no RAM cart: the EverDrive does not answer at `0x400000` after C. Try the diagnostic disc (`DIAG=1 bash build.sh`): its `SAFE CART` line tells which |
+
+**The memory is not battery-backed.** The EverDrive's memory is very likely lost at power-off (only bank 31, its
+save RAM, goes to the SD card). A game's saves in the RAM cart survive a reset, not a power-off.
+
+**In ares** (docs/11): `ares-headless --ramcart-type everdrive --ramcart-boot edboot/EDBOOT.BIN` with the
+diagnostic disc gives `SAFE CART: FOUND` and `STATE:4B10`. Build it with `bash edboot/build.sh`.
 
 ## The two ROMs
 
@@ -112,5 +152,6 @@ written.
 | `SH2 READS DIFFER FROM 68000` | the memory works, but the SH2s see something else: timing or the 32X's cart path |
 | `68000 NOT ANSWERING` | the 68000 side stopped. The screen shows the command that did not come back, its argument and the eight COMM registers. (A 68000 stuck while it holds the cart, RV = 1, freezes the screen instead: the SH2s wait for the cart.) |
 
-In ares this ROM shows `MAPPER: SWITCHES BANKS` and `W` for every bank: ares emulates the standard SSF mapper
-(bank switching, read only), not the EverDrive's write bit. That is expected.
+In ares v148 this ROM shows `MAPPER: SWITCHES BANKS` and `W` for every bank: plain ares emulates the standard
+SSF mapper (bank switching, read only), not the EverDrive's write bit. With the EverDrive board
+([docs/11](11_ARES_16MB_RAM_CART.md)) it shows the console's result.

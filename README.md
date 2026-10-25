@@ -104,6 +104,13 @@ SEGA_TOOLCHAIN=/opt/sega REGION=EU bash build.sh       # another toolchain place
 STREAM=1 CARTW=1 DISC_NAME=BootCampFast bash build.sh  # faster loads (emulation-tested only)
 ```
 
+The EverDrive PRO programs build on their own (same `ROOTDIR=` / `SEGA_TOOLCHAIN=`):
+
+```
+bash edtest/build.sh      # edtest/EDTEST_W.32X + EDTEST_X.32X: the 16 MB RAM test (docs/10)
+bash edboot/build.sh      # edboot/EDBOOT.BIN: the EverDrive as a CD32X disc's RAM cart (docs/10)
+```
+
 ### 6. What build.sh checks
 
 It stops with a message at the first problem:
@@ -134,7 +141,7 @@ RAM for a 32X program, set up in software**. The test ROM (`edtest/`, details in
 | `EDTEST_X.32X` | `0xE000` (P + X + W) | **1 full pass**, pass 2 under way: all 27 banks OK, **0 bad words** |
 
 Both values work. `0xA000` is the one the Pro's documentation describes; the X bit (32X mode, from the older
-EverDrive notes) changed nothing measurable.
+EverDrive notes) changed nothing measurable. Photos: [`edtest/results/`](edtest/results/).
 
 **How the 32X program uses it:**
 
@@ -147,11 +154,16 @@ EverDrive notes) changed nothing measurable.
 - The SH2s read the cart at `0x22000000` (cache-through), as from any cart.
 - Never write banks 28–31: they hold the EverDrive's save area and its own software.
 
-**What this does not yet cover.** The CD32X games boot from the CD, with the cart out of the way. The test ran
-in cartridge mode, started from the EverDrive menu. Using the EverDrive as the CD stack's RAM cart needs one
-more step: set up the mapper, then let the CD boot. The EverDrive's #CART bit may do that; it is not tested
-yet. Booting the CD with "Run Mega-CD" instead finds no writable memory at the cart (diagnostic disc: `SAFE
-CART: NOT FOUND`).
+**The next step: `EDBOOT.BIN`, the EverDrive as a CD32X disc's RAM cart.** CD32X discs boot from the CD with
+no cartridge seen by the console. `edboot/EDBOOT.BIN` (`bash edboot/build.sh`), started from the EverDrive menu
+with the disc in the Sega CD, sets the mapper up as a 4 MB RAM cart (16 MB behind it), releases CART_IN with
+CTRL0's C bit and starts the Sega CD BIOS, which boots the disc. No disc or boot stack changes. It works in
+ares; the console test is next ([docs/10](docs/10_EVERDRIVE_TEST.md#edbootbin-the-everdrive-as-the-ram-cart-of-a-cd32x-disc)).
+"Run Mega-CD" is not the same: it gives the disc the EverDrive's backup-RAM cart, not this RAM (diagnostic
+disc: `SAFE CART: NOT FOUND`).
+
+**In ares:** the EverDrive PRO 16 MB cart, with everything needed to add it to ares v148 (a patch, the hardware
+model, the pitfalls, the tests): [docs/11](docs/11_ARES_16MB_RAM_CART.md) and [`ares/`](ares/).
 
 ## How it boots, in one picture
 
@@ -175,7 +187,9 @@ The details are in [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md).
 | `stack/subcpu/` | The Sega CD Sub-CPU program (APP.BIN) and the Genesis 68000 listener | Only `game_files.h`: your file names |
 | `stack/sh2/` | CDLOADER, the SH2 program that loads your ROM into the cart | No (it is byte-identical to OpenLara's) |
 | `hello/` | The example game: a 32X ROM using `cdapi.c` for every CD service | Copy it and make it yours |
-| `edtest/` | The EverDrive PRO 16 MB RAM test: two 32X cartridge ROMs (`bash edtest/build.sh`) | No |
+| `edtest/` | The EverDrive PRO 16 MB RAM test: two 32X cartridge ROMs (`bash edtest/build.sh`), and the console photos in `edtest/results/` | No |
+| `edboot/` | `EDBOOT.BIN`, the launcher that makes the EverDrive PRO a CD32X disc's RAM cart (`bash edboot/build.sh`) | No |
+| `ares/` | The EverDrive PRO 16 MB cart for the ares emulator, as a patch for ares v148 | No |
 | `tools/` | `prep_rom.py` (checks and marks the ROM), the boot picture, a test music track, the font | No |
 | `docs/` | How it works, the commands, memory maps, rules learned on the console, how the existing games differ | Read it |
 | `build.sh` | Builds the game, the loader, the Sub-CPU program and the disc | `GAME=yourfolder` |
@@ -210,7 +224,8 @@ The full checklist is in [docs/02_PORTING_YOUR_GAME.md](docs/02_PORTING_YOUR_GAM
 | [07 The methods compared](docs/07_METHODS_COMPARED.md) | How OpenLara, OpenJazz REV, Hurrican, SuperTux REV and Sonic CD 2011 use the stack |
 | [08 Research index](docs/08_RESEARCH_INDEX.md) | Where to read more: MicroNut99's repositories and documents |
 | [09 Error codes](docs/09_ERROR_CODES.md) | **Look up any number the disc shows**: the error box, the loader's codes, the green and white diagnostic text, the screen you are stuck on |
-| [10 EverDrive PRO test](docs/10_EVERDRIVE_TEST.md) | Can a Mega EverDrive PRO be a 16 MB RAM cart? The test ROMs and how to read them |
+| [10 EverDrive PRO test](docs/10_EVERDRIVE_TEST.md) | Can a Mega EverDrive PRO be a 16 MB RAM cart? The test ROMs, the console results, and `EDBOOT.BIN` |
+| [11 A 16 MB RAM cart for ares](docs/11_ARES_16MB_RAM_CART.md) | Everything needed to add the EverDrive PRO cart to ares: what is proven, the board, where it plugs in, the pitfalls, the tests |
 
 ## Status
 

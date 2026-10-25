@@ -232,9 +232,9 @@ static void draw(void)
                     a ? "BANKS LOSE DATA OR ALIAS" :
                     s ? "SH2 READS DIFFER FROM 68000" :
                     w ? "SOME BANKS NOT WRITABLE" : "ALL TESTED BANKS OK";
-    text(8, 164, "MAPPER:", C_GREY);
-    text(72, 164, mapper_text, mapper_ok ? C_GREEN : C_RED);
-    text(248, 164, "RUN", C_GREY); text(280, 164, hexn(b, nonce, 4), C_GREY);
+    text(8, 167, "MAPPER:", C_GREY);           /* y 167: under the OFFSET line (159-166) of an error */
+    text(72, 167, mapper_text, mapper_ok ? C_GREEN : C_RED);
+    text(248, 167, "RUN", C_GREY); text(280, 167, hexn(b, nonce, 4), C_GREY);
     if (slave_dead) text(208, 148, "SLAVE SH2 NO ANSWER", C_RED);
     text(8, 176, "VERDICT:", C_GREY); text(80, 176, v, (ok == done && done) ? C_GREEN : C_YELLOW);
     if (stuck)                              /* which 68000 command did not come back, and the COMM registers */
