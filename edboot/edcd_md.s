@@ -24,14 +24,17 @@ _start:
         lea     0xFFFD00,sp
         move.b  #0,0xA15107             /* RV off: the SH2 boot ROMs read this cart */
 
-| 1. the RAM cart: windows 1-7 = banks 1-7, then writes on (window 0 = bank 0 = this ROM)
-        lea     0xA130F2,a0
-        moveq   #1,d0
-1:      move.w  d0,(a0)+
-        addq.w  #1,d0
-        cmpi.w  #8,d0
-        bne.b   1b
-        move.w  #0xA000,0xA130F0        /* P + W: as edtest, console-proven */
+| 1. the RAM cart: windows 1-7 = banks 1-7, then writes on (window 0 = bank 0 = this ROM).
+|    With the 32X on, a write to the cart's registers (0xA130xx) only reaches the cart while RV = 1
+|    (console, 25 Oct 2026: without it the EverDrive stayed write-protected and the game's copy did not
+|    stick, STATE 4DE2; edtest sets RV for them, as Chilly Willy's SRAM code does).  RV = 1 also takes
+|    the cart away from 0x880000, where this runs, so the writes are made from work RAM.
+        lea     ed_regs(pc),a0
+        lea     0xFF8000,a1
+        move.w  #(ed_regs_end-ed_regs)/2-1,d0
+1:      move.w  (a0)+,(a1)+
+        dbra    d0,1b
+        jsr     0xFF8000
 
 | 2. the BIOS's RAM jump table: 29 entries "jmp 0xFFFDAE" at 0xFFFD00-0xFFFDAD, an rte at 0xFFFDAE.
 |    The vectors (32X vector ROM -> this cart's table at 0x200 -> here) are those of a CD boot:
@@ -159,6 +162,20 @@ is_subbios:
 2:      cmpm.b  (a1)+,(a3)+
         dbne    d0,2b
 9:      rts
+
+| copied to 0xFF8000 and run there (position independent): the EverDrive's mapper, with RV = 1
+ed_regs:
+        move.b  #1,0xA15107             /* RV on: the register writes reach the cart */
+        lea     0xA130F2,a0
+        moveq   #1,d0
+1:      move.w  d0,(a0)+                /* CTRL1-7 = banks 1-7 */
+        addq.w  #1,d0
+        cmpi.w  #8,d0
+        bne.b   1b
+        move.w  #0xA000,0xA130F0        /* CTRL0: P + W, as edtest, console-proven */
+        move.b  #0,0xA15107             /* RV off: the cart back at 0x880000, the SH2s may read it */
+        rts
+ed_regs_end:
 
 | d1 = the colour: the whole screen in it, then stop
 fail:
