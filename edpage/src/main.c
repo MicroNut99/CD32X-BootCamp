@@ -206,6 +206,10 @@ static int set_page(int p)
     return 1;
 }
 
+/* a page switch through the REAL listener: the 68000 copies hw_md.s's m1_xfer into work RAM and runs
+   it with (one byte = the page, 0xA130F2, length 1), which is what CMD 68 asks of it */
+static int listener_page(int p) { return md_cmd((uint16_t)(0x1600 | p), 0); }
+
 /* ONE byte to the even address 0xA130F0 + 2n - the write the paged games make for a page switch */
 static int byte_reg(int n, int value) { return md_cmd((uint16_t)(0x1500 | n), (uint16_t)value); }
 
@@ -222,7 +226,7 @@ static uint16_t sh2_read(uint32_t addr)
 static uint16_t mark(int p) { return (uint16_t)(0x5000 | (p << 8) | p); }
 
 typedef struct { const char *name; uint16_t want, after, later; int done; } Row;
-static Row rows[10];
+static Row rows[13];
 static int nrows = 0;
 
 static void draw(void)
@@ -244,11 +248,9 @@ static void draw(void)
         text(152, y, hex4(b, r->after), r->after == r->want ? C_WHITE : C_RED);
         if (r->done > 1) text(208, y, hex4(b, r->later), r->later == r->want ? C_WHITE : C_RED);
     }
-    text(8, 166, "ROWS 1-8: THE MAPPER ITSELF (WORD", C_GREY);
-    text(8, 176, "  WRITES TO CTRL1-7).", C_GREY);
-    text(8, 188, "LAST TWO: ONE BYTE TO A130F2, THE", C_GREY);
-    text(8, 198, "  WRITE THE PAGED GAMES MAKE. RED =", C_GREY);
-    text(8, 208, "  IT MOVED A WINDOW IT MUST NOT.", C_GREY);
+    text(8, 190, "LISTENER ROWS: THE SWITCH THROUGH", C_GREY);
+    text(8, 200, "  HW_MD.S M1_PAGE ITSELF. RED THERE", C_GREY);
+    text(8, 210, "  = THE LISTENER IS WHAT IS BROKEN.", C_GREY);
     flip();
 }
 
@@ -270,8 +272,11 @@ int main(void)
     }
     rows[7].name = "SAVE BANK 31 VIA W1"; rows[7].want = 0xB31B;
     rows[8].name = "BYTE A130F2: RESIDNT"; rows[8].want = 0xA501;   /* must survive the games' write */
-    rows[9].name = "BYTE A130F2: PAGEWIN"; rows[9].want = 0x5202;   /* page 2 must still be mapped */
-    nrows = 10;
+    rows[9].name  = "BYTE A130F2: PAGEWIN"; rows[9].want  = 0x5202;  /* page 2 must still be mapped */
+    rows[10].name = "LISTENER PAGE 3    "; rows[10].want = 0x5303;    /* m1_page, the real code */
+    rows[11].name = "LISTENER PAGE 5    "; rows[11].want = 0x5505;
+    rows[12].name = "LISTENER: RESIDENT "; rows[12].want = 0xA501;    /* it must not move window 1 */
+    nrows = 13;
     draw();
 
     /* CTRL0 = P only, W off - what an EDCD launcher sets (M1CTRL0=0x8000); the pokes turn W on
@@ -338,6 +343,22 @@ int main(void)
     rows[8].later = rows[8].after; rows[9].later = rows[9].after;
     rows[8].done = 2; rows[9].done = 2;
     if (!set_win(1, 1)) fail_stop("68000 NOT ANSWERING (CTRL1 HOME 2)");
+
+    /* 6. and now the same switch through the REAL listener code (hw_md.s m1_xfer -> m1_cart ->
+       m1_page), which is the one thing none of this has exercised yet.  Page 1 is mapped first, so
+       a switch that does nothing leaves page 1's marker in view. */
+    phase = "THE REAL LISTENER"; draw();
+    if (!set_page(1)) fail_stop("68000 NOT ANSWERING (PAGE 1)");
+    if (!listener_page(3)) fail_stop("68000 NOT ANSWERING (LISTENER 3)");
+    rows[10].after = sh2_read(PAGE_BASE);
+    rows[10].later = rows[10].after; rows[10].done = 2; draw();
+
+    if (!listener_page(5)) fail_stop("68000 NOT ANSWERING (LISTENER 5)");
+    rows[11].after = sh2_read(PAGE_BASE);
+    rows[11].later = rows[11].after; rows[11].done = 2; draw();
+
+    rows[12].after = sh2_read(W1_BASE);            /* window 1 must be untouched by a page switch */
+    rows[12].later = rows[12].after; rows[12].done = 2;
 
     phase = "DONE"; draw();
     while (1) { }

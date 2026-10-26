@@ -254,6 +254,8 @@ handle_req:
         bls     ed_block
         cmpi.w  #0x15FF,d0
         bls     ed_bytereg
+        cmpi.w  #0x16FF,d0
+        bls     ed_m1page
 | unknown command
         move.w  #0,0xA15120         /* done */
         bra     main_loop
@@ -349,6 +351,33 @@ bw_byte:
 bdone:
         move.b  #0,0xA15107         /* clear RV */
         move.l  d6,0xA15128         /* bad words -> COMM8:COMM10 */
+        move.w  #0,0xA15120         /* done */
+        bra     main_loop
+
+| 0x16nn: edpage - a page switch made EXACTLY the way a launcher makes it: the real m1_xfer /
+| m1_cart / m1_page out of the BootCamp's stack/subcpu/hw_md.s (src-md/m1_real.s), copied into work
+| RAM first - a launcher's listener lives in the Genesis's work RAM, where m1_buf and m1_wb are
+| writable - and called with (src = one byte of work RAM holding the page, dst = 0xA130F2, len = 1).
+| That is precisely what the Sub-CPU's CMD 68 / cart_page_write asks of the listener.  nn = the page.
+        .equ    M1_RAM, 0xFF8000
+        .equ    M1_ARG, 0xFF7F00
+ed_m1page:
+        movem.l d2-d3/a2-a3,-(sp)
+        move.b  d0,M1_ARG               /* the page byte the game puts in Word RAM */
+        lea     m1_blk_start,a0
+        lea     m1_blk_end,a3           /* (the length is a link-time value: compare, do not fold) */
+        lea     M1_RAM,a1
+0:
+        move.w  (a0)+,(a1)+
+        cmpa.l  a0,a3
+        bhi.b   0b
+        lea     M1_ARG,a0               /* src: the one byte */
+        lea     0xA130F2,a1             /* dst: window 1's page register */
+        moveq   #1,d0                   /* one byte */
+        moveq   #0,d3                   /* bytes, not words */
+        lea     M1_RAM,a2               /* m1_xfer is at the block's start */
+        jsr     (a2)
+        movem.l (sp)+,d2-d3/a2-a3
         move.w  #0,0xA15120         /* done */
         bra     main_loop
 
