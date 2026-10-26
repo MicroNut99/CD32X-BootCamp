@@ -69,6 +69,10 @@ endif
 ifneq ($(M1CTRL0),)
 ASFLAGS += --defsym OL_M1CTRL0=$(M1CTRL0)
 endif
+# MODE1-7: M1SAVE=1 - cart 0x800000-0x83FFFF = the EverDrive's save bank (31, kept on the SD card)
+ifeq ($(M1SAVE),1)
+ASFLAGS += --defsym OL_M1SAVE=1
+endif
 endif
 
 PREFIX = $(ROOTDIR)/m68k-elf/bin/m68k-elf-

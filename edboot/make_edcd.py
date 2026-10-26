@@ -15,7 +15,7 @@ A 32X cartridge ROM for the Mega EverDrive PRO:
 """
 import re
 import struct
-import sys
+import os, sys
 
 # vector n (2..47) -> where the Sega CD BIOS's vector table sends it (the same in the US, EU and JP
 # BIOSes).  None = the BIOS's ROM (0x000200): those go to the extra entry 0xFFFDA8.
@@ -69,6 +69,12 @@ def main():
     assert dest == 0x06000000, "CDLOADER is not linked at the start of SDRAM"
     assert cdl_end - cdl_ofs >= length, "CDLOADER's code in the launcher is shorter than its table says"
 
+    # EDCD_SAVE=1: the header declares save RAM, so the EverDrive OS keeps its bank 31 (the battery RAM)
+    # on the SD card as MEGA/gamedata/<this ROM>/bram.srm - 256 KB seen on a console with this entry
+    # (edsave, 25 Oct 2026).  The listener reaches that bank as cart 0x800000 (hw_md.s MODE1-7).
+    sram = b" " * 12
+    if os.environ.get("EDCD_SAVE", "0") == "1":
+        sram = b"RA" + bytes([0xF8, 0x20]) + struct.pack(">2I", 0x200001, 0x23FFFF)
     rom = bytearray(0x800)
     rom[0:4] = struct.pack(">I", 0x01000000)
     for v in range(1, 64):
@@ -77,7 +83,7 @@ def main():
            + b"CD32X CARTRIDGE BOOT: EVERDRIVE PRO".ljust(48) * 2
            + b"GM 00000000-00" + b"\0\0" + b"J6".ljust(16)
            + struct.pack(">4I", 0, 0x3FFFFF, 0xFF0000, 0xFFFFFF)
-           + b" " * 12 + b" " * 12 + b" " * 40 + b"JUE".ljust(16))
+           + sram + b" " * 12 + b" " * 40 + b"JUE".ljust(16))
     assert len(hdr) == 0x100
     rom[0x100:0x200] = hdr
     jt = jump_table(0x880800)

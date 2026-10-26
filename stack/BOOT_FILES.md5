@@ -3,7 +3,7 @@ a5399fd233321a10693ea68b791f5ba8  stack/sh2/cdl_crt0.s
 122246bcd7c9050f5a661fbff63b471e  stack/sh2/cdloader.ld
 10eb72e99064e553c4880a1be385842c  stack/sh2/cdloader_sh2.c
 fadfd0f3996194d154d292ec1ca5fcca  stack/subcpu/LICENSE.md
-15e90930bbc7245613b4fbfc074a6184  stack/subcpu/Makefile
+578c2520d0fcb85fba26383fa16e7b1d  stack/subcpu/Makefile
 2a50ec97332a94aec01e464eff90c40e  stack/subcpu/cd.s
 479eb6d18d2d8a188993bda2db5e6904  stack/subcpu/cdfs.s
 b9c91b5d2ae3b111f901f4822d274130  stack/subcpu/crt.s
@@ -12,7 +12,7 @@ af969044811079df7b9e4ff77f367363  stack/subcpu/files.h
 b979f95f122b4a71770f1ec595d81dc3  stack/subcpu/files.s
 358b7bc04a82c9b508ee04551018d356  stack/subcpu/font.s
 0bf506694f4123316b70d70e574387bd  stack/subcpu/hw_md.h
-55a3dd204231dc24cec97b6e3463c844  stack/subcpu/hw_md.s
+2582af83afaea38ce9d5b977828c8509  stack/subcpu/hw_md.s
 59ddb6c8154f98101e90697fec7b38ba  stack/subcpu/kos.s
 b85b4a79df927391132bd46280c5e4ae  stack/subcpu/main.c
 463ff58dcc02ea41e6f1155bfbad2d77  stack/subcpu/make_mixed_cd2.py

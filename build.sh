@@ -122,11 +122,13 @@ echo "==> done: burn $OUT/$NAME.cue (with its .bin).  Needs a Sega CD + 32X + a 
 
 # EDCD=1: the same stack's Sub-CPU program with the cartridge-boot listener (MODE1=1), built in a copy of
 # stack/ (the disc keeps the normal one), then edboot/EDCD.32X around it (docs/12_CARTRIDGE_BOOT.md)
+# EDCD_SAVE=1: the listener also reaches the EverDrive's save bank (cart 0x800000, MODE1-7) and the
+# launcher's header declares save RAM, so the EverDrive OS keeps that bank on the SD card (bram.srm)
 if [ "${EDCD:-0}" = 1 ]; then
   echo "==> 7. EDCD.32X: the disc from a Mega EverDrive PRO (cartridge boot)"
   T=$(mktemp -d)                                   # (no trap: DIAG=1 keeps its own on EXIT)
   cp -r "$HERE/stack" "$T/"
-  ( cd "$T/stack/subcpu" && make clean > /dev/null && make CDROMPlayer.bin ROOTDIR="$ROOTDIR" MODE1=1 ${M1WORDS:+M1WORDS=$M1WORDS} ${M1MINVB:+M1MINVB=$M1MINVB} ${M1NOVINT:+M1NOVINT=$M1NOVINT} ${EDCD_QUIET:+QUIET=$EDCD_QUIET} ${EDCD_W0:+M1W0BANK=$EDCD_W0} M1CTRL0=$([ "${EDCD_X:-0}" = 1 ] && echo 0xC000 || echo 0x8000) > "$T/mode1.log" 2>&1 ) \
+  ( cd "$T/stack/subcpu" && make clean > /dev/null && make CDROMPlayer.bin ROOTDIR="$ROOTDIR" MODE1=1 ${M1WORDS:+M1WORDS=$M1WORDS} ${M1MINVB:+M1MINVB=$M1MINVB} ${M1NOVINT:+M1NOVINT=$M1NOVINT} ${EDCD_QUIET:+QUIET=$EDCD_QUIET} ${EDCD_W0:+M1W0BANK=$EDCD_W0} M1CTRL0=$([ "${EDCD_X:-0}" = 1 ] && echo 0xC000 || echo 0x8000) ${EDCD_SAVE:+M1SAVE=$EDCD_SAVE} > "$T/mode1.log" 2>&1 ) \
     || { tail -20 "$T/mode1.log"; echo "*** the MODE1 Sub-CPU program did not build"; exit 1; }
   ROOTDIR="$ROOTDIR" bash "$HERE/edboot/build_edcd.sh" "$T/stack/subcpu/CDROMPlayer.bin" "$HERE/stack/sh2/CDLOADER.32x"
   rm -rf "$T"

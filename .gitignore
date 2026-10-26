@@ -33,3 +33,9 @@ edw0/EDW0B_*.32X
 edw0/EDW0C_*.32X
 edw0/EDW0D_*.32X
 edw0/EDW0E_*.32X
+edsave/EDSAVE*.32X
+edsave/edsave.32x
+edsave/build/
+edsave/src-md/*.o
+edsave/src-md/*.bin
+edsave/output.map
