@@ -206,6 +206,9 @@ static int set_page(int p)
     return 1;
 }
 
+/* ONE byte to the even address 0xA130F0 + 2n - the write the paged games make for a page switch */
+static int byte_reg(int n, int value) { return md_cmd((uint16_t)(0x1500 | n), (uint16_t)value); }
+
 /* one word into the cart by the 68000 (W on inside RV = 1), the way the listener's copies write */
 static int poke(uint32_t addr, uint16_t v) { COMM8_32 = addr; return md_cmd(0x1300, v); }
 
@@ -219,7 +222,7 @@ static uint16_t sh2_read(uint32_t addr)
 static uint16_t mark(int p) { return (uint16_t)(0x5000 | (p << 8) | p); }
 
 typedef struct { const char *name; uint16_t want, after, later; int done; } Row;
-static Row rows[8];
+static Row rows[10];
 static int nrows = 0;
 
 static void draw(void)
@@ -241,12 +244,11 @@ static void draw(void)
         text(152, y, hex4(b, r->after), r->after == r->want ? C_WHITE : C_RED);
         if (r->done > 1) text(208, y, hex4(b, r->later), r->later == r->want ? C_WHITE : C_RED);
     }
-    text(8, 150, "AFTER WRONG = SH2 AND 68000 DISAGREE", C_GREY);
-    text(8, 160, "  AT ONCE (WINDOW OR CACHE).", C_GREY);
-    text(8, 172, "LATER WRONG ONLY = THE MAPPING DRIFTS", C_GREY);
-    text(8, 182, "  ONCE OTHER PAGES ARE USED (M1_WB).", C_GREY);
-    text(8, 194, "ALL RIGHT = THE LISTENER IS GOOD AND", C_GREY);
-    text(8, 204, "  THE GAMES' OWN PAGING IS AT FAULT.", C_GREY);
+    text(8, 166, "ROWS 1-8: THE MAPPER ITSELF (WORD", C_GREY);
+    text(8, 176, "  WRITES TO CTRL1-7).", C_GREY);
+    text(8, 188, "LAST TWO: ONE BYTE TO A130F2, THE", C_GREY);
+    text(8, 198, "  WRITE THE PAGED GAMES MAKE. RED =", C_GREY);
+    text(8, 208, "  IT MOVED A WINDOW IT MUST NOT.", C_GREY);
     flip();
 }
 
@@ -267,7 +269,9 @@ int main(void)
         rows[1 + p - PAGE_LOW].want = mark(p);
     }
     rows[7].name = "SAVE BANK 31 VIA W1"; rows[7].want = 0xB31B;
-    nrows = 8;
+    rows[8].name = "BYTE A130F2: RESIDNT"; rows[8].want = 0xA501;   /* must survive the games' write */
+    rows[9].name = "BYTE A130F2: PAGEWIN"; rows[9].want = 0x5202;   /* page 2 must still be mapped */
+    nrows = 10;
     draw();
 
     /* CTRL0 = P only, W off - what an EDCD launcher sets (M1CTRL0=0x8000); the pokes turn W on
@@ -318,6 +322,22 @@ int main(void)
     /* the resident window once more: it must still read what it did at the start */
     rows[0].later = sh2_read(W1_BASE);
     rows[0].done = 2;
+
+    /* 5. and the write the games actually make for a page switch: ONE byte to 0xA130F2.  On the
+       16MB-PCB cart that is window 1's page register; here it is CTRL1 - the bank of cart 0x080000,
+       which holds OpenJazz's packs and Rayman's file 200.  Page 2 is mapped in windows 4-7 first,
+       so both things can be seen at once: does the resident window survive, and does the page
+       window move?  m1_page exists to turn this byte into CTRL4..7 writes; nothing intercepts it
+       here, so this is what reaches the EverDrive when it does not run. */
+    phase = "THE GAMES' PAGE WRITE"; draw();
+    if (!set_win(1, 1)) fail_stop("68000 NOT ANSWERING (CTRL1)");
+    if (!set_page(2)) fail_stop("68000 NOT ANSWERING (PAGE 2)");
+    if (!byte_reg(1, 2)) fail_stop("68000 NOT ANSWERING (BYTE A130F2)");
+    rows[8].after = sh2_read(W1_BASE);
+    rows[9].after = sh2_read(PAGE_BASE);
+    rows[8].later = rows[8].after; rows[9].later = rows[9].after;
+    rows[8].done = 2; rows[9].done = 2;
+    if (!set_win(1, 1)) fail_stop("68000 NOT ANSWERING (CTRL1 HOME 2)");
 
     phase = "DONE"; draw();
     while (1) { }

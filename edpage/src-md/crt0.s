@@ -252,6 +252,8 @@ handle_req:
         bls     ed_poke
         cmpi.w  #0x14FF,d0
         bls     ed_block
+        cmpi.w  #0x15FF,d0
+        bls     ed_bytereg
 | unknown command
         move.w  #0,0xA15120         /* done */
         bra     main_loop
@@ -347,6 +349,24 @@ bw_byte:
 bdone:
         move.b  #0,0xA15107         /* clear RV */
         move.l  d6,0xA15128         /* bad words -> COMM8:COMM10 */
+        move.w  #0,0xA15120         /* done */
+        bra     main_loop
+
+| 0x15nn: edpage - the write the paged games make: ONE byte to the EVEN address 0xA130F0 + 2 nn, so
+| it lands on D8-D15, COMM2's low byte = the value.  On the 16MB-PCB cart 0xA130F2 is window 1's page
+| register; on the EverDrive the same address is CTRL1, the bank of cart 0x080000.  RV = 1 around it,
+| as the listener's safe_cart_xfer does.  (Whether the EverDrive takes an even-byte write to CTRL1-7
+| is the open question in the BootCamp's docs/11.)
+ed_bytereg:
+        moveq   #0,d1
+        move.b  d0,d1
+        add.w   d1,d1
+        lea     0xA130F0,a0
+        move.w  0xA15122,d2         /* the value */
+        move.w  #0x2700,sr
+        move.b  #1,0xA15107         /* set RV */
+        move.b  d2,0(a0,d1.w)       /* ONE byte, at the even address */
+        move.b  #0,0xA15107         /* clear RV */
         move.w  #0,0xA15120         /* done */
         bra     main_loop
 
