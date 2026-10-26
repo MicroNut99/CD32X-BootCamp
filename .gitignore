@@ -39,3 +39,9 @@ edsave/build/
 edsave/src-md/*.o
 edsave/src-md/*.bin
 edsave/output.map
+edsave2/EDSAVE*.32X
+edsave2/edsave2.32x
+edsave2/build/
+edsave2/src-md/*.o
+edsave2/src-md/*.bin
+edsave2/output.map
