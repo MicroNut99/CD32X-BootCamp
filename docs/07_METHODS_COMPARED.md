@@ -147,9 +147,9 @@ inside vblank. **Different:** how the work gets to the 68000:
 |---|---|---|---|---|
 | OpenLara REV | CD audio, tracks up to 84 | 32X PWM, mixed on the slave (bank in the level file); Sega CD PCM packs as the fallback | cart piece 0 (settings, game) + 14 (records) + its 16 slots at `0x060000` | CMD 48 every frame |
 | OpenJazz REV | CD tracks 2–41 | PCM `SFX00` / `SFX01` (CMD 53), no PWM | cart pieces 0–10 | CMD 48 sent at the frame's end, collected later; 6-button |
-| Hurrican | CD tracks 2–24 (from IT modules) | PCM `SFX00.BIN`, no PWM | backup RAM high scores (`OPENJAZZ_JJ`) + cart piece 10 | CMD 48, polled at most every 4 ms |
+| Hurrican | CD tracks 2–24 (from IT modules) | PCM `SFX00.BIN`, no PWM | high scores: backup RAM on the disc build (`OPENJAZZ_JJ`, OpenJazz's name, inherited) → **bank 31 save piece 12 in an ED-SAVE launcher** (`CART_EDSAVE`, CMD 56 / 59 rerouted in the Sub-CPU program; engine unchanged) + cart piece 10 (port settings) | CMD 48, polled at most every 4 ms |
 | SuperTux REV | CD tracks 2–13 | PCM, 20 effects | cart piece 13. Backup RAM "never worked on the console". | CMD 48 |
-| Sonic CD 2011 | CD audio | PCM banks (CMD 53) | **backup RAM only** (`SONICCD32X_`, 512 bytes) | CMD 48 |
+| Sonic CD 2011 | CD audio | PCM banks (CMD 53) | **backup RAM only** (`SONICCD32X_`, 512 bytes) - so it will keep nothing on the EverDrive until CMD 56 / 59 are rerouted to a save piece, as Hurrican's are | CMD 48 |
 
 ### 3.7 Build and test
 

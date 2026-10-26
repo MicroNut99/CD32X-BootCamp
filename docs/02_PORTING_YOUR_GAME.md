@@ -49,10 +49,21 @@ instead of after a burn.
    - File `100 + n` loads into the level slot (cart `0x200000`, up to 1984 KB).
    - File `200 + n` loads into the resident slot (cart `0x080000`).
    - File `300 + n` is a movie (level slot).
-5. **Pick a backup-RAM name** in `game_files.h` (11 characters), if you use CMD 56–59.
+5. **Pick a backup-RAM name** in `game_files.h` (11 characters), if you use CMD 56–59. **But on the
+   Mega EverDrive PRO, CMD 56 / 59 do not persist anything by themselves**: they go through the CD
+   BIOS (`_BURAM`) into the Sega CD's internal backup RAM, which has nothing to do with the
+   EverDrive's save bank. A launcher build must route them to a save piece in bank 31 instead - see
+   Hurrican's `cd32x/subcpu/main.c` under `CART_EDSAVE` (CMD 56 / 59 -> piece 12), which does it in
+   the Sub-CPU program alone, with no change to the engine or to the disc's program. A title that
+   keeps everything in backup RAM (Hurrican's high scores; Sonic CD 2011) therefore saves nothing on
+   the EverDrive until that route is added.
 6. **Pick your save pieces.** The cart's save area is shared by every CD32X game on that cart (16 × 4 KB at
-   `0x3F0000`). Check the ownership table in the command ledger (MicroNut99/docs,
-   `CD32X_COMMAND_LEDGER_ADDITIONS.md` §5). Free as of Oct 2026: 11, 12. Piece 15 is test scratch.
+   `0x3F0000`), and bank 31 mirrors the same numbering for ED-SAVE builds. Check the ownership table in
+   the command ledger (MicroNut99/docs, `CD32X_COMMAND_LEDGER_ADDITIONS.md` §5). Owners as of
+   26 Oct 2026: 0–10 OpenJazz / OpenLara / Hurrican's port settings, 11 D32XR (Doom's save), 12
+   Hurrican's high scores (ED builds), 13 SuperTux, 14 OpenLara's records, 15 test scratch and
+   D32XR's preload record. **Nothing is free**: take a piece only by agreement, and never give one a
+   second owner.
 7. **Music:** `mygame/music/Track02.wav`, `Track03.wav`, … (44.1 kHz 16-bit stereo). Disc track N = CMD 45 N.
 8. **Post status codes** in COMM12 (`cd_status`) at each start-up step, and `0x4B10` once running.
    - Give your game its own range, and list it as hello's are listed in [09](09_ERROR_CODES.md).
