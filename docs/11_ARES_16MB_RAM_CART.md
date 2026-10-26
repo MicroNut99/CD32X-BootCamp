@@ -9,6 +9,30 @@ applies to upstream ares v148 (`git apply`, tag `v148` of https://github.com/are
 It gives the cartridge use and the CART_IN switch (sections 2–4). Section 5 says what a frontend adds for CD32X
 discs.
 
+## The law of this document
+
+**The emulator MUST reflect the hardware, and never the other way around** (MicroNut99, 26 Oct 2026:
+"That does not work, period"). Three things follow, and they are not negotiable:
+
+1. **Every rule in the board comes from a measurement** - a dated console run with the probe that
+   produced it - not from reasoning about what the hardware probably does. The tables below cite the
+   probe for each rule for exactly this reason.
+2. **When ares and the console disagree, the console is right and the BOARD gets fixed.** A game is
+   never adjusted to suit ares. There is already a precedent for the cost of getting this backwards:
+   letting the cart answer the 68000 while ADEN = 1 and RV = 0 made programs that ran in ares fail on
+   the console (section "Mistakes", below) - the model was more permissive than the machine, so the
+   bug waited until the hardware to appear.
+3. **Where a rule is not yet measured, model it pessimistically** - refuse, or fail loudly - rather
+   than inventing a plausible behaviour. A permissive guess hides the divergence until the console;
+   a strict one surfaces it on the PC, which is the whole point of having the board. The two rules in
+   "answered on the console but not modelled yet" are both cases where ares is currently the
+   permissive one: it keeps the PSRAM the menu wipes, and it holds the SH2s the hardware feeds
+   garbage.
+
+And the standing consequence for testing: **a green run in ares is never a pass for the console.** It
+is a cheap filter that can catch bugs, not a certificate that there are none. Nothing is called
+working until the console says so.
+
 **The model:** the Mega EverDrive PRO's extended SSF mapper with its write bit set. That makes the EverDrive
 16 MB of RAM, in 32 banks of 512 KB, any of which can be switched into the eight 512 KB windows of the 4 MB
 cartridge space. That is exactly what was tested on the console ([docs/10](10_EVERDRIVE_TEST.md)).
