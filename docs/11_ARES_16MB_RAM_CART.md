@@ -243,7 +243,13 @@ Update this document and the board when a console answers one of them.
   `0x07FFFF`) with the 32X on is dropped. `Bus::write` reports the non-cart writes through a new board hook
   (`disturb`); the `/TIME` registers are excluded (changing W is harmless). Regression: `EDCD_H3` boots
   BootCamp and OpenLara, `EDCD_DIAG_H2` (W always on) fails with `4DE2`.
-- Still open: byte writes to CTRL1–7, a console reset's effect on the registers.
+- **Byte writes to CTRL1–7: ANSWERED, 26 Oct 2026** (`edpage`, console). An **even-byte** write to
+  `0xA130F2` with RV = 1 is **ignored** - CTRL1 keeps its bank and nothing else moves. A *word* write
+  to the same register is taken. So the page register of the 16MB-PCB cart (one even byte, which is
+  what every paged game's CMD 68 writes) does nothing at all on an EverDrive unless the listener
+  turns it into word writes to CTRL4–7 (MODE1-9, `m1_page`). The board already modelled it this way
+  (`if(!lower) return;`), so the model was right and is now measured rather than assumed.
+- Still open: a console reset's effect on the registers.
 
 **Do not change ares or this board unless MicroNut99 asks for it** (26 Oct 2026: "Dont fuck with
 ARES"). The board as it stands is what the console measurements produced; it is a reference, not a

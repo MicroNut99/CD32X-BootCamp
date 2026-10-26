@@ -51,6 +51,22 @@ never uses that table (its vectors are the BIOS's), so **the same disc boots bot
 way with a RAM cart, and from the EverDrive with `EDCD.32X`. The Sub-CPU program inside `EDCD.32X` is a
 second build of the stack with `MODE1=1`; the disc keeps the normal one.
 
+**MODE1-9 measured on the console (26 Oct 2026, `edpage`).** Everything the page switch depends on was
+checked on hardware with a probe that needs no disc, after OpenJazz, D32XR and Rayman all loaded
+completely on an EverDrive and then could not find what they had loaded:
+
+| checked | result |
+|---|---|
+| pages 1-6 through CTRL4-7 (word writes), marker written by the 68000, read back by the SH2 | correct, and still correct after every page has been used |
+| the resident window (cart `0x080000`, bank 1) and the save bank (31) | correct |
+| **one even byte to `0xA130F2`** - the write a paged game's CMD 68 makes | **ignored**: no window moves. Without `m1_page` a paged game switches no page at all |
+| **the real `m1_xfer` / `m1_cart` / `m1_page`**, lifted out of this file into the probe and run from work RAM with CMD 68's own arguments | **correct**: switched to page 3 and page 5, left window 1 alone |
+
+So the listener's paging is sound, the mapper is sound, and `OL_M1PAGE=1` is present in the launchers
+(checked in the built `CDROMPlayer.bin`: `m1_page`'s CTRL4 write is there). What has NOT been tested
+is the link between a game asking for a page and the listener being asked - the SH2's CMD 68 and the
+Sub-CPU's handler - which is where the fault must be. `EDCD_DIAG=1` prints that traffic.
+
 **Two more things the console taught (25 Oct 2026), both in the listener's cart copies:**
 - The cart's first 512 KB (window 0) cannot be written by the 68000 directly with the 32X on: the copy
   routes window 0's addresses through window 1 (CTRL1 = window 0's bank for the block, then bank 1 again).
