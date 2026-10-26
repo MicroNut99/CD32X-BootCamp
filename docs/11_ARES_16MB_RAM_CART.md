@@ -198,3 +198,17 @@ The CD32X ares build passes all of these (25 Oct 2026), except that no ordinary 
 4. **Byte writes** to CTRL1–7.
 
 Update this document and the board when a console answers one of them.
+
+**Answered on the console, 25 Oct 2026** (and in the board, ares_android `everdrive-pro`):
+- The C bit changes nothing: the EverDrive stays the cartridge at `0x000000` (docs/12). The board's "RAM
+  cart" use (C = 1, the cart at `0x400000`) is kept for discs that boot the normal way with another cart.
+- Bank 31 is the EverDrive's battery RAM, kept on the SD card as `bram.srm` (256 KB written) when the ROM's
+  header declares save RAM; banks 0–29 (PSRAM) are wiped every time the EverDrive menu runs (`edsave/`).
+  The board already kept bank 31 as the save file; the wipe is not modelled (ares keeps the 16 MB).
+- Two rules the board now models, both from `edw0` and the cartridge boot: with W = 1, a 68000 write to
+  anything but the cart disturbs an SH2 cart read within 1 µs of it (the read returns 0 and the word takes
+  the 68000's data - deterministic, not exact); and a direct 68000 write to window 0 (`0x000100`–
+  `0x07FFFF`) with the 32X on is dropped. `Bus::write` reports the non-cart writes through a new board hook
+  (`disturb`); the `/TIME` registers are excluded (changing W is harmless). Regression: `EDCD_H3` boots
+  BootCamp and OpenLara, `EDCD_DIAG_H2` (W always on) fails with `4DE2`.
+- Still open: byte writes to CTRL1–7, a console reset's effect on the registers.
