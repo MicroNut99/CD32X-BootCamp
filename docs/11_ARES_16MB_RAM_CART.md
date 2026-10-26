@@ -245,16 +245,18 @@ Update this document and the board when a console answers one of them.
   BootCamp and OpenLara, `EDCD_DIAG_H2` (W always on) fails with `4DE2`.
 - Still open: byte writes to CTRL1–7, a console reset's effect on the registers.
 
-**Answered on the console but NOT modelled yet** (a different list from "still open" above: nothing
-needs measuring, only putting into the board - and each one buys a class of test that today needs
-either the console or a hand review of the code):
+**Do not change ares or this board unless MicroNut99 asks for it** (26 Oct 2026: "Dont fuck with
+ARES"). The board as it stands is what the console measurements produced; it is a reference, not a
+scratchpad. The two rules below are listed so that **nobody misreads what a run in ares covers** -
+they are not a to-do list, and nothing here authorises touching the board to make a test easier.
 
-| Rule | Measured by | What modelling it would buy |
+**Measured on the console, outside what the board models** - so an ares run says nothing about these:
+
+| Rule | Measured by | What an ares run therefore cannot tell you |
 |---|---|---|
-| Banks 0–29 (PSRAM) are **wiped every time the EverDrive menu runs**; bank 31 survives (`edsave`, 25 Oct) | `edsave/`, console | ED-SAVE becomes testable in ares at all. Today ares keeps the 16 MB, so a save surviving a relaunch there says nothing about whether bank 31 did the work - the page-1 path looks identical (docs/08). Wipe banks 0–29 when the launcher starts and the relaunch test becomes decisive. |
-| An **SH2 cart access while the 68000 holds RV = 1 returns garbage at once** - not held (`edsave3`, 26 Oct: 965,207 of 978,000 slave reads bad with RV = 1, clean with RV = 0) | `edsave3/`, console | Freeze-class bugs become visible in ares. Today it holds the SH2s instead, so the whole class is invisible there and has to be found by reading every wait path by hand (done for the four ED-SAVE builds, docs/08 - no defects, but that does not scale). |
+| Banks 0–29 (PSRAM) are **wiped every time the EverDrive menu runs**; bank 31 survives (`edsave`, 25 Oct) | `edsave/`, console | Whether a save actually went to bank 31. ares keeps the 16 MB, so a save surviving a relaunch there looks the same whether ED-SAVE worked or the game quietly used page 1 (docs/08). Read the board's `bram.srm`, and the game's own save diagnostics (docs/09), rather than the save screen. |
+| An **SH2 cart access while the 68000 holds RV = 1 returns garbage at once** - not held (`edsave3`, 26 Oct: 965,207 of 978,000 slave reads bad with RV = 1, clean with RV = 0) | `edsave3/`, console | Whether a build freezes. ares holds the SH2s instead, so that whole class is invisible there; it is found by reading the wait paths (docs/08) and settled on the console. |
 
-Both are already in `docs/05`/`docs/06` of the MegaEverDrivePro_16MB_RAM repository as console
-findings. These are **gaps, not defects**: the board does not model them and does not pretend to, so
-the only error available here is reading an ares run as if it covered them. What they need is the
-measurement carried into the board - no new console run, and nothing to undo.
+Both are recorded as console findings in `docs/05`/`docs/06` of the MegaEverDrivePro_16MB_RAM
+repository. They are **gaps in coverage, not defects**: the board neither models them nor pretends
+to. The only mistake available here is reading an ares run as if it covered them.
