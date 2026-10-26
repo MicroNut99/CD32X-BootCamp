@@ -179,7 +179,11 @@ the CD into it - and so does OpenLara CD32X ([docs/12](docs/12_CARTRIDGE_BOOT.md
 - the EverDrive's write-enable bit (CTRL0 bit 13) must be **off** whenever the 68000 writes anything but the
   cart: with it on, some of the 68000's writes to work RAM, the VDP or the gate array land in the cart and
   change it, and the SH2's reads of the cart come back as zeros meanwhile (`edw0/EDW0E_W.32X` shows it in one
-  screen). The listener turns it on only inside a copy into the cart, with the SH2 held off the cart;
+  screen). The listener turns it on only inside a copy into the cart, with RV = 1;
+- **an SH2's cart access while the 68000 holds RV = 1 is not held until RV = 0 - the EverDrive answers it
+  at once, with garbage** (`edsave3/EDSAVE3.32X`, 26 Oct: ~100% bad words through every such copy). So a
+  game must keep both SH2s in SDRAM code with interrupts masked for every 68000 copy with RV = 1 (OpenLara
+  EDSAVE-4); a loop that happens to be cached is luck, and the first cold cache in the game is a freeze;
 - the cart's first 512 KB cannot be written by the 68000 directly with the 32X on: the copy goes through
   window 1 with window 0's bank mapped there for the block;
 - copies between Word RAM and the cart go through a work-RAM buffer (Word RAM read with RV = 0, the cart
