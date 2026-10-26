@@ -75,6 +75,10 @@ def main():
     sram = b" " * 12
     if os.environ.get("EDCD_SAVE", "0") == "1":
         sram = b"RA" + bytes([0xF8, 0x20]) + struct.pack(">2I", 0x200001, 0x23FFFF)
+        print("    save RAM declared in the header (RA, 0x200001-0x23FFFF): the EverDrive keeps "
+              "bank 31 as MEGA/gamedata/<this launcher>/bram.srm")
+    else:
+        print("    NO save RAM in the header (EDCD_SAVE is not 1): nothing in bank 31 is kept")
     rom = bytearray(0x800)
     rom[0:4] = struct.pack(">I", 0x01000000)
     for v in range(1, 64):
