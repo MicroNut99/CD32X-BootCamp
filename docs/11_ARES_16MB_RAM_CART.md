@@ -17,11 +17,19 @@ discs.
 1. **Every rule in the board comes from a measurement** - a dated console run with the probe that
    produced it - not from reasoning about what the hardware probably does. The tables below cite the
    probe for each rule for exactly this reason.
-2. **When ares and the console disagree, the console is right and the BOARD gets fixed.** A game is
-   never adjusted to suit ares. There is already a precedent for the cost of getting this backwards:
-   letting the cart answer the 68000 while ADEN = 1 and RV = 0 made programs that ran in ares fail on
-   the console (section "Mistakes", below) - the model was more permissive than the machine, so the
-   bug waited until the hardware to appear.
+2. **The board is DERIVED from the measurements, not corrected against them.** This is not a
+   workflow where ares is written first and patched when the console contradicts it: a rule enters
+   the board because a probe measured it, and that is the only way a rule enters the board. So
+   disagreement is not routine maintenance - it means a guess got in, and the answer is to take the
+   guess out, never to re-interpret the hardware or adjust a game to suit ares. The cost of having
+   this backwards is already on record: letting the cart answer the 68000 while ADEN = 1 and RV = 0
+   made programs that ran in ares fail on the console (section "Mistakes", below), because the model
+   was the more permissive one and the bug therefore waited for the hardware to show up.
+   Three states, kept distinct, and only the third is ever a defect:
+   - **measured and modelled** - the tables below, each citing its probe;
+   - **measured, not modelled yet** - a *gap*: the board does not claim the rule, so ares cannot test
+     that class of thing and nobody should read a green run as covering it (the list further down);
+   - **in the board without a measurement behind it** - the only kind that is wrong, and it comes out.
 3. **Where a rule is not yet measured, model it pessimistically** - refuse, or fail loudly - rather
    than inventing a plausible behaviour. A permissive guess hides the divergence until the console;
    a strict one surfaces it on the PC, which is the whole point of having the board. The two rules in
@@ -246,5 +254,7 @@ either the console or a hand review of the code):
 | Banks 0–29 (PSRAM) are **wiped every time the EverDrive menu runs**; bank 31 survives (`edsave`, 25 Oct) | `edsave/`, console | ED-SAVE becomes testable in ares at all. Today ares keeps the 16 MB, so a save surviving a relaunch there says nothing about whether bank 31 did the work - the page-1 path looks identical (docs/08). Wipe banks 0–29 when the launcher starts and the relaunch test becomes decisive. |
 | An **SH2 cart access while the 68000 holds RV = 1 returns garbage at once** - not held (`edsave3`, 26 Oct: 965,207 of 978,000 slave reads bad with RV = 1, clean with RV = 0) | `edsave3/`, console | Freeze-class bugs become visible in ares. Today it holds the SH2s instead, so the whole class is invisible there and has to be found by reading every wait path by hand (done for the four ED-SAVE builds, docs/08 - no defects, but that does not scale). |
 
-Both are already in `docs/05`/`docs/06` of the MegaEverDrivePro_16MB_RAM repository as console findings;
-this table is only the list of what the board still owes them.
+Both are already in `docs/05`/`docs/06` of the MegaEverDrivePro_16MB_RAM repository as console
+findings. These are **gaps, not defects**: the board does not model them and does not pretend to, so
+the only error available here is reading an ares run as if it covered them. What they need is the
+measurement carried into the board - no new console run, and nothing to undo.
