@@ -61,7 +61,22 @@ second build of the stack with `MODE1=1`; the disc keeps the normal one.
   right before a copy into the cart and off right after - with RV = 1 (the SH2 off the cart) and no other
   68000 write in between.  Reads of the cart leave W off.  Turning W on and off does no harm by itself.
 
-**Switches** (all off by default): `M1WORDS=1` word copies; `EDCD_W0=<bank>` the game in that EverDrive bank
+**What the EverDrive keeps (25 Oct 2026, `edsave/EDSAVE1.32X`, three runs on the console).** The 16 MB of
+banks 0–29 are PSRAM, and the EverDrive OS **wipes it every time its menu runs**: markers written in banks
+0 and 7 were gone at the next start, every time.  Bank 31 is the EverDrive's battery RAM: its markers
+survived every round trip, and the OS wrote `MEGA/gamedata/EDSAVE1.32X/bram.srm` (256 KB) for the ROM,
+because its header declares save RAM (an `RA` entry).  krikzz's own SSF mapper source
+(github.com/krikzz/MEGA-PRO, `fpga/mapper/map_ssf`) says the same: banks 0–15 and 16–30 are the two 8 MB
+PSRAM chips, bank 31 the backup memory.  Consequences:
+- a game's saves in the cart do not outlive a session.  **MODE1-7** (`EDCD_SAVE=1`): the listener reaches
+  bank 31 as cart `0x800000`–`0x83FFFF` (through window 1, as window 0), and `make_edcd.py` gives EDCD the
+  `RA` entry, so the OS keeps the bank on the SD card.  A game stores its saves there through the Sub-CPU
+  (OpenLara CD32X REV, EDSAVE-1: CMD 61 writes it, a new CMD 62 reads it, since the SH2 cannot see that
+  bank).  Only the bank's first 256 KB: the OS keeps its own things above.
+- "is the game / level already in the cart?" checks can never hit after a relaunch; every launch loads
+  from the CD.  The checks are harmless (they verify a checksum of the data), just never true.
+
+**Switches** (all off by default): `M1WORDS=1` word copies; `EDCD_SAVE=1` the save bank (above); `EDCD_W0=<bank>` the game in that EverDrive bank
 (window 0 shows it; the listener's window-1 route follows); `EDCD_X=1` CTRL0 with the EverDrive's X bit
 (`0xC000`; it changed nothing on the console).  The diagnostic build has more (`M1MINVB`, `M1NOVINT`,
 `EDCD_QUIET`), described in `build.sh`.
@@ -109,5 +124,10 @@ no-disc probe `edw0/` (from edtest) then measured the EverDrive's window 0 as th
 the 68000 idle or reading anything, and failing - zeros, and the stored words changing - as soon as the
 68000 *writes* anything with the write-enable bit on.  `edw0/EDW0E_W.32X` shows it in one screen.
 
-**ares** does not model that EverDrive behaviour (its reads were right all along), which is why every
-launcher passed there first.
+**ares** did not model that EverDrive behaviour (its reads were right all along), which is why every
+launcher passed there first.  It does now (ares_android `everdrive-pro`, 25 Oct 2026): a 68000 write to
+anything but the cart with W on disturbs an SH2 cart read within 1 µs of it (the read returns 0 and the word
+takes the 68000's data), and a direct 68000 write to window 0 is dropped.  With that, the launcher that
+works on the console (`EDCD_H3`) boots BootCamp and OpenLara in ares, and the earlier one with W always on
+(`EDCD_DIAG_H2`) fails there as it did on the console.  The model is deterministic, not exact: the console
+never said which word changes or how long the window is.

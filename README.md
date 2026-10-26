@@ -109,6 +109,7 @@ The EverDrive PRO programs build on their own (same `ROOTDIR=` / `SEGA_TOOLCHAIN
 ```
 bash edtest/build.sh      # edtest/EDTEST_W.32X + EDTEST_X.32X: the 16 MB RAM test (docs/10)
 bash edw0/build.sh        # edw0/EDW0E_W.32X: window 0 as the SH2 reads it while the 68000 writes (docs/12)
+bash edsave/build.sh      # edsave/EDSAVE1.32X: what the EverDrive keeps across its menu (docs/12)
 bash edboot/build.sh      # edboot/EDBOOT.BIN, EDBOOTD.BIN, EDPROBE.BIN: the C-bit tests (docs/10)
 EDCD=1 bash build.sh      # + edboot/EDCD.32X: the disc started from the EverDrive PRO (docs/12) - console-proven
 ```
@@ -154,7 +155,11 @@ EverDrive notes) changed nothing measurable. Photos: [`edtest/results/`](edtest/
 
 - The 68000 writes these registers, and writes and reads the cart, with RV = 1.
 - The SH2s read the cart at `0x22000000` (cache-through), as from any cart.
-- Never write banks 28–31: they hold the EverDrive's save area and its own software.
+- Banks 28–30 hold the EverDrive's own things: never write them. Bank 31 is its battery RAM - the save
+  memory the EverDrive OS keeps on the SD card (`bram.srm`) when the ROM's header declares save RAM; a game
+  may use its first 256 KB (`EDCD_SAVE=1`, docs/12).
+- Banks 0–29 are PSRAM and **the EverDrive wipes them every time its menu runs** (`edsave/`, 25 Oct 2026):
+  nothing a game leaves there is seen again after a relaunch. Saves go to bank 31.
 
 **The CD boot does not work with it: the EverDrive stays the cartridge.** `edboot/EDBOOT.BIN` tried to let go of
 the cartridge line with CTRL0's C bit and start the Sega CD BIOS. On the console the C bit changes nothing
@@ -178,7 +183,9 @@ the CD into it - and so does OpenLara CD32X ([docs/12](docs/12_CARTRIDGE_BOOT.md
 - the cart's first 512 KB cannot be written by the 68000 directly with the 32X on: the copy goes through
   window 1 with window 0's bank mapped there for the block;
 - copies between Word RAM and the cart go through a work-RAM buffer (Word RAM read with RV = 0, the cart
-  written with RV = 1).
+  written with RV = 1);
+- nothing in the EverDrive's PSRAM survives its menu, so saves live in its bank 31, which the EverDrive OS
+  writes to the SD card (`edsave/EDSAVE1.32X`; `EDCD_SAVE=1`).
 
 `edw0/` is the probe that found the write-enable rule (`bash edw0/build.sh`, no disc): the SH2 reads the
 EverDrive's window 0 while the 68000 does one thing at a time.
@@ -210,6 +217,7 @@ The details are in [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md).
 | `hello/` | The example game: a 32X ROM using `cdapi.c` for every CD service | Copy it and make it yours |
 | `edtest/` | The EverDrive PRO 16 MB RAM test: two 32X cartridge ROMs (`bash edtest/build.sh`), and the console photos in `edtest/results/` | No |
 | `edw0/` | The EverDrive PRO window 0 probe: the SH2 reads the cart while the 68000 writes; found the write-enable rule (`bash edw0/build.sh`) | No |
+| `edsave/` | The EverDrive PRO retention probe: what survives its menu (`bash edsave/build.sh`). Found that the PSRAM is wiped at every menu run and that bank 31 goes to the SD card (`bram.srm`) | No |
 | `edboot/` | `EDCD.32X`, the disc started from the EverDrive PRO (`EDCD=1 bash build.sh`); `EDBOOT.BIN` and the C-bit tests (`bash edboot/build.sh`) | No |
 | `ares/` | The EverDrive PRO 16 MB cart for the ares emulator, as a patch for ares v148 | No |
 | `tools/` | `prep_rom.py` (checks and marks the ROM), the boot picture, a test music track, the font | No |
