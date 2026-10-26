@@ -212,3 +212,15 @@ Update this document and the board when a console answers one of them.
   (`disturb`); the `/TIME` registers are excluded (changing W is harmless). Regression: `EDCD_H3` boots
   BootCamp and OpenLara, `EDCD_DIAG_H2` (W always on) fails with `4DE2`.
 - Still open: byte writes to CTRL1–7, a console reset's effect on the registers.
+
+**Answered on the console but NOT modelled yet** (a different list from "still open" above: nothing
+needs measuring, only putting into the board - and each one buys a class of test that today needs
+either the console or a hand review of the code):
+
+| Rule | Measured by | What modelling it would buy |
+|---|---|---|
+| Banks 0–29 (PSRAM) are **wiped every time the EverDrive menu runs**; bank 31 survives (`edsave`, 25 Oct) | `edsave/`, console | ED-SAVE becomes testable in ares at all. Today ares keeps the 16 MB, so a save surviving a relaunch there says nothing about whether bank 31 did the work - the page-1 path looks identical (docs/08). Wipe banks 0–29 when the launcher starts and the relaunch test becomes decisive. |
+| An **SH2 cart access while the 68000 holds RV = 1 returns garbage at once** - not held (`edsave3`, 26 Oct: 965,207 of 978,000 slave reads bad with RV = 1, clean with RV = 0) | `edsave3/`, console | Freeze-class bugs become visible in ares. Today it holds the SH2s instead, so the whole class is invisible there and has to be found by reading every wait path by hand (done for the four ED-SAVE builds, docs/08 - no defects, but that does not scale). |
+
+Both are already in `docs/05`/`docs/06` of the MegaEverDrivePro_16MB_RAM repository as console findings;
+this table is only the list of what the board still owes them.
