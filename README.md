@@ -1,7 +1,7 @@
 # CD32X BootCamp
 
 Everything you need to boot **your own game on a Sega CD + 32X** ("CD32X") from one CD, with a
-battery-backed **4 MB RAM cart** in the 32X slot. This is the boot stack that OpenLara (Tomb Raider), Jazz
+battery-backed RAM cart or a Mega EverDrive as a **RAM cart** in the 32X slot. This is the boot stack that OpenLara (Tomb Raider), Jazz
 Jackrabbit, Hurrican and SuperTux run on. Here it comes as a clean kit, with a small example game that
 builds and boots.
 
