@@ -5,6 +5,10 @@ how to build the CD32X ares build's headless runner there, how to get the owner'
 the container, how to run them (RAM cart and EverDrive PRO), how to read what comes out, and what a green run
 does **not** prove. Written 27 Oct 2026 from the runs that found the Hurrican and Sonic CD 2011 EverDrive faults.
 
+1. Use the owner's ares, built from their repo, and their launcher and disc. Nothing else counts.
+2. Send the owner the contact sheet from every run.
+3. Never say "tested" about the owner's build until their folder's md5s match what was tested.
+
 Read [docs/11](11_ARES_16MB_RAM_CART.md)'s "law" first: **the emulator follows the hardware, and a green run
 in ares is never a pass for the console.** ares is a cheap filter for bugs, nothing more.
 
