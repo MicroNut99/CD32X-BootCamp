@@ -158,30 +158,29 @@ kill the process by its PID (`pgrep -f '[a]res-headless'` - a bare `pkill -f are
 
 | The console does | ares does | So |
 |---|---|---|
-| Answers an SH2 cart read with **garbage** while the 68000 holds RV = 1 (docs/12, `edsave3`) | Holds the SH2 until RV = 0 | Code or data the SH2s fetch from the cart during a copy works in ares and crashes on the console. Use the probe below |
-| **Wipes** the EverDrive's PSRAM (banks 0–30) every time its menu runs | Keeps all 16 MB in `--ramcart` | A relaunch test must wipe the file itself: bank *n* is bytes `n × 0x80000` … `+ 0x7FFFF`; fill banks 0–30, keep bank 31 (the saves) |
-| Stops on an SH2 **word access at an odd address** (address error, the red screen) | Lets it through | OpenJazz's sun drawing (27 Oct 2026) ran in ares and stopped the console. Read word / long pointer arithmetic by hand |
+| Answers an SH2 cart read with **garbage** while the 68000 holds RV = 1 (docs/12, `edsave3`) | Since 28 Oct 2026: the same on the EverDrive PRO cart (a pseudo-random word); before, it held the SH2 until RV = 0 | Run with `--interpreter` and `ARES_RV_LOG=1` (below) |
+| **Wipes** the EverDrive's PSRAM (banks 0–29) every time its menu runs | Since 28 Oct 2026: a launcher boot (`--ramcart-boot`) fills banks 0–29 with a pattern first, at power-on and at a reset; bank 31 (the saves) is kept | Every start loads everything again, as on the console |
+| Stops on an SH2 **word access at an odd address** (address error, the red screen) | Since 28 Oct 2026: the same in the interpreter (`--interpreter`; `ARES_SH2_ADDRESS_ERRORS=0` off); the recompiler lets it through | OpenJazz's sun drawing (27 Oct 2026) ran in ares and stopped the console |
 | The real timing of the CD drive, the 68000 and the SH2s | Faster SH2s, its own CD timing | A race can hide in ares |
 
-**The RV probe** ([`ares/rv-garbage-probe.patch`](../ares/rv-garbage-probe.patch), for the CD32X ares build;
-`git apply` in its source, then rebuild). With `ARES_RV_GARBAGE=1` in the environment, an SH2 cart read while
-RV = 1 returns `0xDEAD` instead of waiting, and is logged once per PC (and every 128th read):
+**The RV rule** (built into the CD32X ares build since 28 Oct 2026; [`ares/rv-garbage-probe.patch`](../ares/rv-garbage-probe.patch)
+was the local probe before it). With the EverDrive PRO as the cart, an SH2 cart read while RV = 1 returns a
+pseudo-random word instead of waiting. `ARES_RV_LOG=1` logs it once per PC (and every 128th read);
+`ARES_RV_GARBAGE=1` gives every cart the rule (the 16MB-PCB too), `ARES_RV_GARBAGE=0` holds the SH2 instead:
 
 ```
 RV-CART M pc=0204c248 pr=060003d6 addr=0204c280 (n=1)
 ```
 
 M / S = master / slave, `pc` the instruction, `pr` its caller, `addr` what it read. Run with `--interpreter`
-(the recompiler fetches a block once, so code fetches during RV would not be seen). Without the variable the
-build is the unchanged one. **A correct game logs nothing** from power-on to play: every command whose 68000
+(the recompiler fetches a block once, so code fetches during RV would not be seen). **A correct game logs nothing** from power-on to play: every command whose 68000
 side copies with RV = 1 must keep both SH2s off the cart - the slave parked in SDRAM, the master waiting in
 SDRAM with its interrupts masked, and the interrupt handlers in SDRAM too (docs/12; OpenLara's `csSpin`, the
 Jazz-shaped games' `send_cmd_rv`).
 
 Found with it (27 Oct 2026, Hurrican's EverDrive build): the master's vblank handler ran from the cart during the
 high scores' copy (CMD 56, sent with a plain wait and interrupts on). After the fix: no line from boot to stage 1.
-The probe models the rule pessimistically (the console's garbage is random, `0xDEAD` is one fixed value), so a
-run that logs nothing can still fail on the console for other reasons; a run that logs something has an SH2
+A run that logs nothing can still fail on the console for other reasons; a run that logs something has an SH2
 on the cart during a copy, which the console answers with garbage.
 
 ## 7. Testing a fix without rebuilding the whole disc
