@@ -15,6 +15,21 @@ GAME=probe DISC_NAME=CD32X_PROBE_V1 EDCD=1 bash build.sh 2>&1 | tee build_log.tx
 - The numbers appear after about two seconds. **A** measures again (the run number is top right).
   Photograph the screen once per boot method.
 
+## Why it exists
+
+The 32X's bus arbitration is not fully documented: Sega's hardware manual gives ranges (cart reads
+6-15 wait states, frame buffer writes through a 4-word FIFO), not how the two SH2s, the 68000 and the
+VDP share the bus and what one costs the other. Those timings come from **our own measurements on
+the console, which are not published anywhere else**.
+
+Tuning ares to the games' frame rates alone did not work. Jazz's open sky and its caves make the
+same memory accesses per picture, yet run at 10 and 18-20 fps on the console. The probe measures each
+cost by itself.
+
+The data so far (Jazz, Hurrican and OpenLara on the console beside ares, the manuals' figures,
+ares's access counts) and the state of the ares model are in the CD32X ares build's
+`README-CD32X.md`, "Console timing".
+
 ## What the numbers are
 
 SH2 clocks (23.01 MHz NTSC) per access, one decimal; the lines marked *clocks* are whole clocks.
