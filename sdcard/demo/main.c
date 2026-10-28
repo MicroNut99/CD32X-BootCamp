@@ -1,0 +1,421 @@
+/* sdcard/demo - hello with its boot counter on the EverDrive's SD card (CD32X BootCamp sdcard/)
+ *
+ * hello/src/main.c with three changes, all marked SDSAVE-DEMO:
+ *   - the boot counter is a checked record at offset 0 of the EverDrive's save bank (sdsave.c), not in
+ *     the cart's save area: start the launcher, see BOOTS n, relaunch from the EverDrive menu, BOOTS n+1
+ *   - the slave SH2 parks in SDRAM when the master asks (SDSAVE_CMD_PARK in COMM4)
+ *   - the screen says whether the bank is there (the launcher's program) and what each save returned
+ * build: bash sdcard/demo/build_demo.sh <out dir>   (README.md)
+ *
+ * --- hello's own description: ---
+ *
+ * A normal 32X cartridge program.  On the CD32X, CDLOADER (stack/sh2) loads this ROM from the
+ * disc into the RAM cart and starts both SH2s at the entries in its header, exactly as the 32X
+ * boot ROM starts a cartridge.  From then on the game runs from the cart; everything it cannot
+ * do itself goes to the Sega CD through cdapi.c.
+ *
+ * What it shows:
+ *   - the frame buffer in 256-colour mode, double buffered (flip at the vertical blank)
+ *   - the pad (CMD 48) - the D-pad moves the square
+ *   - a data file from the disc into the cart (CMD 38 + 46): LEVEL00.BIN at start, C loads LEVEL01.BIN
+ *   - CD audio (CMD 45 / 54): A plays track 2, B stops it
+ *   - a save in the cart (CMD 58 + 61): the boot counter, START saves it again
+ *   - status codes in COMM12 (4Exx while starting, 4B10 = running)
+ *   - an error box: any failed CD service shows its code (docs/09_ERROR_CODES.md) on the screen
+ */
+#include <stdint.h>
+#include "32x.h"
+#include "cdapi.h"
+#include "font8x8.h"
+#include "sdsave.h"                         /* SDSAVE-DEMO */
+
+/* HELLO_DIAG_TEXT (build.sh DIAG=1 -> make DIAG=1): the diagnostic disc.  hello starts on the Sub-CPU's
+   green text (the boot history: STATE, files opened, cart chunks and addresses) and B+C switches
+   between that text and hello's own screen.  0: the Genesis display stays off (release). */
+#ifndef HELLO_DIAG_TEXT
+#define HELLO_DIAG_TEXT 0
+#endif
+
+#define SAVE_OFS    0x0000u                 /* SDSAVE-DEMO: where in the save bank (this launcher's bram.srm) */
+#define SAVE_MAGIC  0x53445631u             /* "SDV1" */
+
+/* ---- what crt0.s needs from the program ---- */
+volatile uint32_t gTicks = 0;
+volatile unsigned mars_pwdt_ovf_count = 0;
+volatile unsigned mars_swdt_ovf_count = 0;
+void pri_vbi_handler(void) { gTicks++; }   /* the master's vertical blank interrupt */
+
+#if HELLO_DIAG_TEXT
+/* EDCD trace: is the SDRAM image (vectors, interrupt tables, start-up code) still what the cart
+   holds?  Compared cache-through at every start-up step.  A difference is reported as a run of
+   status codes ~20 ms apart (the Sub-CPU's history row keeps the last six): EC<step>, the offset,
+   the cart's word (high, low), the SDRAM word (high, low); then the game stops. */
+static void post_slow(uint16_t v) { cd_status(v); for (volatile int i = 0; i < 300000; i++) { } }
+static void ints_off(void) { __asm__ __volatile__("ldc %0,sr" : : "r"(0xF0) : "memory"); }
+static void sdram_check(int step)
+{
+    const volatile uint32_t *hdr = (const volatile uint32_t *)0x22000000u;
+    uint32_t src = hdr[0x3D4 / 4], size = hdr[0x3DC / 4];
+    const volatile uint32_t *rom = (const volatile uint32_t *)(0x22000000u + src);
+    const volatile uint32_t *ram = (const volatile uint32_t *)0x26000000u;   /* SDRAM, cache-through */
+    const volatile uint32_t *cch = (const volatile uint32_t *)0x06000000u;   /* SDRAM, through the cache */
+    for (uint32_t i = 0; i < size / 4; i++)
+    {
+        uint32_t a = rom[i], b = ram[i], c = cch[i];
+        if (a != b || a != c)
+        {   /* EC<step> (SDRAM differs) or ED<step> (SDRAM right, the cache not), the offset,
+               the cart's word (high, low), the SDRAM word, the cached word (low words) */
+            ints_off();                         /* the report must not be interrupted */
+            post_slow((uint16_t)((a != b ? 0xEC00 : 0xED00) | step));
+            post_slow((uint16_t)(i * 4));
+            post_slow((uint16_t)(a >> 16)); post_slow((uint16_t)a);
+            post_slow((uint16_t)b); post_slow((uint16_t)c);
+            while (1) { }
+        }
+    }
+}
+#endif
+void sec_dma1_handler(void) { }
+void secondary(void)                        /* the slave SH2: idle, but parks for every save-bank copy */
+{
+    while (1)
+    {   /* SDSAVE-DEMO: the master's SDSAVE_CMD_PARK -> into SDRAM until it clears COMM4 (sdsave.c) */
+        if ((uint16_t)MARS_SYS_COMM4 == SDSAVE_CMD_PARK)
+            sdsave_slave_park();
+        for (volatile int k = 0; k < 64; k++) { }   /* never hammer a COMM register */
+    }
+}
+
+/* ---- the frame buffer: 320 x 224, one byte a pixel, written 16 bits at a time ---- */
+#define FB          ((volatile uint16_t *)&MARS_FRAMEBUFFER)
+enum { C_BLACK, C_WHITE, C_RED, C_GREEN, C_YELLOW, C_GREY, C_BLUE, C_CYAN };
+
+static void palette(void)
+{
+    static const uint16_t pal[8] = {
+        0x0000, 0x7FFF, 0x001F, 0x03E0, 0x03FF, 0x4210, 0x7C00, 0x7FE0   /* BGR555 */
+    };
+    volatile uint16_t *cram = (volatile uint16_t *)&MARS_CRAM;
+    while ((MARS_VDP_FBCTL & MARS_VDP_PEN) == 0) { }   /* the palette: only in blanking */
+    for (int i = 0; i < 256; i++)
+        cram[i] = (i < 8) ? pal[i] : 0;
+}
+
+static void line_table(void)                /* line n starts at word 0x100 + n x 160 */
+{
+    for (int i = 0; i < 256; i++)
+        FB[i] = (uint16_t)(0x100 + (i < 224 ? i : 223) * 160);
+}
+
+static void clear(uint8_t c)
+{
+    uint16_t w = (uint16_t)((c << 8) | c);
+    volatile uint16_t *p = FB + 0x100;
+    for (int i = 0; i < 160 * 224; i++)
+        p[i] = w;
+}
+
+static void plot2(int x, int y, uint8_t a, uint8_t b)     /* two pixels, x even */
+{
+    FB[0x100 + y * 160 + (x >> 1)] = (uint16_t)((a << 8) | b);
+}
+
+static void box(int x0, int y0, int w, int h, uint8_t c)
+{
+    for (int y = y0; y < y0 + h; y++)
+        for (int x = x0 & ~1; x < x0 + w; x += 2)
+            plot2(x, y, c, c);
+}
+
+static void text(int x, int y, const char *s, uint8_t c)   /* x a multiple of 8 */
+{
+    for (; *s; s++, x += 8)
+    {
+        int ch = (uint8_t)*s;
+        if (ch < 32 || ch > 127) ch = '?';
+        const unsigned char *g = font8x8[ch - 32];
+        for (int r = 0; r < 8; r++)
+            for (int b = 0; b < 8; b += 2)
+                plot2(x + b, y + r, (g[r] & (0x80 >> b)) ? c : C_BLACK,
+                                     (g[r] & (0x40 >> b)) ? c : C_BLACK);
+    }
+}
+
+static void hex4(char *d, uint32_t v)
+{
+    for (int i = 0; i < 4; i++)
+        d[i] = "0123456789ABCDEF"[(v >> (12 - 4 * i)) & 15];
+    d[4] = 0;
+}
+
+/* the pad as words, one line: "UP LEFT A START" ("-" = nothing pressed or no pad); at most max chars */
+static void pad_words(char *d, uint16_t pad, int max)
+{
+    static const struct { uint16_t bit; const char *name; } k[] = {
+        { SEGA_CTRL_UP, "UP" }, { SEGA_CTRL_DOWN, "DOWN" }, { SEGA_CTRL_LEFT, "LEFT" },
+        { SEGA_CTRL_RIGHT, "RIGHT" }, { SEGA_CTRL_A, "A" }, { SEGA_CTRL_B, "B" }, { SEGA_CTRL_C, "C" },
+        { SEGA_CTRL_X, "X" }, { SEGA_CTRL_Y, "Y" }, { SEGA_CTRL_Z, "Z" }, { SEGA_CTRL_START, "START" },
+        { SEGA_CTRL_MODE, "MODE" },
+    };
+    int n = 0;
+    for (unsigned i = 0; i < sizeof k / sizeof k[0]; i++)
+    {
+        if (!(pad & k[i].bit))
+            continue;
+        const char *w = k[i].name;
+        int len = 0;
+        while (w[len]) len++;
+        if (n + (n ? 1 : 0) + len > max)
+            break;
+        if (n) d[n++] = ' ';
+        while (*w) d[n++] = *w++;
+    }
+    if (!n) d[n++] = '-';
+    d[n] = 0;
+}
+
+static void dec(char *d, uint32_t v)
+{
+    char t[12]; int n = 0;
+    do { t[n++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (n) *d++ = t[--n];
+    *d = 0;
+}
+
+static void flip(void)                      /* show what was drawn at the next vertical blank */
+{
+    uint16_t cur = MARS_VDP_FBCTL & MARS_VDP_FS;
+    MARS_VDP_FBCTL = (uint16_t)(cur ^ 1);
+    while ((MARS_VDP_FBCTL & MARS_VDP_FS) == cur) { }
+}
+
+static void hexn(char *d, uint32_t v, int n)    /* n hex digits */
+{
+    for (int i = 0; i < n; i++)
+        d[i] = "0123456789ABCDEF"[(v >> (4 * (n - 1 - i))) & 15];
+    d[n] = 0;
+}
+
+static const char *error_text(uint16_t code)
+{
+    switch (code)
+    {
+    case CD_ERR_SAVE:      return "CART SAVE FAILED";
+    case CD_ERR_NO_FILE:   return "FILE NOT ON THE DISC";
+    case CD_ERR_CHUNK:     return "FILE DID NOT REACH CART";
+    case CD_ERR_NO_ANSWER: return "SEGA CD DID NOT ANSWER";
+    default:               return "UNKNOWN ERROR";
+    }
+}
+
+/* the error box: the code, where it was raised (the BC-Ex tag in cdapi.c), what was asked, and the
+   COMM registers as they were at that moment.  Every number is in docs/09_ERROR_CODES.md. */
+static void error_box(void)
+{
+    char b[12];
+    const CdError *e = &cd_error;
+    box(4, 140, 312, 78, C_RED);
+    box(6, 142, 308, 74, C_BLACK);
+    hex4(b, e->code);
+    text(8, 145, "ERROR", C_RED);  text(56, 145, b, C_YELLOW);
+    text(104, 145, error_text(e->code), C_WHITE);
+    text(8, 156, e->tag ? e->tag : "?", C_CYAN);
+    text(8, 167, "CMD", C_GREY);  dec(b, e->cmd);  text(40, 167, b, C_WHITE);
+    switch (e->code)
+    {
+    case CD_ERR_SAVE:                       /* the piece and where it lives in the cart */
+        text(72, 167, "PIECE", C_GREY); dec(b, e->arg); text(120, 167, b, C_WHITE);
+        text(152, 167, "CART", C_GREY); hexn(b, 0x3F0000u + ((uint32_t)e->arg << 12), 6); text(192, 167, b, C_WHITE);
+        break;
+    case CD_ERR_CHUNK:                      /* the file, the chunk, its offset in the file */
+        text(72, 167, "FILE", C_GREY);  dec(b, e->file); text(112, 167, b, C_WHITE);
+        text(152, 167, "CHUNK", C_GREY); dec(b, e->arg); text(200, 167, b, C_WHITE);
+        text(232, 167, "+", C_GREY);    hexn(b, (uint32_t)e->arg << 15, 6); text(240, 167, b, C_WHITE);
+        break;
+    case CD_ERR_NO_FILE:
+        text(72, 167, "FILE", C_GREY);  dec(b, e->arg); text(112, 167, b, C_WHITE);
+        break;
+    default:
+        text(72, 167, "COMM2", C_GREY); hex4(b, e->arg); text(120, 167, b, C_WHITE);
+        break;
+    }
+    static const char *const name[8] = { "C0", "C2", "C4", "C6", "C8", "CA", "CC", "CE" };
+    for (int i = 0; i < 8; i++)             /* COMM0 ... COMM14 (CE = the Sub-CPU's heartbeat) */
+    {
+        int x = 8 + (i & 3) * 64, y = 180 + (i >> 2) * 11;
+        text(x, y, name[i], C_GREY);
+        hex4(b, e->comm[i]); text(x + 24, y, b, C_WHITE);
+    }
+    text(8, 205, "LOOK UP: DOCS 09 ERROR CODES", C_GREEN);
+}
+
+/* the first line of a text file in the cart (the files are plain text, see disc/data) */
+static void cart_line(char *d, uint32_t addr, int max)
+{
+    const volatile uint8_t *p = (const volatile uint8_t *)addr;
+    int i = 0;
+    while (i < max - 1 && p[i] >= 32 && p[i] < 127) { d[i] = (char)p[i]; i++; }
+    d[i] = 0;
+}
+
+int main(void)
+{
+    char file_text[40] = "(not loaded)", buf[48];
+    uint32_t boots = 0;
+    int music = 0, x = 152, y = 150;
+    uint16_t prev = 0xFFFF;                 /* buttons held at start don't count */
+    uint16_t chord = 0;                     /* the buttons pressed since all were last released */
+
+    cd_status(0x4E00);                      /* 4E00: hello started */
+#if HELLO_DIAG_TEXT
+    {   /* EDCD trace: the master SH2's bus controller and cache, as the 32X boot ROM left them -
+           six status values ~20 ms apart: BCR1, BCR2, WCR, MCR, RTCSR:RTCOR, CCR:SR[7:4] */
+        uint32_t sr;
+        __asm__ __volatile__("stc sr,%0" : "=r"(sr));
+        post_slow(*(volatile uint16_t *)0xFFFFFFE0);                       /* BCR1 */
+        post_slow(*(volatile uint16_t *)0xFFFFFFE4);                       /* BCR2 */
+        post_slow(*(volatile uint16_t *)0xFFFFFFE8);                       /* WCR */
+        post_slow(*(volatile uint16_t *)0xFFFFFFEC);                       /* MCR */
+        post_slow((uint16_t)((*(volatile uint16_t *)0xFFFFFFF0 & 0xFF) << 8 | (*(volatile uint16_t *)0xFFFFFFF8 & 0xFF)));
+        post_slow((uint16_t)((*(volatile uint8_t *)0xFFFFFE92) << 8 | ((sr >> 4) & 0xF)));
+    }
+    sdram_check(0);                         /* EDCD trace: the image as handed over */
+#endif
+    int view_text = HELLO_DIAG_TEXT;        /* 1: the Sub-CPU's green text shows (diagnostic disc) */
+    cd_genesis_display(view_text);          /* 0: only the 32X picture */
+
+    /* EDCD trace (diagnostic disc only): a status code after each start-up step, so the Sub-CPU's
+       live ST: field shows the last step that finished (cartridge boot, 25 Oct 2026: the SH2 went
+       silent between the Genesis-display command and the first save). */
+#if HELLO_DIAG_TEXT
+#define STEP(c) do { cd_status(c); sdram_check((c) & 0xFF); } while (0)
+#else
+#define STEP(c) ((void)0)
+#endif
+    STEP(0x4E10);                           /* 4E10: display command done, setting the 32X mode */
+    MARS_VDP_DISPMODE = MARS_224_LINES | MARS_VDP_MODE_256;
+    STEP(0x4E11);                           /* 4E11: mode set, waiting for the palette window (PEN) */
+    palette();
+    STEP(0x4E12);                           /* 4E12: palette written */
+    for (int i = 0; i < 2; i++) {
+        line_table(); clear(C_BLACK);
+        STEP(0x4E13 + i * 2);               /* 4E13 / 4E15: frame buffer written, flipping */
+        flip();
+        STEP(0x4E14 + i * 2);               /* 4E14 / 4E16: flipped */
+    }
+
+    /* SDSAVE-DEMO: the boot counter, a checked record at offset 0 of the EverDrive's save bank */
+    STEP(0x4E17);                           /* 4E17: reading the save bank */
+    int bank = sdsave_present();            /* 1: the launcher's program (EDCD_SAVE=1) */
+    int loaded = sdsave_load_record(SAVE_OFS, SAVE_MAGIC, &boots, sizeof boots);
+    if (loaded != SDSAVE_OK)
+        boots = 0;                          /* none yet (a new bram.srm), or no bank */
+    boots++;
+    STEP(0x4E18);                           /* 4E18: read done, saving */
+    int saved = sdsave_save_record(SAVE_OFS, SAVE_MAGIC, &boots, sizeof boots);
+    cd_status(saved == SDSAVE_OK ? 0x4E01 : (uint16_t)(0x4EA0 - saved));   /* 4E01 saved, 4EA1.. failed */
+
+    /* a data file from the disc into the cart's level slot (file 100 = LEVEL00.BIN, slot 16) */
+    if (cd_load(100))
+        cart_line(file_text, CART_SLOT(16), 39);
+    uint16_t shown = 0;                     /* an error code stays in COMM12 while its box shows */
+    if (!cd_error.code)
+        cd_status(0x4B10);                  /* 4B10: running */
+
+    while (1)
+    {
+        uint16_t pad = cd_pad(0, 0);
+        /* the buttons act when they are RELEASED, as a chord: everything pressed together counts as one
+           press.  So B+C (diagnostic disc) never also runs B's or C's own action. */
+        const uint16_t keys = SEGA_CTRL_A | SEGA_CTRL_B | SEGA_CTRL_C | SEGA_CTRL_START;
+        uint16_t hit = 0;
+        if (prev == 0xFFFF)                 /* buttons held at start don't count */
+        {
+            if (!(pad & keys)) prev = 0;
+        }
+        else
+        {
+            chord |= pad & keys;
+            if (chord && !(pad & keys)) { hit = chord; chord = 0; }
+            prev = pad;
+        }
+
+        if (pad & SEGA_CTRL_LEFT)  x -= 2;
+        if (pad & SEGA_CTRL_RIGHT) x += 2;
+        if (pad & SEGA_CTRL_UP)    y -= 2;
+        if (pad & SEGA_CTRL_DOWN)  y += 2;
+        if (x < 0) x = 0;
+        if (x > 304) x = 304;
+        if (y < 140) y = 140;
+        if (y > 208) y = 208;
+
+        if (HELLO_DIAG_TEXT && hit == (SEGA_CTRL_B | SEGA_CTRL_C))
+        {
+            view_text ^= 1;                 /* diagnostic disc: B+C = green text / hello's screen */
+            cd_genesis_display(view_text);
+            hit = 0;
+        }
+        if (hit & (hit - 1))
+            hit = 0;                        /* any other chord: nothing */
+        if (hit & SEGA_CTRL_A) { cd_music_play(2, 0); music = 1; }
+        if (hit & SEGA_CTRL_B) { cd_music_stop(); music = 0; }
+        if (hit & SEGA_CTRL_C)
+        {
+            music = 0;                      /* cd_load stops the music first */
+            if (cd_load(101))
+                cart_line(file_text, CART_SLOT(16), 39);
+            else
+                file_text[0] = '-', file_text[1] = 0;
+        }
+        if (hit & SEGA_CTRL_START)          /* SDSAVE-DEMO: save the counter again */
+            saved = sdsave_save_record(SAVE_OFS, SAVE_MAGIC, &boots, sizeof boots);
+
+        if (!cd_error.code && shown)
+            cd_status(0x4B10);              /* the error went away (the action worked again) */
+        if (cd_error.code && !shown && view_text)
+        {
+            view_text = 0;                  /* a new error: hello's screen, so no green text covers the box */
+            cd_genesis_display(0);
+        }
+        shown = cd_error.code;
+
+        clear(C_BLACK);                     /* with the Genesis display on (diagnostic view) its text is in front
+                                               of the 32X picture (priority bit 0) wherever it has text */
+        if (view_text)
+        {
+            /* the Genesis text fills all 28 rows, so these go where its rows are short: row 5
+               ("CD DRIVE READY", up to x 128) and row 8 ("68K LISTENER ACTIVE", up to x 168) */
+            pad_words(buf, pad, 18);        /* the pad still works here: one line, in words */
+            text(136, 40, "PAD", C_GREY);   text(168, 40, buf, C_WHITE);
+            text(232, 64, "B+C:HELLO", C_YELLOW);
+            if (cd_error.code)
+                error_box();
+            flip();
+            continue;
+        }
+        text(48, 16, "CD32X BOOTCAMP - SD CARD SAVE", C_YELLOW);
+        box(16, 30, 288, 2, C_BLUE);
+        dec(buf, boots);
+        text(16, 40, "BOOTS:", C_GREY);  text(80, 40, buf, C_WHITE);
+        /* SDSAVE-DEMO: the bank, the load's and the save's results (sdsave.h SDSAVE_E_*) */
+        text(160, 40, saved == SDSAVE_OK ? "SAVED" : "SAVE FAILED", saved == SDSAVE_OK ? C_GREEN : C_RED);
+        text(16, 124, "SD BANK:", C_GREY);  text(88, 124, bank ? "YES" : "NO", bank ? C_GREEN : C_RED);
+        text(208, 124, "LD", C_GREY); dec(buf, (uint32_t)-loaded); text(232, 124, buf, C_WHITE);
+        text(256, 124, "SV", C_GREY); dec(buf, (uint32_t)-saved);  text(280, 124, buf, C_WHITE);
+        pad_words(buf, pad, 30);            /* what is held, in words */
+        text(16, 56, "PAD:", C_GREY);    text(64, 56, buf, C_WHITE);
+        text(16, 72, "FILE:", C_GREY);   text(64, 72, file_text, C_CYAN);
+        text(16, 88, "MUSIC:", C_GREY);  text(72, 88, music ? "TRACK 2" : "OFF", C_WHITE);
+        dec(buf, gTicks / 60);
+        text(160, 88, "SECONDS:", C_GREY); text(232, 88, buf, C_WHITE);
+        text(16, 108, "A MUSIC  B STOP  C FILE  START SAVE", C_GREEN);
+        if (HELLO_DIAG_TEXT)
+            text(232, 98, "B+C:TEXT", C_YELLOW);
+        box(0, 136, 320, 1, C_GREY);
+        box(x, y, 16, 16, C_RED);
+        if (cd_error.code)
+            error_box();
+        flip();
+    }
+    return 0;
+}
