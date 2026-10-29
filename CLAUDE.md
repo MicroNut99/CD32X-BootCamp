@@ -1,0 +1,33 @@
+# Read this first (for an AI working in this repository)
+
+This kit is the CD32X boot stack. The reference material lives in a second repository,
+[MicroNut99/docs](https://github.com/MicroNut99/docs), checked out here as the `manuals/` submodule:
+
+```
+git submodule update --init          # fetches manuals/ (run once after cloning)
+```
+
+## Reading rules
+
+1. **Two documents must be read in full before any work on this stack. Not skimmed, not sampled,
+   not summarised from their headings: every line.**
+   - `manuals/CD32X_COMMAND_LEDGER_ADDITIONS.md`: the master list of every Sub-CPU command, who owns
+     each save piece (§5), the listener routines.
+   - `manuals/CD32X_COMMAND_PROGRAMMING_GUIDE.md`: how a command is added, step by step.
+
+   Read them with the Read tool from top to bottom, in pieces if they're long, until the end of the file.
+   If a tool returns only part of a file, keep reading from where it stopped.
+
+2. **All the manuals must be read**, including the PDFs (`32x_hardware_manual.pdf`,
+   `Mega-CD_Hardware_Manual.pdf`, the Kobo PDFs, the addenda), before changing anything they describe.
+   [docs/08_RESEARCH_INDEX.md](docs/08_RESEARCH_INDEX.md) says what each one is.
+
+3. **The boot stack (`stack/`) is off limits** unless the owner asks for a change to it by name.
+
+4. The emulator follows the hardware: a green run in ares is never a pass for the console
+   ([docs/11](docs/11_ARES_16MB_RAM_CART.md), [docs/13](docs/13_ARES_FOR_AI.md)).
+
+5. Never commit game data, discs, BIOS files or music to this or any public repository.
+
+If `manuals/` is empty, the submodule hasn't been fetched: run the command above. Don't work from
+memory of these documents, and don't substitute the web for them.

@@ -1,0 +1,3 @@
+[submodule "manuals"]
+	path = manuals
+	url = https://github.com/MicroNut99/docs.git
