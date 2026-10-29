@@ -14,6 +14,7 @@ stack/sh2/*.BIN
 *.32x
 # made by build.sh when a game has no music
 hello/music/Track02.wav
+probe/music/Track02.wav
 __pycache__/
 # (data files in <game>/cd/ are NOT ignored, whatever their names)
 *.diagsave
