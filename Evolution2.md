@@ -191,6 +191,11 @@ back into it; only MicroNut99's ares counts, and a green run there is a filter, 
 from the owner's machine (BIOS, discs, data) enters a repository. New from this pass: **when a document
 and the code disagree, the code and the console measurement win; fix the document, say so here.**
 
+When building a new game or app:
+Test the bootstack and the game with this: https://github.com/MicroNut99/ares_android
+Add any successful new bootstack cmds here: https://github.com/MicroNut99/docs/blob/main/CD32X_COMMAND_LEDGER_ADDITIONS.md
+Update the game or apps readme with the new bootstack changes.
+
 ## Read, skimmed, not read
 
 - Read line by line: all of the above.
