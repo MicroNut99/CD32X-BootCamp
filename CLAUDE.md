@@ -34,8 +34,14 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
 
 5. Never commit game data, discs, BIOS files or music to this or any public repository.
 
+6. **[Evolution1.md](Evolution1.md) is required reading, in full, before anything else in this
+   repository.** It is the record of what a previous AI found after reading the whole kit (29 Oct
+   2026): what the stack is, how it boots, the contract for a game, the EverDrive PRO findings and the
+   process rules, in one page. Start from it, not from the folder listing.
+
 ## Reading order (a new AI learns this stack fastest this way)
 
+0. [Evolution1.md](Evolution1.md): the whole kit on one page, as last read.
 1. [README.md](README.md), then [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md): what runs where,
    power-on to `main()`.
 2. The two must-read documents, in full: `manuals/CD32X_COMMAND_LEDGER_ADDITIONS.md`, then
