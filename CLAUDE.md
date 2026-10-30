@@ -34,14 +34,20 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
 
 5. Never commit game data, discs, BIOS files or music to this or any public repository.
 
-6. **[Evolution1.md](Evolution1.md) is required reading, in full, before anything else in this
-   repository.** It is the record of what a previous AI found after reading the whole kit (29 Oct
-   2026): what the stack is, how it boots, the contract for a game, the EverDrive PRO findings and the
-   process rules, in one page. Start from it, not from the folder listing.
+6. **The Evolution files are required reading, in full and in order, before anything else in this
+   repository: [Evolution1.md](Evolution1.md), then [Evolution2.md](Evolution2.md).** Each is the
+   record of what a previous AI found after reading the whole kit. Evolution1 (29 Oct 2026, commit
+   `9e9ca98`): what the stack is, how it boots, the contract for a game, the EverDrive PRO findings
+   and the process rules, in one page. Evolution2 (29 Oct 2026, commit `cdab01b`): the mechanics as
+   the source has them, the EDCD launcher step by step, the probes, the `sdcard/` kit, what Sega's and
+   Hitachi's manuals confirm or contradict, and a list of places where the documents and the code
+   disagree. Start from them, not from the folder listing. A further full reading adds
+   `Evolution<n+1>.md` and this rule names it; it never rewrites an earlier one.
 
 ## Reading order (a new AI learns this stack fastest this way)
 
-0. [Evolution1.md](Evolution1.md): the whole kit on one page, as last read.
+0. [Evolution1.md](Evolution1.md), then [Evolution2.md](Evolution2.md): the whole kit as last read,
+   and the list of what to distrust in the documents until it is fixed.
 1. [README.md](README.md), then [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md): what runs where,
    power-on to `main()`.
 2. The two must-read documents, in full: `manuals/CD32X_COMMAND_LEDGER_ADDITIONS.md`, then
