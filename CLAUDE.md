@@ -24,8 +24,13 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
 
 3. **The boot stack (`stack/`) is off limits** unless the owner asks for a change to it by name.
 
-4. The emulator follows the hardware: a green run in ares is never a pass for the console
-   ([docs/11](docs/11_ARES_16MB_RAM_CART.md), [docs/13](docs/13_ARES_FOR_AI.md)).
+4. **The emulator to test with is the owner's ares build,
+   [MicroNut99/ares_android](https://github.com/MicroNut99/ares_android).** It is made for CD32X,
+   32XCD and EDCD (EverDrive PRO) boot games, and runs regular 32X games too. Use it, from your own
+   container, for every test run: how to build its headless runner, get the disc in, run it and read
+   the result is in [docs/13](docs/13_ARES_FOR_AI.md); what it models and its limits are in
+   [docs/11](docs/11_ARES_16MB_RAM_CART.md) and [`ares/`](ares/). No other emulator counts for this
+   stack. And the emulator follows the hardware: a green run in ares is never a pass for the console.
 
 5. Never commit game data, discs, BIOS files or music to this or any public repository.
 

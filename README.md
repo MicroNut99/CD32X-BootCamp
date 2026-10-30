@@ -229,6 +229,7 @@ The details are in [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md).
 | `tools/` | `prep_rom.py` (checks and marks the ROM), the boot picture, a test music track, the font | No |
 | `docs/` | How it works, the commands, memory maps, rules learned on the console, how the existing games differ | Read it |
 | `manuals/` | [MicroNut99/docs](https://github.com/MicroNut99/docs) as a submodule: the command ledger, the programming guide, the Kobo PDFs, the addenda, Sega's hardware manuals (`git submodule update --init`). The reading rules are in [CLAUDE.md](CLAUDE.md) |
+| [ares_android](https://github.com/MicroNut99/ares_android) | The emulator to test with: the owner's ares build for CD32X, 32XCD and EDCD boot games (and regular 32X games). [docs/13](docs/13_ARES_FOR_AI.md) says how to run it headless from a container |
 | `build.sh` | Builds the game, the loader, the Sub-CPU program and the disc | `GAME=yourfolder` |
 
 ## Bringing your own game

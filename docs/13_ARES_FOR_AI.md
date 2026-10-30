@@ -16,7 +16,7 @@ in ares is never a pass for the console.** ares is a cheap filter for bugs, noth
 
 | What | Where it comes from |
 |---|---|
-| The CD32X ares build's source (ares v148 + the RAM carts + the EverDrive PRO board + `ares-headless`) | The owner's own ares. It is private: ask the owner to add its repository to your session. Its desktop/headless CMake project is in `android/native/`. |
+| The CD32X ares build's source (ares v148 + the RAM carts + the EverDrive PRO board + `ares-headless`) | The owner's own ares: [MicroNut99/ares_android](https://github.com/MicroNut99/ares_android) (`git clone` it into your container). Made for CD32X, 32XCD and EDCD boot games; runs regular 32X games too. Its desktop/headless CMake project is in `android/native/`. |
 | A US Sega CD BIOS (`us.bin`) | The owner's file. Stage it from their computer; never commit it anywhere. |
 | The game's disc (`.cue` + `.bin`) and, for the EverDrive, its launcher (`EDCD_<GAME>.32X`) | The owner's build folder (`S:\KoboPort\sega-toolchain-12.1\sega\<game>`), through the device tools (section 3). Never commit discs or game data. |
 | `cmake`, `ninja`, a C++ compiler, `python3` with Pillow | Usually in the container already (`which cmake ninja g++`; `python3 -c "import PIL"`). |
@@ -212,5 +212,5 @@ container (`find / -name libstdc++.a | grep sh-elf`) and pass it as the Makefile
 - Check the owner's folder against what you tested (section 3), and give the build commands with the
   `cd /mnt/s/KoboPort/sega-toolchain-12.1/sega/<game>` line first.
 - Nothing from the owner's machine goes into a repository: no BIOS, no discs, no game data.
-- Do not name or link the owner's private repositories in any document.
+- Do not name or link the owner's private repositories in any document (ares_android is public; the others are not unless the owner says so).
 - Tell the owner which `_to_delete/` folders hold your temporary files.

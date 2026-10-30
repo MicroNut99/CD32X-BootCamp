@@ -38,6 +38,7 @@
 | [OpenJazzCD32X](https://github.com/MicroNut99/OpenJazzCD32X), [SuperTuxCD32X](https://github.com/MicroNut99/SuperTuxCD32X) | The earlier versions of the REV repositories |
 | [OpenTyrianCD32X](https://github.com/MicroNut99/OpenTyrianCD32X) | The cartridge + CD architecture |
 | [MD-32X-RAM-Cart-32Bit](https://github.com/MicroNut99/MD-32X-RAM-Cart-32Bit) | The RAM cart hardware |
+| [ares_android](https://github.com/MicroNut99/ares_android) | **The emulator for this stack:** ares v148 with the 4 / 16 MB RAM carts and the EverDrive PRO, plus `ares-headless` for testing from a container. Made for CD32X, 32XCD and EDCD boot games; regular 32X games too. How to use it: [docs/13](13_ARES_FOR_AI.md) |
 | [Sonic32XPlus1](https://github.com/MicroNut99/Sonic32XPlus1), [Sonic32XPlus1-RealHardware](https://github.com/MicroNut99/Sonic32XPlus1-RealHardware), [BlakeStone32X](https://github.com/MicroNut99/BlakeStone32X), [AnotherWorld32X](https://github.com/MicroNut99/AnotherWorld32X), [VitualRacing32X](https://github.com/MicroNut99/VitualRacing32X) | 32X cartridge projects (no CD) |
 
 ## Outside
