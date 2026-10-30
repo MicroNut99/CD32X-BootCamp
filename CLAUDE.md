@@ -34,5 +34,22 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
 
 5. Never commit game data, discs, BIOS files or music to this or any public repository.
 
+## Reading order (a new AI learns this stack fastest this way)
+
+1. [README.md](README.md), then [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md): what runs where,
+   power-on to `main()`.
+2. The two must-read documents, in full: `manuals/CD32X_COMMAND_LEDGER_ADDITIONS.md`, then
+   `manuals/CD32X_COMMAND_PROGRAMMING_GUIDE.md`.
+3. The Kobo PDFs in `manuals/`: `KOBO-CD32X_BOOT_PROCESS.pdf`, then `KOBO-Sega 32XCD Boot Sequence
+   and Sub-CPU Command Ledger.pdf` (the root of every disc game here).
+4. [docs/03_COMMANDS.md](docs/03_COMMANDS.md), [docs/04_MEMORY_MAPS.md](docs/04_MEMORY_MAPS.md),
+   [docs/06_HARDWARE_RULES.md](docs/06_HARDWARE_RULES.md): this kit's commands, maps and the rules
+   learned on the console.
+5. Sega's manuals in `manuals/`: `32x_hardware_manual.pdf`, `Mega-CD_Hardware_Manual.pdf`; then the
+   addenda and the rest of `manuals/` ([docs/08](docs/08_RESEARCH_INDEX.md) says what each is).
+6. Testing: [docs/11](docs/11_ARES_16MB_RAM_CART.md), [docs/13](docs/13_ARES_FOR_AI.md), then build
+   ares_android's headless runner and run `hello/`.
+7. Only then [docs/02_PORTING_YOUR_GAME.md](docs/02_PORTING_YOUR_GAME.md) and the game you're here for.
+
 If `manuals/` is empty, the submodule hasn't been fetched: run the command above. Don't work from
 memory of these documents, and don't substitute the web for them.
