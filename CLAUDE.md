@@ -35,18 +35,23 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
 5. Never commit game data, discs, BIOS files or music to this or any public repository.
 
 6. **The Evolution files are required reading, in full and in order, before anything else in this
-   repository: [Evolution1.md](Evolution1.md), then [Evolution2.md](Evolution2.md).** Each is the
+   repository: [Evolution1.md](Evolution1.md), then [Evolution2.md](Evolution2.md), then
+   [Evolution3.md](Evolution3.md).** Each is the
    record of what a previous AI found after reading the whole kit. Evolution1 (29 Oct 2026, commit
    `9e9ca98`): what the stack is, how it boots, the contract for a game, the EverDrive PRO findings
    and the process rules, in one page. Evolution2 (29 Oct 2026, commit `cdab01b`): the mechanics as
    the source has them, the EDCD launcher step by step, the probes, the `sdcard/` kit, what Sega's and
    Hitachi's manuals confirm or contradict, and a list of places where the documents and the code
-   disagree. Start from them, not from the folder listing. A further full reading adds
-   `Evolution<n+1>.md` and this rule names it; it never rewrites an earlier one.
+   disagree. Evolution3 (31 Oct 2026, commit `a8c8afd`): the kit read against the eight repositories
+   around it (every port's Sub-CPU program, krikzz's EverDrive PRO sources) - the command-number and
+   save-piece clashes the ledger had missed (62, 69, 74; piece 12), each port's listener numbering, what
+   krikzz's RTL confirms of the console findings, and the EverDrive's SD-card path with a preload design
+   (`manuals/MegaEverDrivePro_SDCARD.md`). Start from them, not from the folder listing. A further full
+   reading adds `Evolution<n+1>.md` and this rule names it; it never rewrites an earlier one.
 
 ## Reading order (a new AI learns this stack fastest this way)
 
-0. [Evolution1.md](Evolution1.md), then [Evolution2.md](Evolution2.md): the whole kit as last read,
+0. [Evolution1.md](Evolution1.md), [Evolution2.md](Evolution2.md), then [Evolution3.md](Evolution3.md): the whole kit as last read,
    and the list of what to distrust in the documents until it is fixed.
 1. [README.md](README.md), then [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md): what runs where,
    power-on to `main()`.
