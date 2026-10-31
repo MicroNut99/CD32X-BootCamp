@@ -50,6 +50,15 @@ ifeq ($(GENPLANE),1)
 ASFLAGS_GENPLANE = --defsym DX_GENPLANE=1
 endif
 # DX-GENPLANE end
+# DX-VSPLIT begin
+# VSPLIT=1 (needs GENPLANE=1): command 78, the V scroll changed part-way down the screen by the Genesis H
+# interrupt (hw_md.s set_vs_line / hint_vs, MD 38).  Without it: unchanged.
+VSPLIT ?= 0
+HWFLAGS += -DDX_VSPLIT=$(VSPLIT)
+ifeq ($(VSPLIT),1)
+ASFLAGS_GENPLANE += --defsym DX_VSPLIT=1
+endif
+# DX-VSPLIT end
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional
 # DX-GENPLANE begin

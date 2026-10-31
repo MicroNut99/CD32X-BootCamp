@@ -24,11 +24,15 @@
         .equ    MD_CMD_COPY_FROM_CART, 24
         .equ    MD_CMD_COPY_WORDS, 25
         .equ    MD_CMD_SAFE_CART_XFER, 26
+.ifdef DX_VSPLIT                            | DX-VSPLIT begin
+        .equ    MD_CMD_END, 39              /* + set_vs_line (38): VSPLIT, V scroll changed part-way down */
+.else                                       | DX-VSPLIT else
 .ifdef DX_GENPLANE                          | DX-GENPLANE begin
         .equ    MD_CMD_END, 38              /* + set_vsram (36), copy_vram_col (37): SuperTux REV2 / REV4 */
 .else                                       | DX-GENPLANE else
         .equ    MD_CMD_END, 36              /* KOBO K19: + set_vdp_reg (34); D32X M1: + start_d32xr (35) */
 .endif                                      | DX-GENPLANE end
+.endif                                      | DX-VSPLIT end
 
 | MODE1-1 (Makefile MODE1=1, docs/12): the listener for a CARTRIDGE boot (the Sega CD's "mode 1"), started
 | by edboot/EDCD.32X from a Mega EverDrive PRO.  There the cart is at 0x000000 and the Sega CD at 0x400000
@@ -334,7 +338,13 @@ md_check:
         add.w   d0,d0
         lea     cmd_table(pc),a0
         move.w  0(a0,d0.w),d0
+.ifdef DX_VSPLIT                            | DX-VSPLIT begin
+        move.w  #0x2400,sr              | VSPLIT: no H interrupt while a routine programs the VDP (the
+        jsr     0(a0,d0.w)              | handler's VSRAM write would move the VDP's address mid-copy);
+        move.w  #0x2000,sr              | a split due meanwhile runs late, at the end of the routine
+.else                                       | DX-VSPLIT else
         jsr     0(a0,d0.w)
+.endif                                      | DX-VSPLIT end
         move.l  d0,0xA12010
 3:
         lea     16(sp),sp
@@ -406,6 +416,106 @@ cmd_table:
 .ifdef DX_GENPLANE                          | DX-GENPLANE begin
         .word   set_vsram - cmd_table           /* 36  SuperTux REV2 */
         .word   copy_vram_col - cmd_table       /* 37  SuperTux REV4 */
+.ifdef DX_VSPLIT                            | DX-VSPLIT begin
+        .word   set_vs_line - cmd_table         /* 38  VSPLIT */
+
+| VSPLIT (needs GENPLANE): the V scroll of planes A and B changed part-way down the screen, from a list of
+| up to 16 entries, by the Genesis H interrupt (level 4, every line).  Mega-CD manual: on H-INT the main
+| CPU jumps to (the high word of the vector at $70) | (the word in $A12006), so $A12006 = the low word of
+| hint_vs (this listener runs in work RAM at $FF1000).
+|
+| void set_vs_line(int index, int entry): index 0-15 = put entry (line << 20 | V scroll A << 10 | V scroll B)
+| into the list; index 0x8000 | count = use the list's first count entries from now on (0 = off: H interrupt
+| disabled).  Entry 0 is the top of the picture (its line is ignored); the others must be in line order.
+| Runs in the command loop with level 4 masked (the dispatcher), so the list never changes under hint_vs.
+set_vs_line:
+        move.l  4(sp),d0
+        move.l  8(sp),d1
+        lea     vs_vars(pc),a1
+        btst    #15,d0
+        bne.b   1f
+        andi.w  #15,d0
+        lsl.w   #2,d0
+        move.l  d1,4(a1,d0.w)           | vs_list[index]
+        moveq   #0,d0
+        rts
+1:
+        andi.w  #31,d0
+        cmpi.w  #16,d0
+        bls.b   2f
+        moveq   #16,d0
+2:
+        move.w  d0,(a1)                 | vs_count
+        move.w  #1,2(a1)                | vs_pos: the next entry after the top one
+        lea     0xC00004,a0
+        tst.w   d0
+        beq.b   4f
+        move.w  #0x8F02,(a0)
+        move.l  #0x40000010,(a0)        | VSRAM 0: the top entry now
+        move.l  4(a1),d1
+        move.l  d1,d0
+        lsr.l   #8,d0
+        lsr.l   #2,d0
+        andi.w  #0x3FF,d0
+        move.w  d0,0xC00000             | plane A
+        andi.w  #0x3FF,d1
+        move.w  d1,0xC00000             | plane B
+        lea     hint_vs(pc),a1
+        move.w  a1,0xA12006             | the H-INT vector's low word -> hint_vs
+        move.w  #0x8A00,(a0)            | H interrupt every line
+        move.w  #0x8014,(a0)            | register 0: IE1 (H interrupt) on
+        moveq   #0,d0
+        rts
+4:
+        move.w  #0x8004,(a0)            | register 0: H interrupt off
+        moveq   #0,d0
+        rts
+
+| the H interrupt, at the end of every line: set up the next line if an entry starts there; after the last
+| line put the top entry back for the next picture
+hint_vs:
+        movem.l d0-d2/a0-a1,-(sp)
+        lea     vs_vars(pc),a1
+        move.w  0xC00008,d0
+        lsr.w   #8,d0                   | V counter: the line just drawn
+        addq.w  #1,d0                   | the line about to be drawn
+        cmpi.w  #224,d0
+        blo.b   1f
+        move.w  #1,2(a1)                | the picture is over: back to the top entry
+        moveq   #0,d2
+        bra.b   3f
+1:
+        move.w  2(a1),d2                | vs_pos
+        cmp.w   (a1),d2
+        bhs.b   9f
+        lsl.w   #2,d2
+        move.l  4(a1,d2.w),d1
+        swap    d1
+        lsr.w   #4,d1                   | its line
+        cmp.w   d1,d0
+        blo.b   9f                      | not yet
+        addq.w  #1,2(a1)
+3:
+        move.l  4(a1,d2.w),d1
+        lea     0xC00004,a0
+        move.w  #0x8F02,(a0)
+        move.l  #0x40000010,(a0)
+        move.l  d1,d0
+        lsr.l   #8,d0
+        lsr.l   #2,d0
+        andi.w  #0x3FF,d0
+        move.w  d0,0xC00000
+        andi.w  #0x3FF,d1
+        move.w  d1,0xC00000
+9:
+        movem.l (sp)+,d0-d2/a0-a1
+        rte
+
+        .align  2
+vs_vars:
+        .word   0, 1                    | vs_count, vs_pos
+        .long   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0     | vs_list[16]
+.endif                                      | DX-VSPLIT end
 
 | DX-GENPLANE: SuperTux CD32X REV's two listener routines, unchanged (MicroNut99/SuperTuxCD32X_REV
 | cd32x/subcpu/hw_md.s).

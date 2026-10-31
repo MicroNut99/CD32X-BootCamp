@@ -61,14 +61,16 @@ status, is the command ledger in https://github.com/MicroNut99/docs: the Kobo PD
 | **65** | VDP register | COMM2 = `0x8000 \| reg << 8 \| value` (registers 0–23) | — | MD 34 `set_vdp_reg` |
 | **66** | V scroll | COMM2 = VSRAM byte address (0 plane A, 2 plane B); COMM8 (high 16) = the value | — | MD 36 `set_vsram` (GENPLANE) |
 | **67** | cart → VRAM map columns | COMM2 = VRAM address of the first column's top word; COMM8L = (columns − 1) << 30 \| words a column << 22 \| cart offset | COMM12 = 1 ok, 0 refused | 1–4 columns of 1–255 words, 128 bytes apart (a 64-cell plane); all inside one 1 MB bank of the window. MD 37 `copy_vram_col` (GENPLANE) |
+| **78** | V scroll line split | COMM2 = index 0–15: COMM8L = entry (line << 20 \| V scroll A << 10 \| V scroll B); COMM2 = `0x8000 \| count`: use the first count entries from now (0 = off) | — | **Only in `VSPLIT=1` builds (needs `GENPLANE=1`).** Entry 0 = the top of the picture, the others in line order. The Genesis H interrupt (every line, level 4; `$A12006` → `hint_vs`) writes VSRAM where an entry starts and puts entry 0 back after line 223. Level 4 is masked while any listener routine runs, so a split due then lands late on that picture. MD 38 `set_vs_line` |
 
 **Free numbers.** Free on every stack, per the ledger's list:
 
 - 39–43, 49, 55;
-- 76–79, and 81 and up (72–75 went to Rayman and `sdcard/` on 26–27 Oct: ledger §17-18).
+- 79, and 81 and up (72–75 went to Rayman and `sdcard/` on 26–27 Oct, ledger §17-18; 76 / 77 are kept for
+  `sdcard/`'s move off 74 / 75, §18; 78 is `VSPLIT`'s, 31 Oct).
 
 Do not take these: 62–67 (this stack's `GENPLANE`, SuperTux REV, Rayman), 67 and 69–71 (OpenJazz REV), 72–75
-(Rayman, `sdcard/`), 80 (Sonic CD 2011).
+(Rayman, `sdcard/`), 76–77 (`sdcard/`'s move), 78 (this stack's `VSPLIT`), 80 (Sonic CD 2011).
 
 A number must never mean two things on any stack. Your command must sit behind a build switch in
 `main.c`, which is compiled with **HWFLAGS** (not CCFLAGS).
@@ -117,6 +119,7 @@ run time:
 | 34 | `SET_VDP_REG` | One Genesis VDP register |
 | 5 / 7 / 12 | `set_vram` / `copy_vram` / `set_palette` | One VRAM word / words from the 68000's map (the cart window) to VRAM / colours to CRAM: Chilly's, used by 62 / 63 / 64 |
 | 36 / 37 | `set_vsram` / `copy_vram_col` | **`GENPLANE=1` only** (`MD_CMD_END` 38, else 36): one VSRAM word; `copy_vram` with the auto-increment at 128 (a map column). SuperTux REV2 / REV4's routines, unchanged |
+| 38 | `set_vs_line` | **`VSPLIT=1` only** (`MD_CMD_END` 39): the split list of command 78; with it, the H interrupt handler `hint_vs` and the dispatcher's level-4 mask during every routine |
 | 18 | `INIT_32X` | The 32X power-up (boot only) |
 
 **Rule:** the 68000 reads the Sub-CPU's command flag twice and acts only when both reads match (HW10). A

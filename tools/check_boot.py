@@ -10,8 +10,9 @@ Every source file of stack/subcpu and stack/sh2 is compared with stack/BOOT_FILE
 differ without failing the check:
   - stack/subcpu/game_files.h  (your file names: not part of the hash list, but it may hold only
                                 #defines and lists of 8.3 file names - it is compiled into main.c)
-  - the blocks marked DX-GENPLANE (build switch GENPLANE, default 0: commands 62-67, listener 36 / 37):
-    taken out before the hash, and checked exactly against stack/GENPLANE_BLOCKS.md5 instead
+  - the blocks marked DX-GENPLANE (build switch GENPLANE, default 0: commands 62-67, listener 36 / 37) and
+    DX-VSPLIT (VSPLIT, default 0: command 78, listener 38 and the H interrupt): taken out before the hash,
+    and checked exactly against stack/GENPLANE_BLOCKS.md5 instead
   - the four lines of the diagnostic disc (tools/diag_switch.py: KOBO_DIAG_TEXT, KOBO_BOOT_TEXT in main.c,
     the display line in hw_md.s, the CMD 52 argument in cdloader_sh2.c): either their release or their
     diagnostic form is accepted (build.sh checks a release disc has the release lines).
@@ -42,7 +43,13 @@ def files():
     return out
 
 
-GENPLANE = re.compile(rb"^[^\n]*DX-GENPLANE begin[^\n]*\n(?:.*?\n)??(?:[^\n]*DX-GENPLANE else[^\n]*\n(?P<orig>.*?\n)??)?[^\n]*DX-GENPLANE end[^\n]*\n", re.M | re.S)
+def _block(name):
+    return re.compile(rb"^[^\n]*DX-" + name + rb" begin[^\n]*\n(?:.*?\n)??(?:[^\n]*DX-" + name + rb" else[^\n]*\n(?P<orig>.*?\n)??)?[^\n]*DX-" + name + rb" end[^\n]*\n", re.M | re.S)
+
+
+# the switched blocks, outermost first (a VSPLIT block's 'else' part may hold a GENPLANE block)
+SWITCHED = [_block(b"VSPLIT"), _block(b"GENPLANE")]
+GENPLANE = SWITCHED[-1]
 
 
 BLOCKS = os.path.join(ROOT, "stack", "GENPLANE_BLOCKS.md5")
@@ -53,13 +60,18 @@ def strip_genplane(data):
     listener routines 36 / 37, behind the build switch GENPLANE (default 0).  The blocks marked DX-GENPLANE
     come out; a block with an 'else' part keeps that part (the original line).  What is left must be the
     console-proven stack of BOOT_FILES.md5; the blocks themselves are fingerprinted in GENPLANE_BLOCKS.md5."""
-    return GENPLANE.sub(lambda m: m.group("orig") or b"", data)
+    for rx in SWITCHED:
+        data = rx.sub(lambda m: m.group("orig") or b"", data)
+    return data
 
 
 def genplane_blocks(rel):
     """the md5 of every DX-GENPLANE block of a file, in order (empty string: the file has none)"""
     data = open(os.path.join(ROOT, rel), "rb").read().replace(b"\r\n", b"\n")
-    found = [m.group(0) for m in GENPLANE.finditer(data)]
+    found = []
+    for rx in SWITCHED:
+        found += [m.group(0) for m in rx.finditer(data)]
+        data = rx.sub(lambda m: m.group("orig") or b"", data)
     return hashlib.md5(b"".join(found)).hexdigest() if found else ""
 
 

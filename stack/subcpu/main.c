@@ -256,6 +256,9 @@ static void cd_chunk_read(uint8_t *dst, int lba, int n, int file_end)
 #define MD_CMD_SET_VSRAM      36         /* SuperTux REV2: hw_md.s set_vsram(addr, word) */
 #define MD_CMD_COPY_VRAM_COL  37         /* SuperTux REV4: hw_md.s copy_vram_col(addr, src, words) */
 #endif /* DX-GENPLANE end */
+#if DX_VSPLIT /* DX-VSPLIT begin */
+#define MD_CMD_SET_VS_LINE    38         /* VSPLIT: hw_md.s set_vs_line(index, entry) */
+#endif /* DX-VSPLIT end */
 /* KOBO K19: hw_md.s set_vdp_reg - one VDP register word */
 
 /* KOBO K19 - GREEN DIAGNOSTIC TEXT.  1 = printed as before (C on the pad shows/hides it).
@@ -1378,6 +1381,19 @@ hb_done:    ;
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
 #endif /* DX-GENPLANE end */
+#if DX_VSPLIT /* DX-VSPLIT begin */
+        /* VSPLIT (Dracula X CD32X, D4: stage 8's raster bands; needs GENPLANE) - 78 "V scroll line split":
+           the V scroll of planes A and B changed part-way down the screen by the Genesis H interrupt.
+             COMM2 = index 0-15: COMM8L = entry (line << 20 | V scroll A << 10 | V scroll B) into the list;
+             COMM2 = 0x8000 | count: use the first count entries from now (0 = off).
+           Entry 0 = the top of the picture; the others in line order.  MD 38 set_vs_line. */
+        else if (cmd == 78) {
+            int a = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF;
+            uint32_t e = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128);
+            do_md_cmd2(MD_CMD_SET_VS_LINE, a, (int)e);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
+        }
+#endif /* DX-VSPLIT end */
         else if (cmd == 53) {
             /* K33 - CMD 53 "load sound effects": KOBOSFX.BIN -> PCM chip.  Reply in COMM12:
                number of effects (0 = failed). */
