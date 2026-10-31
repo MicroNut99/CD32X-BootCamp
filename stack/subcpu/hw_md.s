@@ -335,13 +335,27 @@ md_check:
         move.l  #-1,0xA12010
         cmpi.b  #MD_CMD_END,d0
         bhs.b   3f
+.ifdef DX_VSPLIT                            | DX-VSPLIT begin
+        move.w  #0x2400,d1              | VSPLIT: the routines that touch the VDP run with the H interrupt
+        cmpi.b  #3,d0                   | masked (the handler's VSRAM write would move the VDP's address
+        beq.b   4f                      | mid-copy; a split due meanwhile runs late). D5: the ones that
+        cmpi.b  #11,d0                  | don't - get_pad (3), delay (11) and the 32X register reads and
+        beq.b   4f                      | writes (19-22) every command makes - run with it on, so they
+        cmpi.b  #19,d0                  | never hold a split back
+        blo.b   5f
+        cmpi.b  #22,d0
+        bhi.b   5f
+4:
+        move.w  #0x2000,d1
+5:
+.endif                                      | DX-VSPLIT end
         add.w   d0,d0
         lea     cmd_table(pc),a0
         move.w  0(a0,d0.w),d0
 .ifdef DX_VSPLIT                            | DX-VSPLIT begin
-        move.w  #0x2400,sr              | VSPLIT: no H interrupt while a routine programs the VDP (the
-        jsr     0(a0,d0.w)              | handler's VSRAM write would move the VDP's address mid-copy);
-        move.w  #0x2000,sr              | a split due meanwhile runs late, at the end of the routine
+        move.w  d1,sr
+        jsr     0(a0,d0.w)
+        move.w  #0x2000,sr
 .else                                       | DX-VSPLIT else
         jsr     0(a0,d0.w)
 .endif                                      | DX-VSPLIT end
@@ -425,9 +439,14 @@ cmd_table:
 | hint_vs (this listener runs in work RAM at $FF1000).
 |
 | void set_vs_line(int index, int entry): index 0-15 = put entry (line << 20 | V scroll A << 10 | V scroll B)
-| into the list; index 0x8000 | count = use the list's first count entries from now on (0 = off: H interrupt
-| disabled).  Entry 0 is the top of the picture (its line is ignored); the others must be in line order.
-| Runs in the command loop with level 4 masked (the dispatcher), so the list never changes under hint_vs.
+| into the list being filled; index 0x8000 | count = show that list, its first count entries (0 = off: H
+| interrupt disabled at once).  Entry 0 is the top of the picture (its line is ignored); the others must be
+| in line order.
+| D5 (31 Oct 2026): two lists.  Entries go into the one not shown, so the picture on screen never changes
+| under it; a commit while the splits run only marks the filled list pending, and hint_vs switches to it
+| at the end of the picture (line 224: the same vblank at which the 32X shows a swapped frame).  The first
+| commit (splits off until then) shows the list at once.
+| Runs in the command loop with level 4 masked (the dispatcher), so nothing changes under hint_vs.
 set_vs_line:
         move.l  4(sp),d0
         move.l  8(sp),d1
@@ -436,7 +455,9 @@ set_vs_line:
         bne.b   1f
         andi.w  #15,d0
         lsl.w   #2,d0
-        move.l  d1,4(a1,d0.w)           | vs_list[index]
+        add.w   4(a1),d0
+        eori.w  #64,d0                  | the list not shown
+        move.l  d1,8(a1,d0.w)
         moveq   #0,d0
         rts
 1:
@@ -445,14 +466,23 @@ set_vs_line:
         bls.b   2f
         moveq   #16,d0
 2:
-        move.w  d0,(a1)                 | vs_count
-        move.w  #1,2(a1)                | vs_pos: the next entry after the top one
-        lea     0xC00004,a0
+        move.w  #-1,6(a1)               | nothing pending
         tst.w   d0
         beq.b   4f
+        tst.w   (a1)
+        beq.b   5f
+        move.w  d0,6(a1)                | the splits run: switch at the end of this picture
+        moveq   #0,d0
+        rts
+5:
+        move.w  d0,(a1)                 | the first list: shown now
+        eori.w  #64,4(a1)
+        move.w  #1,2(a1)                | vs_pos: the next entry after the top one
+        lea     0xC00004,a0
         move.w  #0x8F02,(a0)
         move.l  #0x40000010,(a0)        | VSRAM 0: the top entry now
-        move.l  4(a1),d1
+        move.w  4(a1),d0
+        move.l  8(a1,d0.w),d1
         move.l  d1,d0
         lsr.l   #8,d0
         lsr.l   #2,d0
@@ -467,12 +497,13 @@ set_vs_line:
         moveq   #0,d0
         rts
 4:
-        move.w  #0x8004,(a0)            | register 0: H interrupt off
+        move.w  d0,(a1)                 | count 0
+        move.w  #0x8004,0xC00004        | register 0: H interrupt off
         moveq   #0,d0
         rts
 
 | the H interrupt, at the end of every line: set up the next line if an entry starts there; after the last
-| line put the top entry back for the next picture
+| line switch to a pending list, and put the top entry back for the next picture
 hint_vs:
         movem.l d0-d2/a0-a1,-(sp)
         lea     vs_vars(pc),a1
@@ -481,7 +512,13 @@ hint_vs:
         addq.w  #1,d0                   | the line about to be drawn
         cmpi.w  #224,d0
         blo.b   1f
-        move.w  #1,2(a1)                | the picture is over: back to the top entry
+        move.w  6(a1),d1                | the picture is over: a pending list?
+        bmi.b   2f
+        move.w  d1,(a1)
+        move.w  #-1,6(a1)
+        eori.w  #64,4(a1)               | it is shown from the next picture
+2:
+        move.w  #1,2(a1)                | back to the top entry
         moveq   #0,d2
         bra.b   3f
 1:
@@ -489,14 +526,17 @@ hint_vs:
         cmp.w   (a1),d2
         bhs.b   9f
         lsl.w   #2,d2
-        move.l  4(a1,d2.w),d1
+        move.w  d2,d1
+        add.w   4(a1),d1
+        move.l  8(a1,d1.w),d1
         swap    d1
         lsr.w   #4,d1                   | its line
         cmp.w   d1,d0
         blo.b   9f                      | not yet
         addq.w  #1,2(a1)
 3:
-        move.l  4(a1,d2.w),d1
+        add.w   4(a1),d2
+        move.l  8(a1,d2.w),d1
         lea     0xC00004,a0
         move.w  #0x8F02,(a0)
         move.l  #0x40000010,(a0)
@@ -513,8 +553,9 @@ hint_vs:
 
         .align  2
 vs_vars:
-        .word   0, 1                    | vs_count, vs_pos
-        .long   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0     | vs_list[16]
+        .word   0, 1, 0, -1             | vs_count, vs_pos, the shown list (0 / 64 bytes), pending count (-1 none)
+        .long   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0     | list 0
+        .long   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0     | list 1
 .endif                                      | DX-VSPLIT end
 
 | DX-GENPLANE: SuperTux CD32X REV's two listener routines, unchanged (MicroNut99/SuperTuxCD32X_REV

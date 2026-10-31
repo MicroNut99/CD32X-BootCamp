@@ -1385,8 +1385,10 @@ hb_done:    ;
         /* VSPLIT (Dracula X CD32X, D4: stage 8's raster bands; needs GENPLANE) - 78 "V scroll line split":
            the V scroll of planes A and B changed part-way down the screen by the Genesis H interrupt.
              COMM2 = index 0-15: COMM8L = entry (line << 20 | V scroll A << 10 | V scroll B) into the list;
-             COMM2 = 0x8000 | count: use the first count entries from now (0 = off).
-           Entry 0 = the top of the picture; the others in line order.  MD 38 set_vs_line. */
+             COMM2 = 0x8000 | count: show that list, its first count entries (0 = off).
+           Entry 0 = the top of the picture; the others in line order.  MD 38 set_vs_line.
+           D5: two lists - entries go into the one not shown; a commit while the splits run takes effect
+           at the end of the picture (the vblank of a 32X swap requested after it). */
         else if (cmd == 78) {
             int a = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF;
             uint32_t e = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128);

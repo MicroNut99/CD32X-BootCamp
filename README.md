@@ -84,7 +84,7 @@ Sub-CPU code is the code OpenLara CD32X ran on the console. Each one is tested i
 | `SLOTS=1` | CMD 61 bit 8 writes OpenLara's save-slot area at `0x060000`. That is inside this kit's ROM area: leave it off. |
 | `CART=8` / `CART=16` | The 8 / 16 MB paged-cart test build, with CMD 68 |
 | `GENPLANE=1` | The Genesis picture commands 62-67 (SuperTux CD32X REV's: VRAM word, cart → VRAM, cart → CRAM, VDP register, V scroll, map columns) and listener routines 36 / 37: a game puts its background on the Genesis planes, the 32X draws in front ([docs/03](docs/03_COMMANDS.md)). `build.sh` stops if the switch did not reach `main.c` and the listener |
-| `VSPLIT=1` | With `GENPLANE=1`: command 78, the planes' V scroll changed part-way down the screen by the Genesis H interrupt (listener routine 38 and `hint_vs`): raster bands with different vertical offsets, up to 16 changes a picture ([docs/03](docs/03_COMMANDS.md)) |
+| `VSPLIT=1` | With `GENPLANE=1`: command 78, the planes' V scroll changed part-way down the screen by the Genesis H interrupt (listener routine 38 and `hint_vs`): raster bands with different vertical offsets, up to 16 changes a picture; the list is double-buffered, so a new one shows from the next vblank, with the 32X frame swapped then ([docs/03](docs/03_COMMANDS.md)) |
 
 **The game** (`hello/Makefile`): `build.sh` passes `DIAG` on to it as `HELLO_DIAG_TEXT`. Your own
 game's Makefile may use it or ignore it.
