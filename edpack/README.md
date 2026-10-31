@@ -13,7 +13,7 @@ bank (word 0 of a bank is its seed). At run time nothing is written: CTRL0 = P o
 runs), each bank is mapped into window 1 and read by the 68000 (RV = 1) and both SH2s (cache-through).
 
 ```
-bash edpack/build.sh          # -> edpack/EDPACK.32X (14 MB)
+bash edpack/build.sh          # -> edpack/EDPACK_14MB.32X (14 MB)
 ```
 
 Copy it to the card, start it from the menu with the 32X attached, no disc. Time the menu's load with a

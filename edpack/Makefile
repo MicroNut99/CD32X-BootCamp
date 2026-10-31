@@ -1,6 +1,6 @@
 # edpack - does the EverDrive PRO menu load a 14 MB .32X whole?  edtest's 68000 side, a read-only SH2 program
 #   make ROOTDIR=/opt/toolchains/sega PACK_NONCE=0x1234   -> edpack.32x (512 KB: bank 0 of the probe)
-#   edpack/build.sh then pads it to 14 MB with tools/pad_markers.py (the same nonce) -> EDPACK.32X
+#   edpack/build.sh then pads it to 14 MB with tools/pad_markers.py (the same nonce) -> EDPACK_14MB.32X
 ROOTDIR ?= /opt/toolchains/sega
 SHROOT  ?= $(ROOTDIR)
 MDROOT  ?= $(ROOTDIR)
