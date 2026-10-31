@@ -41,8 +41,20 @@ HWFLAGS += -DOL_FMVRING=$(FMVRING)
 # than bytes (command 33).  OpenLara's default is on; 0 builds the copy as before.
 CARTW ?= 0
 HWFLAGS += -DOL_CARTW=$(CARTW)
+# DX-GENPLANE begin
+# GENPLANE=1: SuperTux CD32X REV's Genesis picture commands 62-67 (main.c, built with HWFLAGS) and their
+# listener routines 36 / 37 (hw_md.s).  Without it: unchanged.  Ledger section 1 / 2.
+GENPLANE ?= 0
+HWFLAGS += -DDX_GENPLANE=$(GENPLANE)
+ifeq ($(GENPLANE),1)
+ASFLAGS_GENPLANE = --defsym DX_GENPLANE=1
+endif
+# DX-GENPLANE end
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional
+# DX-GENPLANE begin
+ASFLAGS += $(ASFLAGS_GENPLANE)
+# DX-GENPLANE end
 # MODE1-1: make CDROMPlayer.bin MODE1=1 - the listener for a cartridge boot (hw_md.s, OL_MODE1), the
 # program edboot/EDCD.32X loads into the Sega CD itself.  Without MODE1: unchanged.  build.sh EDCD=1
 # builds it in a copy of this folder; the disc always gets the normal program.

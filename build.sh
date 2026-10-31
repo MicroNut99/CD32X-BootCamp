@@ -8,7 +8,7 @@
 #   SEGA_TOOLCHAIN=<folder>             the same, plus <folder>/usr/bin on PATH (genisoimage)
 #   DIAG=1                              the diagnostic disc: the stack's boot text on (docs/09_ERROR_CODES.md)
 #   REGION=US | EU | JP                 the boot block for the console's region (default US; only US is tested)
-#   STREAM= CARTW= FMVRING= SLOTS= CART= the Sub-CPU's build switches (stack/subcpu/Makefile; all off by default)
+#   STREAM= CARTW= FMVRING= SLOTS= CART= GENPLANE= the Sub-CPU's build switches (stack/subcpu/Makefile; all off by default)
 #   EDCD=1                              also edboot/EDCD.32X: the disc started from a Mega EverDrive PRO, which
 #                                       stays the cartridge (docs/12_CARTRIDGE_BOOT.md).  The disc still boots
 #                                       the normal way too (its game ROM's 68000 jump table is the only change).
@@ -103,7 +103,14 @@ make -C "$HERE/stack/sh2" -f Makefile.cdloader ROOTDIR="$ROOTDIR"
 echo "==> 5. the Sub-CPU program + the disc image (stack/subcpu)"
 # REGION=EU / JP: the toolchain's EU_BOOT.BIN / JP_BOOT.BIN boot block for those consoles (only US is tested)
 case "${REGION:-US}" in US|EU|JP) ;; *) echo "*** REGION must be US, EU or JP"; exit 1;; esac
-cd "$HERE/stack/subcpu" && make clean > /dev/null && make cd ROOTDIR="$ROOTDIR" BOOTBLOCK="$ROOTDIR/bootblocks/${REGION:-US}_BOOT.BIN"
+cd "$HERE/stack/subcpu" && make clean > /dev/null && make cd ROOTDIR="$ROOTDIR" BOOTBLOCK="$ROOTDIR/bootblocks/${REGION:-US}_BOOT.BIN" 2>&1 | tee "$HERE/stack/subcpu/make.log"; [ "${PIPESTATUS[0]}" = 0 ] || exit 1
+# DX-GENPLANE: GENPLANE=1 must reach main.c (HWFLAGS) and the listener (ASFLAGS) - an unanswered command looks
+# like a hang (ledger section 7a), so stop here if either is missing
+if [ "${GENPLANE:-0}" = 1 ]; then
+  grep -E "gcc .*-DDX_GENPLANE=1 .*main\.c" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** GENPLANE=1 did not reach main.c"; exit 1; }
+  "$ROOTDIR/m68k-elf/bin/m68k-elf-nm" "$HERE/stack/subcpu/CDROMPlayer.elf" | grep -q " copy_vram_col$" || { echo "*** GENPLANE=1: the listener has no copy_vram_col"; exit 1; }
+  echo "==> GENPLANE=1: commands 62-67 in main.c, listener routines 36 / 37 in hw_md.s"
+fi
 ISO="$HERE/stack/subcpu/CDROMPlayer.iso"
 grep -a -q "SH2-OPENLARA-CD-OL1-LOADER" "$ISO" || { echo "*** the disc has no CDLOADER - stopping"; exit 1; }
 [ -f "$HERE/stack/subcpu/cd/$ROMNAME" ] || { echo "*** $ROMNAME (GAME_ROM_NAME) is not on the disc - stopping"; exit 1; }

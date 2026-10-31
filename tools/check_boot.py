@@ -4,11 +4,14 @@
     python3 tools/check_boot.py            check (build.sh runs it first; exit 1 = changed)
     python3 tools/check_boot.py --update   write stack/BOOT_FILES.md5 again (only when you MEANT to change
                                            the stack, and you have run the new one on a console)
+    python3 tools/check_boot.py --update-genplane   write stack/GENPLANE_BLOCKS.md5 again (the switched blocks)
 
 Every source file of stack/subcpu and stack/sh2 is compared with stack/BOOT_FILES.md5.  Two things may
 differ without failing the check:
   - stack/subcpu/game_files.h  (your file names: not part of the hash list, but it may hold only
                                 #defines and lists of 8.3 file names - it is compiled into main.c)
+  - the blocks marked DX-GENPLANE (build switch GENPLANE, default 0: commands 62-67, listener 36 / 37):
+    taken out before the hash, and checked exactly against stack/GENPLANE_BLOCKS.md5 instead
   - the four lines of the diagnostic disc (tools/diag_switch.py: KOBO_DIAG_TEXT, KOBO_BOOT_TEXT in main.c,
     the display line in hw_md.s, the CMD 52 argument in cdloader_sh2.c): either their release or their
     diagnostic form is accepted (build.sh checks a release disc has the release lines).
@@ -39,8 +42,29 @@ def files():
     return out
 
 
-def digest(rel):
+GENPLANE = re.compile(rb"^[^\n]*DX-GENPLANE begin[^\n]*\n(?:.*?\n)??(?:[^\n]*DX-GENPLANE else[^\n]*\n(?P<orig>.*?\n)??)?[^\n]*DX-GENPLANE end[^\n]*\n", re.M | re.S)
+
+
+BLOCKS = os.path.join(ROOT, "stack", "GENPLANE_BLOCKS.md5")
+
+
+def strip_genplane(data):
+    """GENPLANE (31 Oct 2026, the owner's request): SuperTux CD32X REV's Genesis picture commands 62-67 and
+    listener routines 36 / 37, behind the build switch GENPLANE (default 0).  The blocks marked DX-GENPLANE
+    come out; a block with an 'else' part keeps that part (the original line).  What is left must be the
+    console-proven stack of BOOT_FILES.md5; the blocks themselves are fingerprinted in GENPLANE_BLOCKS.md5."""
+    return GENPLANE.sub(lambda m: m.group("orig") or b"", data)
+
+
+def genplane_blocks(rel):
+    """the md5 of every DX-GENPLANE block of a file, in order (empty string: the file has none)"""
     data = open(os.path.join(ROOT, rel), "rb").read().replace(b"\r\n", b"\n")
+    found = [m.group(0) for m in GENPLANE.finditer(data)]
+    return hashlib.md5(b"".join(found)).hexdigest() if found else ""
+
+
+def digest(rel):
+    data = strip_genplane(open(os.path.join(ROOT, rel), "rb").read().replace(b"\r\n", b"\n"))
     return hashlib.md5(diag_switch.to_release(rel, data)).hexdigest()
 
 
@@ -100,6 +124,21 @@ def main():
             bad.append("new      " + rel)
         elif want[rel] != now[rel]:
             bad.append("changed  " + rel)
+    blocks = {rel: genplane_blocks(rel) for rel in files()}
+    blocks = {rel: h for rel, h in blocks.items() if h}
+    if "--update-genplane" in sys.argv:
+        with open(BLOCKS, "w") as f:
+            for rel in sorted(blocks):
+                f.write("%s  %s\n" % (blocks[rel], rel))
+        print("check_boot: wrote the GENPLANE blocks of %d files to %s" % (len(blocks), os.path.relpath(BLOCKS, ROOT)))
+    want_b = {}
+    for line in open(BLOCKS):
+        if line.strip():
+            h, rel = line.split(None, 1)
+            want_b[rel.strip()] = h
+    for rel in sorted(set(want_b) | set(blocks)):
+        if want_b.get(rel) != blocks.get(rel):
+            bad.append("GENPLANE block changed / missing / new  " + rel)
     if bad:
         print("check_boot: the boot stack is NOT the one this kit ships:")
         for b in bad:

@@ -83,6 +83,7 @@ Sub-CPU code is the code OpenLara CD32X ran on the console. Each one is tested i
 | `FMVRING=1` | Ring mode in CMD 46, for movies that play while they stream (OpenLara) |
 | `SLOTS=1` | CMD 61 bit 8 writes OpenLara's save-slot area at `0x060000`. That is inside this kit's ROM area: leave it off. |
 | `CART=8` / `CART=16` | The 8 / 16 MB paged-cart test build, with CMD 68 |
+| `GENPLANE=1` | The Genesis picture commands 62-67 (SuperTux CD32X REV's: VRAM word, cart → VRAM, cart → CRAM, VDP register, V scroll, map columns) and listener routines 36 / 37: a game puts its background on the Genesis planes, the 32X draws in front ([docs/03](docs/03_COMMANDS.md)). `build.sh` stops if the switch did not reach `main.c` and the listener |
 
 **The game** (`hello/Makefile`): `build.sh` passes `DIAG` on to it as `HELLO_DIAG_TEXT`. Your own
 game's Makefile may use it or ignore it.
@@ -271,7 +272,7 @@ The full checklist is in [docs/02_PORTING_YOUR_GAME.md](docs/02_PORTING_YOUR_GAM
 
 | What | Status |
 |---|---|
-| The stack (`stack/`) | The code OpenLara CD32X ran on the console (v1.0–v1.4). CDLOADER is byte-identical. With its default switches (`STREAM`, `CARTW`, `FMVRING`, `SLOTS` all 0), the Sub-CPU program compiles to the same code, apart from the file table (`game_files.h`) and the backup RAM file name. The four switches are tested in emulation only. |
+| The stack (`stack/`) | The code OpenLara CD32X ran on the console (v1.0–v1.4). CDLOADER is byte-identical. With its default switches (`STREAM`, `CARTW`, `FMVRING`, `SLOTS`, `GENPLANE` all 0), the Sub-CPU program compiles to the same code, apart from the file table (`game_files.h`) and the backup RAM file name. The four switches are tested in emulation only. |
 | `hello/` + `build.sh` | Built and booted in emulation with a 4 MB RAM cart: the boot picture, the ROM loaded, `4B10`, file loads, the pad, the save surviving a second boot, CD audio, the error box, the diagnostic disc's text view. Not yet run on a console. |
 
 ## Credits

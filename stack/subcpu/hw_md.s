@@ -24,7 +24,11 @@
         .equ    MD_CMD_COPY_FROM_CART, 24
         .equ    MD_CMD_COPY_WORDS, 25
         .equ    MD_CMD_SAFE_CART_XFER, 26
+.ifdef DX_GENPLANE                          | DX-GENPLANE begin
+        .equ    MD_CMD_END, 38              /* + set_vsram (36), copy_vram_col (37): SuperTux REV2 / REV4 */
+.else                                       | DX-GENPLANE else
         .equ    MD_CMD_END, 36              /* KOBO K19: + set_vdp_reg (34); D32X M1: + start_d32xr (35) */
+.endif                                      | DX-GENPLANE end
 
 | MODE1-1 (Makefile MODE1=1, docs/12): the listener for a CARTRIDGE boot (the Sega CD's "mode 1"), started
 | by edboot/EDCD.32X from a Mega EverDrive PRO.  There the cart is at 0x000000 and the Sega CD at 0x400000
@@ -399,6 +403,58 @@ cmd_table:
         .word   chilly_rv_memcpy - cmd_table    /* 33 */
         .word   set_vdp_reg - cmd_table         /* 34  KOBO K19 */
         .word   start_d32xr - cmd_table         /* 35  D32X M1 */
+.ifdef DX_GENPLANE                          | DX-GENPLANE begin
+        .word   set_vsram - cmd_table           /* 36  SuperTux REV2 */
+        .word   copy_vram_col - cmd_table       /* 37  SuperTux REV4 */
+
+| DX-GENPLANE: SuperTux CD32X REV's two listener routines, unchanged (MicroNut99/SuperTuxCD32X_REV
+| cd32x/subcpu/hw_md.s).
+| SuperTux REV2: void set_vsram(int addr, int word);
+| One word into the VDP's vertical scroll RAM (VSRAM) at byte address addr (0 = plane A,
+| 2 = plane B in full-screen mode; up to 0x4E in 2-cell column mode).  WHY a command of its
+| own: VSRAM is not video RAM - set_vram's address command always targets VRAM (0x4000....),
+| a VSRAM write needs the code 0x40000010.  Same shape as set_vram: auto-increment 2, the
+| 32-bit address command in ONE move.l (an interrupt cannot split it), then the data word.
+| Runs in the command loop, never inside an interrupt.
+set_vsram:
+        lea     0xC00000,a1
+        move.w  #0x8F02,4(a1)
+        move.l  4(sp),d1
+        andi.l  #0x0000007E,d1
+        swap    d1
+        ori.l   #0x40000010,d1
+        move.l  d1,4(a1)
+        move.l  8(sp),d0
+        move.w  d0,(a1)
+        moveq   #0,d0
+        rts
+
+| SuperTux REV4: void copy_vram_col(int addr, short *src, int words);
+| copy_vram with the VDP's auto-increment at 128 bytes instead of 2: the words go DOWN one
+| column of a 64-cell-wide plane map (one map row is 64 words).  WHY: a plane map is stored row
+| by row, so a new column scrolling in is 28-30 words 128 bytes apart - with copy_vram that would
+| be one command a word.  The increment is put back to 2 afterwards (every other routine sets it
+| itself too).  Runs in the command loop, never inside an interrupt.
+copy_vram_col:
+        lea     0xC00000,a1
+        move.w  #0x8F80,4(a1)
+        move.l  4(sp),d1
+        lsl.l   #2,d1
+        lsr.w   #2,d1
+        swap    d1
+        ori.l   #0x40000000,d1
+        move.l  d1,4(a1)
+        movea.l 8(sp),a0
+        move.l  12(sp),d0
+        subq.w  #1,d0
+0:
+        move.w  (a0)+,(a1)
+        dbra    d0,0b
+        move.w  #0x8F02,4(a1)
+        moveq   #0,d0
+        rts
+
+.endif                                      | DX-GENPLANE end
 
 | D32X M1: void start_d32xr(void) - never returns.
 | D32XR's ROM is in the RAM cart.  Interrupts off, cart bank 0, RV off (the SH2 must reach the

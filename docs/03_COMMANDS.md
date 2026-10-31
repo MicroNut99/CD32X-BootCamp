@@ -55,13 +55,20 @@ status, is the command ledger in https://github.com/MicroNut99/docs: the Kobo PD
 | **44** | (clear Genesis planes) | — | — | Answered; does nothing in this build |
 | **60** | 68000 → cartridge code | — | — | The D32XR experiment: hands the 68000 to the ROM's Genesis code and ends the CD stack. **Never** use it with this loader. |
 | **68** | cart page, window 1 | COMM2 = page 1–7 | COMM12 = 1 done, 0 refused | Only in `CART=8` / `CART=16` builds, for the 8/16 MB paged cart. Clear caches after it. |
+| **62** | VRAM word | COMM2 = VRAM byte address (even); COMM8 (high 16) = the word | — | **Only in `GENPLANE=1` builds** (62-67: SuperTux CD32X REV's Genesis picture commands, ledger §1, §20). MD 5 `set_vram` |
+| **63** | cart → VRAM | COMM2 = VRAM byte address; COMM8L = words << 22 \| cart offset (even; 1–1023 words) | COMM12 = 1 ok, 0 refused | The 68000 reads the cart through `0x900000` (RV 0): the SH2 is never locked out. MD 7 `copy_vram` |
+| **64** | cart → CRAM | COMM2 = first colour 0–63; COMM8L = count << 22 \| cart offset | COMM12 = 1 ok, 0 refused | MD 12 `set_palette` |
+| **65** | VDP register | COMM2 = `0x8000 \| reg << 8 \| value` (registers 0–23) | — | MD 34 `set_vdp_reg` |
+| **66** | V scroll | COMM2 = VSRAM byte address (0 plane A, 2 plane B); COMM8 (high 16) = the value | — | MD 36 `set_vsram` (GENPLANE) |
+| **67** | cart → VRAM map columns | COMM2 = VRAM address of the first column's top word; COMM8L = (columns − 1) << 30 \| words a column << 22 \| cart offset | COMM12 = 1 ok, 0 refused | 1–4 columns of 1–255 words, 128 bytes apart (a 64-cell plane); all inside one 1 MB bank of the window. MD 37 `copy_vram_col` (GENPLANE) |
 
 **Free numbers.** Free on every stack, per the ledger's list:
 
 - 39–43, 49, 55;
-- 72–79, and 81 and up.
+- 76–79, and 81 and up (72–75 went to Rayman and `sdcard/` on 26–27 Oct: ledger §17-18).
 
-Do not take these: 62–67 (SuperTux REV), 67 and 69–71 (OpenJazz REV), 80 (Sonic CD 2011).
+Do not take these: 62–67 (this stack's `GENPLANE`, SuperTux REV, Rayman), 67 and 69–71 (OpenJazz REV), 72–75
+(Rayman, `sdcard/`), 80 (Sonic CD 2011).
 
 A number must never mean two things on any stack. Your command must sit behind a build switch in
 `main.c`, which is compiled with **HWFLAGS** (not CCFLAGS).
@@ -108,6 +115,8 @@ run time:
 | 33 | `CHILLY_RV_MEMCPY` | Cart copy, RV = 1, bytes |
 | 32 | `CHILLY_MEMCPY` | Plain copy; reads the cart through the `0x900000` window |
 | 34 | `SET_VDP_REG` | One Genesis VDP register |
+| 5 / 7 / 12 | `set_vram` / `copy_vram` / `set_palette` | One VRAM word / words from the 68000's map (the cart window) to VRAM / colours to CRAM: Chilly's, used by 62 / 63 / 64 |
+| 36 / 37 | `set_vsram` / `copy_vram_col` | **`GENPLANE=1` only** (`MD_CMD_END` 38, else 36): one VSRAM word; `copy_vram` with the auto-increment at 128 (a map column). SuperTux REV2 / REV4's routines, unchanged |
 | 18 | `INIT_32X` | The 32X power-up (boot only) |
 
 **Rule:** the 68000 reads the Sub-CPU's command flag twice and acts only when both reads match (HW10). A
@@ -120,8 +129,8 @@ disabled since.
 |---|---|---|---|---|
 | 46 | chunk → cart; bit 15 = no read-back | same | 4 forms: `0x00nn` chunk, `0x01nn`–`0x03nn` runs of up to 4 chunks, `0xF8nn` cart page, `0xF0nn` slot override | — |
 | 47 | chunk compare | same | cart → frame buffer | — |
-| 60–63 | 60 D32XR start, 61 save piece | 62–66 Genesis VDP from the cart (SuperTux) | — | CD find, CD read, SRAM read / write |
-| 67 | — | **two meanings:** OpenJazz = Genesis plane (load, start, off, one map cell); SuperTux = map columns into VRAM | — | — |
+| 60–63 | 60 D32XR start, 61 save piece; 62-63 Genesis picture (`GENPLANE`) | 62–66 Genesis VDP from the cart (SuperTux); 62 = save piece in on the EverDrive launcher builds of OpenJazz REV / Hurrican / OpenLara EDCD, Genesis background on D32XR (ledger §4) | — | CD find, CD read, SRAM read / write |
+| 67 | map columns into VRAM (`GENPLANE`, as SuperTux) | **two meanings:** OpenJazz = Genesis plane (load, start, off, one map cell); SuperTux = map columns into VRAM | — | — |
 | 68 | cart page (window 1) | same | act file → Genesis planes | — |
 | 69–71 | — | OpenJazz: 69 unpack LZ, 70 disc stamp, 71 bonus floor | — | — |
 | 80 | — | — | the graphics chip's stamp floor | — |
