@@ -225,6 +225,7 @@ The details are in [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md).
 | `edw0/` | The EverDrive PRO window 0 probe: the SH2 reads the cart while the 68000 writes; found the write-enable rule (`bash edw0/build.sh`) | No |
 | `edsave/` | The EverDrive PRO retention probe: what survives its menu (`bash edsave/build.sh`). Found that the PSRAM is wiped at every menu run and that bank 31 goes to the SD card (`bram.srm`) | No |
 | `edboot/` | `EDCD.32X`, the disc started from the EverDrive PRO (`EDCD=1 bash build.sh`); `EDBOOT.BIN` and the C-bit tests (`bash edboot/build.sh`) | No |
+| `edpack/` | The EverDrive PRO 14 MB file probe: does the menu load a 14 MB `.32X` into the PSRAM whole? (`bash edpack/build.sh`, no disc). The question behind `edboot/pack_edcd.py`, a launcher that carries the game's data (`manuals/MegaEverDrivePro_SDCARD.md` §4.0) | No |
 | `ares/` | The EverDrive PRO 16 MB cart for the ares emulator, as a patch for ares v148 | No |
 | `tools/` | `prep_rom.py` (checks and marks the ROM), the boot picture, a test music track, the font | No |
 | `docs/` | How it works, the commands, memory maps, rules learned on the console, how the existing games differ | Read it |
