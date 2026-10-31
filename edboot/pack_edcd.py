@@ -2,6 +2,7 @@
 """pack_edcd.py - a launcher file that carries the game's data: the EverDrive menu preloads the PSRAM
 
     pack_edcd.py <EDCD_GAME.32X> -o <EDCD_GAME_PACK.32X> --at <offset> <file> [--at <offset> <file> ...]
+    pack_edcd.py <EDCD_OPENLARA.32X> -o <EDCD_OPENLARA.32X> --openlara <disc files folder> [LEVELn.PKD]
     pack_edcd.py <EDCD_DOOM.32X> -o <EDCD_DOOM_PACK.32X> --d32xr <preload.json> <D32XR.32X> <disc files folder>
 
 The EverDrive PRO menu copies a .32X from the card into its PSRAM, linearly from the start of the 16 MB,
@@ -13,6 +14,16 @@ for that; run it first (MegaEverDrivePro_SDCARD.md section 4.0).  Nothing in the
 The file is limited to 14 MB (banks 0-27): banks 28-30 hold the EverDrive OS's own buffers and bank 31 is
 the battery RAM.  Bank 0 is the launcher itself (it must fit 512 KB), so a game's ROM cannot be packed at
 offset 0; the loader copies that part from the CD as before.
+
+--openlara <disc files folder> [<level for the level slot>] lays out OpenLara CD32X-REV's EverDrive build:
+    0x080000   LEVEL1.PKD   Caves, the title menu and level 1 (CMD 38 file 202 -> slot 4; CAVES-1)
+    0x200000   LEVEL2.PKD   the level slot (file 100 + id; RESUME-1), another level if named
+The whole pack ends under 4 MB, so it is within reach even if the OS loads only 4 MB of a .32X.  OpenLara's
+"already in the cart" checks compare the record in save piece 14 (length + checksum; in the EverDrive
+build that piece lives in bank 31, kept in bram.srm) with what is in the cart: the first launch loads from
+the CD and writes the record, every launch after that finds the packed Caves (and the level, when the
+record names the same level) and loads nothing.  The engine (OPENLARA.32X, <= 384 KB) still comes from the
+CD: bank 0 is the launcher.
 
 --d32xr lays out DOOM CD32X Fusion's EverDrive build (CART=ED: page 1 = banks 4-7 is the ROM's second
 2 MB, pages 2-6 = banks 8-27 the preload) from the plan tools/make_preload.py wrote:
@@ -68,6 +79,21 @@ def main():
                 sys.exit('*** --at offsets must be multiples of 4')
             place(items, off, data, os.path.basename(args[i + 2]))
             i += 3
+        elif args[i] == '--openlara':
+            folder = args[i + 1]
+            level = 'LEVEL2.PKD'
+            n = 2
+            if i + 2 < len(args) and not args[i + 2].startswith('-'):
+                level = args[i + 2]; n = 3
+            caves = open(os.path.join(folder, 'LEVEL1.PKD'), 'rb').read()
+            if len(caves) > 0x180000:
+                sys.exit('*** LEVEL1.PKD is %d bytes: Caves must fit 0x080000-0x1FFFFF' % len(caves))
+            place(items, 0x080000, caves, 'LEVEL1.PKD (Caves, slot 4)')
+            lv = open(os.path.join(folder, level), 'rb').read()
+            if len(lv) > 0x1F0000:
+                sys.exit('*** %s is %d bytes: a level must fit 0x200000-0x3EFFFF' % (level, len(lv)))
+            place(items, 0x200000, lv, '%s (level slot)' % level)
+            i += n
         elif args[i] == '--d32xr':
             plan = json.load(open(args[i + 1]))['files']
             rom = open(args[i + 2], 'rb').read()
