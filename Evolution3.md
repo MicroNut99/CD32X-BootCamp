@@ -118,6 +118,31 @@ has run.
 17. **The programming guide's rule "while RV = 1, SH2 cart reads are simply held, so no parking code is
     needed"** was the 4 MB cart's truth and the EverDrive's trap; it now carries the `edsave3` exception.
 
+## Added the same day: the packed launcher (31 Oct 2026, console)
+
+The SD-card document's §4.0 asked one question before anything else: does the EverDrive menu load a
+multi-megabyte `.32X` into the PSRAM whole in 32X mode? **`edpack/` answered it on the console the same
+morning: `LOADED 14 OF 14 MB`, banks 1-27 all `OK`, 0 bad words from the 68000 and both SH2s.** So the
+cheapest preload is real: a launcher file with the game's data behind its first 512 KB, at the cart offsets
+the game's own CMD 38 / 46 would fill, arrives in the PSRAM "already loaded" - no EDIO code, no change to
+the stack, nothing new on the disc. `edboot/pack_edcd.py` builds such a file (`--openlara`, `--d32xr`, or
+`--at offset file`); the layout for Doom was checked by re-reading every WAD out of the image along the
+loader's own page walk and recomputing its checksum. Two were built into the owner's folders:
+
+- OpenLara: `EDCD.32X` (the 26 Oct `EDCD_SAVE=1` launcher) + `LEVEL1.PKD` at `0x080000` + `LEVEL2.PKD` at
+  `0x200000`, 4.0 MB. OpenLara's Caves / level records are in bank 31 (`bram.srm`), so from the second
+  launch on its checks hit. Expected: first launch the red bar, second launch none.
+- Doom: `EDCD_DOOM_V5_PAIN_PLUTEX.32X` + `D32XR.32X` from `0x80000` + the four preload WADs in pages 2-6,
+  14.0 MB. Its whole-ROM checksum cannot match (bank 0 is the launcher), so the loader still copies the
+  4 MB ROM from the CD; the WAD sums match and the 10 MB preload is skipped. Cutting the ROM copy to the
+  chunks that differ is a change to D32XR's `cdloader_sh2.c` (`LOADER_CHECK` already has the per-chunk
+  sums), not to the stack.
+
+Neither game's packed launcher had been run on the console when this was written; the probe had. Two
+traps met on the way: on a Windows drive `edpack.32x` and `EDPACK.32X` are one file (`make clean` deleted
+the result; the output is `EDPACK_14MB.32X` now), and the owner's BootCamp folder is a copy, not a clone
+(`git pull` has nothing to pull; a sibling `CD32X-BootCamp-git` clone is where the new files come from).
+
 ## Process rules (unchanged, plus one)
 
 `stack/` is off limits and md5-guarded; every addition goes behind an `HWFLAGS` switch in a copy and is
