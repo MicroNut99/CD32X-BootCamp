@@ -30,5 +30,5 @@ watch: that is the cost per launch of a packed launcher of this size.
 
 Photograph the screen; the nonce top right (`RUN xxxx` in edtest's place) ties it to the build.
 
-Tested in ares: not yet (the CD32X ares build's EverDrive board loads any size file, so a pass there says
-nothing about the OS - this one is for the console only). Built: not yet in this container (no toolchain).
+**Console, 31 Oct 2026** (Genesis + 32X + Mega EverDrive PRO, nonce 17E7): `LOADED 14 OF 14 MB`, banks 1-27 all `OK`, 0 bad words from the 68000 and both SH2s. The OS loads the whole file. ares cannot answer this one (its EverDrive board loads any size file); the console is the only test.
+
