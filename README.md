@@ -105,6 +105,7 @@ GAME=mygame DISC_NAME=MyGame bash build.sh             # your game
 SEGA_TOOLCHAIN=/opt/sega REGION=EU bash build.sh       # another toolchain place, a PAL console
 STREAM=1 CARTW=1 DISC_NAME=BootCampFast bash build.sh  # faster loads (emulation-tested only)
 GAME=probe DISC_NAME=CD32X_PROBE_V1 EDCD=1 bash build.sh  # the timing probe (probe/README.md)
+GAME=timeprobe CART=16 DISC_NAME=CD32X_TIMEPROBE bash build.sh  # does /TIME reach the cart through the 32X? (timeprobe/README.md)
 ```
 
 The EverDrive PRO programs build on their own (same `ROOTDIR=` / `SEGA_TOOLCHAIN=`):
@@ -223,6 +224,7 @@ The details are in [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md).
 | `stack/sh2/` | CDLOADER, the SH2 program that loads your ROM into the cart | No (it is byte-identical to OpenLara's) |
 | `hello/` | The example game: a 32X ROM using `cdapi.c` for every CD service | Copy it and make it yours |
 | `probe/` | The CD32X timing probe: what each 32X access costs on the console (cart, frame buffer, FIFO, SDRAM, cache, the two SH2s on one bus, the VDP fill, a Sega CD command), measured by the SH2's own timer, for setting ares to the console's timing (`probe/README.md`) | No |
+| `timeprobe/` | The /TIME probe: command 68's page write (0x01 to 0xA130F2, RV = 1) in one-second bursts, so a logic probe or analyzer on the cart edge (B31 /TIME, B29 /UWR) shows whether the 32X passes /TIME to its top slot - the 16 MB paged cart needs it (`timeprobe/README.md`) | No |
 | `edtest/` | The EverDrive PRO 16 MB RAM test: two 32X cartridge ROMs (`bash edtest/build.sh`), and the console photos in `edtest/results/` | No |
 | `edw0/` | The EverDrive PRO window 0 probe: the SH2 reads the cart while the 68000 writes; found the write-enable rule (`bash edw0/build.sh`) | No |
 | `edsave/` | The EverDrive PRO retention probe: what survives its menu (`bash edsave/build.sh`). Found that the PSRAM is wiped at every menu run and that bank 31 goes to the SD card (`bram.srm`) | No |
