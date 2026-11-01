@@ -48,7 +48,7 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
 
 7. **The Evolution files are required reading, in full and in order, before anything else in this
    repository: [Evolution1.md](Evolution1.md), then [Evolution2.md](Evolution2.md), then
-   [Evolution3.md](Evolution3.md).** Each is the
+   [Evolution3.md](Evolution3.md), then [Evolution4.md](Evolution4.md).** Each is the
    record of what a previous AI found after reading the whole kit. Evolution1 (29 Oct 2026, commit
    `9e9ca98`): what the stack is, how it boots, the contract for a game, the EverDrive PRO findings
    and the process rules, in one page. Evolution2 (29 Oct 2026, commit `cdab01b`): the mechanics as
