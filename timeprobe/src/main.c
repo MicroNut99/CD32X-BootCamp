@@ -119,14 +119,18 @@ static void flip(void)
     while ((MARS_VDP_FBCTL & MARS_VDP_FS) == cur) { }
 }
 
-/* one page write: 0x01 -> 0xA130F2 by the 68000 with RV = 1.  1 = done, 0 = refused, -1 = no answer */
+/* one page write: 0x01 -> 0xA130F2 by the 68000 with RV = 1.  1 = done, 0 = refused, -1 = no answer.
+   last_reply: COMM12 as the Sub-CPU left it (1 = done; 0 = its command 68 refused the page;
+   0xFFFF = nothing wrote COMM12, so the command was answered by something that is not command 68) */
+static uint16_t last_reply = 0xFFFF;
 static int page_write(void)
 {
     MARS_SYS_COMM2 = 1;
-    COMM12_16 = 0;                          /* the reply comes back in COMM12 */
+    COMM12_16 = 0xFFFF;                     /* the reply comes back in COMM12 */
     if (!cd_cmd(CD_CMD_CART_PAGE))
         return -1;
-    return COMM12_16 == 1 ? 1 : 0;
+    last_reply = COMM12_16;
+    return last_reply == 1 ? 1 : 0;
 }
 
 int main(void)
@@ -211,10 +215,11 @@ int main(void)
             text(16, 100, "WRITES/SECOND:", C_GREY); dec(b, last_rate); text(136, 100, b, C_WHITE);
             text(16, 112, "TOTAL:", C_GREY);          dec(b, total);     text(136, 112, b, C_WHITE);
             if (refused) { text(16, 124, "REFUSED:", C_RED); dec(b, refused); text(136, 124, b, C_RED); }
+            text(16, 136, "LAST REPLY:", C_GREY); hex4(b, last_reply); text(136, 136, b, C_WHITE);
         }
-        text(16, 150, "PROBE B31 /TIME AND B29 /UWR", C_YELLOW);
-        text(16, 162, "THEY SHOULD PULSE ONLY IN WRITING", C_YELLOW);
-        text(16, 174, "B28 /LWR SHOULD STAY QUIET", C_YELLOW);
+        text(16, 152, "PROBE B31 /TIME AND B29 /UWR", C_YELLOW);
+        text(16, 164, "THEY SHOULD PULSE ONLY IN WRITING", C_YELLOW);
+        text(16, 176, "B28 /LWR SHOULD STAY QUIET", C_YELLOW);
         text(16, 196, continuous ? "START: BURSTS" : "START: CONTINUOUS", C_GREEN);
         hex4(b, (uint32_t)(gTicks / 60)); text(256, 196, b, C_GREY);
         flip();
