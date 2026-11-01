@@ -22,9 +22,21 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
    `Mega-CD_Hardware_Manual.pdf`, the Kobo PDFs, the addenda), before changing anything they describe.
    [docs/08_RESEARCH_INDEX.md](docs/08_RESEARCH_INDEX.md) says what each one is.
 
-3. **The boot stack (`stack/`) is off limits** unless the owner asks for a change to it by name.
+3. **Three outside repositories are required reading** too (read their READMEs and docs in full,
+   and the source they point you to):
+   - [Stephane-D/SGDK](https://github.com/Stephane-D/sgdk): the Mega Drive development kit. The
+     68000 side: VDP, DMA, sprites, pads, sound, and how a Mega Drive program is laid out.
+   - [drojaazu/megadev](https://github.com/drojaazu/megadev): the Mega CD development framework.
+     The Main CPU / Sub CPU split, the BIOS calls, Word RAM, CD reading from the Sub CPU side.
+   - [haroldo-ok/kiloblaster-32x](https://github.com/haroldo-ok/kiloblaster-32x): a complete game
+     ported to the 32X. How a real port divides the work between the 68000 and the SH2s.
 
-4. **The emulator to test with is the owner's ares build,
+   They are reference, not this stack: where they differ from `manuals/` or `docs/`, this stack's
+   documents win for this stack.
+
+4. **The boot stack (`stack/`) is off limits** unless the owner asks for a change to it by name.
+
+5. **The emulator to test with is the owner's ares build,
    [MicroNut99/ares_android](https://github.com/MicroNut99/ares_android).** It is made for CD32X,
    32XCD and EDCD (EverDrive PRO) boot games, and runs regular 32X games too. Use it, from your own
    container, for every test run: how to build its headless runner, get the disc in, run it and read
@@ -32,7 +44,7 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
    [docs/11](docs/11_ARES_16MB_RAM_CART.md) and [`ares/`](ares/). No other emulator counts for this
    stack. And the emulator follows the hardware: a green run in ares is never a pass for the console.
 
-5. Never commit game data, discs, BIOS files or music to this or any public repository.
+6. Never commit game data, discs, BIOS files or music to this or any public repository.
 
 6. **The Evolution files are required reading, in full and in order, before anything else in this
    repository: [Evolution1.md](Evolution1.md), then [Evolution2.md](Evolution2.md), then
@@ -64,9 +76,10 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
    learned on the console.
 5. Sega's manuals in `manuals/`: `32x_hardware_manual.pdf`, `Mega-CD_Hardware_Manual.pdf`; then the
    addenda and the rest of `manuals/` ([docs/08](docs/08_RESEARCH_INDEX.md) says what each is).
-6. Testing: [docs/11](docs/11_ARES_16MB_RAM_CART.md), [docs/13](docs/13_ARES_FOR_AI.md), then build
+6. The outside repositories: SGDK, then megadev, then kiloblaster-32x (rule 3).
+7. Testing: [docs/11](docs/11_ARES_16MB_RAM_CART.md), [docs/13](docs/13_ARES_FOR_AI.md), then build
    ares_android's headless runner and run `hello/`.
-7. Only then [docs/02_PORTING_YOUR_GAME.md](docs/02_PORTING_YOUR_GAME.md) and the game you're here for.
+8. Only then [docs/02_PORTING_YOUR_GAME.md](docs/02_PORTING_YOUR_GAME.md) and the game you're here for.
 
 If `manuals/` is empty, the submodule hasn't been fetched: run the command above. Don't work from
 memory of these documents, and don't substitute the web for them.

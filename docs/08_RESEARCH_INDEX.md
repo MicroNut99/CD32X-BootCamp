@@ -45,4 +45,8 @@
 
 - RAM cart: https://consolemods.org/wiki/Genesis:MD_32X_RAM_Cart
 - Chilly Willy's Sega CD / 32X toolchain and examples: the base of all of the above.
+- **Required reading** ([CLAUDE.md](../CLAUDE.md) rule 3):
+  - [Stephane-D/SGDK](https://github.com/Stephane-D/sgdk): the Mega Drive development kit (68000 side).
+  - [drojaazu/megadev](https://github.com/drojaazu/megadev): the Mega CD development framework (Main / Sub CPU, BIOS, Word RAM).
+  - [haroldo-ok/kiloblaster-32x](https://github.com/haroldo-ok/kiloblaster-32x): a complete game ported to the 32X.
 - Doom 32X: Resurrection (Victor Luchits and team): the game CDLOADER and CMD 60 were first written to boot.
