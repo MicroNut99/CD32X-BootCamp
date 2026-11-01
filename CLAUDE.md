@@ -58,12 +58,18 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
    around it (every port's Sub-CPU program, krikzz's EverDrive PRO sources) - the command-number and
    save-piece clashes the ledger had missed (62, 69, 74; piece 12), each port's listener numbering, what
    krikzz's RTL confirms of the console findings, and the EverDrive's SD-card path with a preload design
-   (`manuals/MegaEverDrivePro_SDCARD.md`). Start from them, not from the folder listing. A further full
+   (`manuals/MegaEverDrivePro_SDCARD.md`). Evolution4 (1 Nov 2026, commit `2846135`): the reading order
+   followed end to end - the rest of `manuals/sega-vr-disasm/`, Hitachi's SH2 manuals, Sega's Genesis
+   manuals and bulletins, SGDK, megadev and kiloblaster-32x read against the stack: what they confirm
+   (RV holds SH2 cart reads on a real 32X), what they add (the RV reset fix, FIFO DMA from Word RAM
+   only, the CD BIOS's top of work RAM, Sega's use of `0xA130F0` D15), why SGDK can't be used as it is,
+   and which reference copies are wrong. Start from them, not from the folder listing. A further full
    reading adds `Evolution<n+1>.md` and this rule names it; it never rewrites an earlier one.
 
 ## Reading order (a new AI learns this stack fastest this way)
 
-0. [Evolution1.md](Evolution1.md), [Evolution2.md](Evolution2.md), then [Evolution3.md](Evolution3.md): the whole kit as last read,
+0. [Evolution1.md](Evolution1.md), [Evolution2.md](Evolution2.md), [Evolution3.md](Evolution3.md), then
+   [Evolution4.md](Evolution4.md): the whole kit as last read,
    and the list of what to distrust in the documents until it is fixed.
 1. [README.md](README.md), then [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md): what runs where,
    power-on to `main()`.
