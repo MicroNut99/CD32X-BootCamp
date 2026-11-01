@@ -46,7 +46,7 @@ git submodule update --init          # fetches manuals/ (run once after cloning)
 
 6. Never commit game data, discs, BIOS files or music to this or any public repository.
 
-6. **The Evolution files are required reading, in full and in order, before anything else in this
+7. **The Evolution files are required reading, in full and in order, before anything else in this
    repository: [Evolution1.md](Evolution1.md), then [Evolution2.md](Evolution2.md), then
    [Evolution3.md](Evolution3.md).** Each is the
    record of what a previous AI found after reading the whole kit. Evolution1 (29 Oct 2026, commit
