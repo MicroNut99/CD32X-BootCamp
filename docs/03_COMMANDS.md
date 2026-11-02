@@ -66,11 +66,11 @@ status, is the command ledger in https://github.com/MicroNut99/docs: the Kobo PD
 **Free numbers.** Free on every stack, per the ledger's list:
 
 - 39–43, 49, 55;
-- 79, and 81 and up (72–75 went to Rayman and `sdcard/` on 26–27 Oct, ledger §17-18; 76 / 77 are kept for
-  `sdcard/`'s move off 74 / 75, §18; 78 is `VSPLIT`'s, 31 Oct).
+- 79, 81-83, 85-89 and 91 and up (72–75 went to Rayman and `sdcard/` on 26–27 Oct, ledger §17-18; 76 / 77 are
+  kept for `sdcard/`'s move off 74 / 75, §18; 78 is `VSPLIT`'s, 31 Oct; 84 and 90 are `traytest/`'s, 2 Nov, §22).
 
 Do not take these: 62–67 (this stack's `GENPLANE`, SuperTux REV, Rayman), 67 and 69–71 (OpenJazz REV), 72–75
-(Rayman, `sdcard/`), 76–77 (`sdcard/`'s move), 78 (this stack's `VSPLIT`), 80 (Sonic CD 2011).
+(Rayman, `sdcard/`), 76–77 (`sdcard/`'s move), 78 (this stack's `VSPLIT`), 80 (Sonic CD 2011), 84 and 90 (`traytest/`: CD status, the tray).
 
 A number must never mean two things on any stack. Your command must sit behind a build switch in
 `main.c`, which is compiled with **HWFLAGS** (not CCFLAGS).
