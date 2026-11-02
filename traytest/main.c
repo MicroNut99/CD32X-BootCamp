@@ -12,6 +12,12 @@
  * the first and last track, the time in the track, the drive lights; every change of the two status
  * codes goes into a list with the time it happened.
  *
+ * T2 (the owner, 2 Nov 2026: "something displayed on the screen to indicate a button press - this is made
+ * for a human"): while A is held the chosen button is drawn pushed in (white); when it acts it turns green
+ * (asked) or red (refused / no answer) for half a second, and a large banner says what it is doing
+ * ("OPENING THE TRAY") for three seconds.  The rest of the time the banner shows the drive's state in
+ * large letters ("TRAY OPEN", "READING DISC", "NO DISC", "PLAYING").
+ *
  * Commands 84 and 90 are merged into a copy of the stack by traytest/merge_tray.py (TRAYTEST=1);
  * ledger section 22.  Everything else is hello's (cdapi.c, crt0.s, the 68000 side).
  */
@@ -20,7 +26,7 @@
 #include "cdapi.h"
 #include "font8x8.h"
 
-#define TRAYTEST_NAME     "TRAY TEST T1"
+#define TRAYTEST_NAME     "TRAY TEST T2"
 #define CD_CMD_STATUS     84          /* traytest/merge_tray.py */
 #define CD_CMD_TRAY       90
 
@@ -90,6 +96,24 @@ static void text_bg(int x, int y, const char *s, uint8_t c, uint8_t bg)   /* x a
 }
 static void text(int x, int y, const char *s, uint8_t c) { text_bg(x, y, s, c, C_BLACK); }
 
+static void text2x(int x, int y, const char *s, uint8_t c, uint8_t bg)   /* twice the size: 16 x 16 a letter */
+{
+    for (; *s; s++, x += 16)
+    {
+        int ch = (uint8_t)*s;
+        if (ch < 32 || ch > 127) ch = '?';
+        const unsigned char *g = font8x8[ch - 32];
+        for (int r = 0; r < 8; r++)
+            for (int b = 0; b < 8; b++)
+            {
+                uint8_t v = (g[r] & (0x80 >> b)) ? c : bg;
+                plot2(x + 2 * b, y + 2 * r, v, v);
+                plot2(x + 2 * b, y + 2 * r + 1, v, v);
+            }
+    }
+}
+static int len_of(const char *s) { int n = 0; while (s[n]) n++; return n; }
+
 static void hexn(char *d, uint32_t v, int n)
 {
     for (int i = 0; i < n; i++)
@@ -141,6 +165,24 @@ static const char *drive_name(int c)
     return n[c & 15];
 }
 
+/* the drive's state for the banner, in words a person reads at a glance */
+static const char *big_state(uint16_t bios)
+{
+    if ((bios & 0x8000) && (bios & 0x7F00) != 0x4000)
+        return "BUSY - WAIT";           /* a command is being carried out */
+    switch ((bios >> 8) & 0x7F)
+    {
+    case 0x40: return "TRAY OPEN";
+    case 0x20: return "READING DISC";
+    case 0x10: return "NO DISC";
+    case 0x01: return (bios & 0xFF) ? "READING DATA" : "PLAYING";
+    case 0x03: return "SCANNING";
+    case 0x05: return "READY (PAUSED)";
+    case 0x00: return "STOPPED";
+    default:   return "WORKING";
+    }
+}
+
 /* ---- the commands ---- */
 static uint16_t reply12;                    /* COMM12 after the last command */
 static uint32_t reply8;                     /* COMM8L after the last command */
@@ -158,7 +200,7 @@ static int cmd(uint16_t c, uint16_t arg)
 }
 
 /* the change list */
-#define LOG_N 7
+#define LOG_N 6
 static struct { uint32_t t; uint16_t bios; uint8_t drive; char what[12]; } log_[LOG_N];
 static int log_n;
 
@@ -207,6 +249,10 @@ int main(void)
     const char *said = "-";                 /* what the last button did */
     uint32_t said_t = 0;
     uint16_t said_reply = 0;
+    static const char *const doing[4] = { "OPENING THE TRAY", "CLOSING THE TRAY", "PLAYING TRACK 2", "STOPPING MUSIC" };
+    const char *banner = 0;                 /* the press's banner (3 s), else the drive's state */
+    uint8_t banner_c = C_GREEN;
+    int act_btn = -1, act_ok = 0;           /* the button that acted: green / red for half a second */
 
     cd_status(0x4E00);
     cd_genesis_display(0);
@@ -256,19 +302,23 @@ int main(void)
 
         if (hit == SEGA_CTRL_A || hit == SEGA_CTRL_C || hit == SEGA_CTRL_START)
         {
-            int busy = (bios & 0x8000) != 0;
+            int busy = (bios & 0x8000) != 0, ok = 1;
+            said_reply = 0;
             switch (sel)
             {
-            case 0: said = cmd(CD_CMD_TRAY, 1) ? "OPEN ASKED" : "NO ANSWER";   said_reply = reply12; break;
-            case 1: said = cmd(CD_CMD_TRAY, 0) ? "CLOSE ASKED" : "NO ANSWER";  said_reply = reply12; break;
+            case 0: ok = cmd(CD_CMD_TRAY, 1) && reply12 == 1; said = ok ? "OPEN ASKED" : "NO ANSWER";   said_reply = reply12; break;
+            case 1: ok = cmd(CD_CMD_TRAY, 0) && reply12 == 1; said = ok ? "CLOSE ASKED" : "NO ANSWER";  said_reply = reply12; break;
             case 2:                         /* 45 and 54 wait for a BIOS that is not busy (stack, no time limit) */
-                if (busy) { said = "BUSY - WAIT"; break; }
-                cd_music_play(2, 0); said = "PLAY ASKED"; said_reply = 0; break;
+                if (busy) { said = "BUSY - WAIT"; ok = 0; break; }
+                cd_music_play(2, 0); said = "PLAY ASKED"; break;
             default:
-                if (busy) { said = "BUSY - WAIT"; break; }
-                cd_music_stop(); said = "STOP ASKED"; said_reply = 0; break;
+                if (busy) { said = "BUSY - WAIT"; ok = 0; break; }
+                cd_music_stop(); said = "STOP ASKED"; break;
             }
             said_t = gTicks;
+            act_btn = sel; act_ok = ok;
+            banner = ok ? doing[sel] : (busy ? "BUSY - TRY AGAIN" : "NO ANSWER");
+            banner_c = ok ? C_GREEN : C_RED;
             log_add(bios, drive, label[sel]);
         }
 
@@ -277,48 +327,68 @@ int main(void)
         text(24, 18, "MODEL 1: NO EJECT BUTTON", C_GREY);
         box(8, 29, 304, 1, C_BLUE);
 
+        const int held = (pad & keys) != 0 && prev != 0xFFFF;   /* A (or C, START) is down now */
+        const int flash = act_btn >= 0 && gTicks - said_t < 30;  /* half a second after a button acted */
         for (int i = 0; i < 4; i++)         /* the four buttons */
         {
             int x = 8 + i * 78, y = 36;
-            uint8_t edge = (i == sel) ? C_YELLOW : C_GREY, fill = (i == sel) ? C_BLUE : C_DARK;
+            uint8_t edge = (i == sel) ? C_YELLOW : C_GREY, fill = (i == sel) ? C_BLUE : C_DARK, ink = C_WHITE;
+            if (i == sel && held)           /* pushed in: white, two pixels lower */
+            {
+                y += 2; edge = C_WHITE; fill = C_WHITE; ink = C_BLACK;
+            }
+            else if (i == act_btn && flash) /* it acted: green, or red when refused */
+            {
+                edge = C_WHITE; fill = act_ok ? C_GREEN : C_RED; ink = C_BLACK;
+            }
             box(x, y, 72, 22, edge);
             box(x + 2, y + 2, 68, 18, fill);
-            int len = 0; while (label[i][len]) len++;
-            text_bg(x + ((72 - len * 8) / 2 & ~7), y + 7, label[i], C_WHITE, fill);
+            int len = len_of(label[i]);
+            text_bg(x + ((72 - len * 8) / 2 & ~7), y + 7, label[i], ink, fill);
         }
 
-        text(8, 66, "BIOS", C_GREY);
-        hexn(b, bios, 4); text(56, 66, b, C_WHITE);
-        text(104, 66, bios_name(bios), C_CYAN);
-        if (bios & 0x8000) text(240, 66, "BUSY", C_RED);
+        /* the banner: what the button is doing (3 s after a press), else the drive's state */
+        {
+            const char *msg = big_state(bios);
+            uint8_t c = C_CYAN, bg = C_DARK;
+            if (banner && gTicks - said_t < 180) { msg = banner; c = C_BLACK; bg = banner_c; }
+            box(8, 62, 304, 20, bg);
+            int n = len_of(msg); if (n > 19) n = 19;
+            text2x(8 + ((304 - n * 16) / 2 & ~1), 64, msg, c, bg);
+        }
 
-        text(8, 78, "DRIVE", C_GREY);
-        hexn(b, drv32 >> 16, 4); text(56, 78, b, C_WHITE);
-        text(104, 78, drive_name(drive >> 0 & 15), C_CYAN);
+        text(8, 86, "BIOS", C_GREY);
+        hexn(b, bios, 4); text(56, 86, b, C_WHITE);
+        text(104, 86, bios_name(bios), C_CYAN);
+        if (bios & 0x8000) text(240, 86, "BUSY", C_RED);
 
-        text(8, 90, "TRACKS", C_GREY);
+        text(8, 96, "DRIVE", C_GREY);
+        hexn(b, drv32 >> 16, 4); text(56, 96, b, C_WHITE);
+        text(104, 96, drive_name(drive >> 0 & 15), C_CYAN);
+
+        text(8, 106, "TRACKS", C_GREY);
         hexn(b, (drv32 >> 8) & 0xFF, 2); p = b + 2; *p++ = '-'; hexn(p, drv32 & 0xFF, 2);
-        text(64, 90, b, C_WHITE);
-        text(128, 90, "LIGHTS", C_GREY);
-        hexn(b, led, 4); text(184, 90, b, C_WHITE);
+        text(64, 106, b, C_WHITE);
+        text(128, 106, "LIGHTS", C_GREY);
+        hexn(b, led, 4); text(184, 106, b, C_WHITE);
 
-        text(8, 102, "TRACK", C_GREY);
-        hexn(b, trackw & 0xFF, 2); text(56, 102, b, C_WHITE);
-        bcd_time(b, pos);    text(80, 102, b, C_WHITE);
-        text(160, 102, "DISC", C_GREY);
-        bcd_time(b, disc_t); text(200, 102, b, C_WHITE);
+        text(8, 116, "TRACK", C_GREY);
+        hexn(b, trackw & 0xFF, 2); text(56, 116, b, C_WHITE);
+        bcd_time(b, pos);    text(80, 116, b, C_WHITE);
+        text(160, 116, "DISC", C_GREY);
+        bcd_time(b, disc_t); text(200, 116, b, C_WHITE);
 
-        text(8, 116, "LAST", C_GREY);
+        text(8, 127, "LAST", C_GREY);
         p = cat(b, said);
         if (said_t) { p = cat(p, "  AT "); secs(p, said_t); }
-        text(48, 116, b, C_GREEN);
-        if (said_reply) { text(256, 116, "R", C_GREY); hexn(b, said_reply, 2); text(272, 116, b, C_WHITE); }
+        text(48, 127, b, C_GREEN);
+        if (said_reply) { text(256, 127, "R", C_GREY); hexn(b, said_reply, 2); text(272, 127, b, C_WHITE); }
 
-        box(8, 127, 304, 1, C_GREY);
-        text(8, 131, "SECONDS  BIOS  DRIVE", C_GREY);
+        box(8, 138, 304, 1, C_GREY);
+        text(8, 142, "SECONDS  BIOS  DRIVE", C_GREY);
         for (int i = 0; i < log_n; i++)     /* every change of the two codes, and every button */
         {
-            int y = 141 + i * 9;
+            int y = 152 + i * 9;
             secs(b, log_[i].t);             text(8, y, b, C_WHITE);
             hexn(b, log_[i].bios, 4);       text(80, y, b, C_WHITE);
             hexn(b, log_[i].drive, 2);      text(128, y, b, C_WHITE);

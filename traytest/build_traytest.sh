@@ -1,7 +1,7 @@
 #!/bin/bash
 # traytest/build_traytest.sh - the tray test disc (traytest/README.md)
 #   bash traytest/build_traytest.sh <out dir> [NAME]
-#     <out dir>/<NAME>.cue + .bin     the disc (default NAME: CD32X_TRAYTEST_T1)
+#     <out dir>/<NAME>.cue + .bin     the disc (default NAME: CD32X_TRAYTEST_T2)
 # Built in a temporary COPY of the BootCamp: commands 84 and 90 are merged into the copy's stack
 # (traytest/merge_tray.py), the game is hello/ with traytest/main.c in it, then the copy's own build.sh
 # runs with TRAYTEST=1.  Nothing in the BootCamp itself changes (check_boot.py before and after).
@@ -10,7 +10,7 @@ set -e
 [ $# -ge 1 ] && [ $# -le 2 ] || { echo "usage: bash traytest/build_traytest.sh <out dir> [NAME]"; exit 1; }
 BC="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$1"; OUT="$(cd "$1" && pwd)"
-NAME="${2:-CD32X_TRAYTEST_T1}"
+NAME="${2:-CD32X_TRAYTEST_T2}"
 python3 "$BC/tools/check_boot.py" > /dev/null || { echo "*** the BootCamp's stack does not pass check_boot.py"; exit 1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 ( cd "$BC" && tar --exclude=./.git --exclude=./disc -cf - . ) | ( cd "$T" && tar -xf - )
