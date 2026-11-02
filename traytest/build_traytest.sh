@@ -31,7 +31,7 @@ EOF
 ( cd "$T" && GAME=traytest_game DISC_NAME="$NAME" TRAYTEST=1 bash build.sh > "$T/build.log" 2>&1 ) \
   || { tail -30 "$T/build.log"; echo "*** the tray test did not build"; exit 1; }
 # an unanswered command looks like a hang (ledger 7a): the switch must have reached main.c
-grep -E "gcc .*-DTRAYTEST=1 .*main\.c" "$T/stack/subcpu/make.log" > /dev/null || { echo "*** TRAYTEST=1 did not reach main.c"; exit 1; }
+grep -E "gcc .*-DTRAYTEST=1 .*main\.c" "$T/build.log" > /dev/null || { echo "*** TRAYTEST=1 did not reach main.c"; exit 1; }
 cp "$T/disc/$NAME.cue" "$T/disc/$NAME.bin" "$OUT/"
 python3 "$BC/tools/check_boot.py" > /dev/null || { echo "*** the BootCamp's stack changed during the build"; exit 1; }
 ( cd "$OUT" && md5sum "$NAME.cue" "$NAME.bin" )
