@@ -85,6 +85,13 @@ ifeq ($(TILEP),1)
 ASFLAGS_GENPLANE += --defsym DX_TILEP=1
 endif
 # DX-TILEP end
+# DX-ROMPAUSE begin
+# ROMPAUSE=1 (with STREAM=1): the read-ahead ring nearly full pauses the drive with its place kept (BIOS ROMPAUSEON /
+# ROMPAUSEOFF) instead of losing the sectors it delivers meanwhile (main.c ROMPAUSE-1): Metal Slug CD32X.  Without it:
+# unchanged.  Ledger section 26.
+ROMPAUSE ?= 0
+HWFLAGS += -DOL_ROMPAUSE=$(ROMPAUSE)
+# DX-ROMPAUSE end
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional
 # DX-GENPLANE begin

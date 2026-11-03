@@ -53,6 +53,9 @@ extern int  scd_bios_call(int fn, int d1, void *a0);
 #ifndef OL_FMVRING
 #define OL_FMVRING 0            /* FMV-2: CMD 46 ring mode for streamed movies (Makefile FMVRING) */
 #endif
+#ifndef OL_ROMPAUSE /* DX-ROMPAUSE begin */
+#define OL_ROMPAUSE 0           /* ROMPAUSE-1: the read-ahead pauses the drive instead of losing sectors (Makefile ROMPAUSE) */
+#endif /* DX-ROMPAUSE end */
 #ifndef OL_CARTW
 #define OL_CARTW 0              /* CARTW-1: CMD 46 copies to the cart in words (Makefile CARTW) */
 #endif
@@ -114,9 +117,42 @@ __asm__(
 );
 static int st_next = -1, st_end;               /* the drive delivers st_next .. st_end - 1 */
 static uint32_t st_restarts, st_low, st_high, st_err;   /* diagnostics */
+#if OL_ROMPAUSE /* DX-ROMPAUSE begin */
+/* ROMPAUSE-1 (Metal Slug CD32X, 3 Nov 2026; ledger section 22b's "pause the data read instead of losing it",
+   section 26): when the read-ahead ring (st_buf) is nearly full, the drive is paused with its place kept
+   (ROMPAUSEON 0x08, state 0x2B) instead of left to run on: the sectors it delivered meanwhile were lost and the
+   next chunk started the read again (a seek).  The ring keeps ST_PAUSE_ROOM slots for the sectors still on their
+   way when it pauses; cd_chunk_read lets it go on (ROMPAUSEOFF 0x09, state 0x2A) when the next chunk is asked for.
+   Any other use of the drive drops the pause with the stream (st_kill); a sector that does not follow on (the
+   headers are checked as always) starts the read again, as before. */
+extern void scd_rom_pause(int on);
+__asm__(
+    "       .pushsection .text\n"
+    "       .align  2\n"
+    "       .globl  scd_rom_pause\n"
+    "scd_rom_pause:\n"
+    "       movem.l %d2-%d7/%a2-%a6,-(%sp)\n"
+    "       move.w  #0x0009,%d0\n"            /* ROMPAUSEOFF */
+    "       tst.l   48(%sp)\n"
+    "       beq.b   1f\n"
+    "       move.w  #0x0008,%d0\n"            /* ROMPAUSEON */
+    "1:     jsr     0x5F22.w\n"
+    "       movem.l (%sp)+,%d2-%d7/%a2-%a6\n"
+    "       rts\n"
+    "       .popsection\n"
+);
+#define ST_PAUSE_ROOM 8
+static int st_paused;
+static uint32_t st_pauses;                     /* (diagnostics) */
+#define st_kill() (st_next = -1, st_paused = 0)
+#define scd_sub_read(p, l, n)  (st_kill(), scd_sub_read(p, l, n))
+#define scd_open_file(n)       (st_kill(), scd_open_file(n))
+#define scd_bios_call(f, d, a) (st_kill(), scd_bios_call(f, d, a))
+#else /* DX-ROMPAUSE else */
 #define scd_sub_read(p, l, n)  (st_next = -1, scd_sub_read(p, l, n))
 #define scd_open_file(n)       (st_next = -1, scd_open_file(n))
 #define scd_bios_call(f, d, a) (st_next = -1, scd_bios_call(f, d, a))
+#endif /* DX-ROMPAUSE end */
 static int unbcd(int v) { return (v >> 4) * 10 + (v & 15); }
 static void cd_stream_read(uint8_t *dst, int lba, int n, int file_end)
 {
@@ -128,6 +164,9 @@ static void cd_stream_read(uint8_t *dst, int lba, int n, int file_end)
             scd_stream_start(lba, count);
             st_next = lba; st_end = lba + count;
             st_restarts++;
+#if OL_ROMPAUSE /* DX-ROMPAUSE begin */
+            st_paused = 0;                               /* (CDCSTOP + ROMREADN: a new read) */
+#endif /* DX-ROMPAUSE end */
         }
         uint8_t hdr[4];
         const int r = scd_stream_sector(dst, hdr, 400000);
@@ -184,6 +223,10 @@ static int st_buf_lba = -1, st_buf_n, st_buf_pos;      /* sector st_buf_lba is i
 extern int wait_md_cmd(void);
 static void cd_pump(void)
 {
+#if OL_ROMPAUSE /* DX-ROMPAUSE begin */
+    if (!st_paused && st_next >= 0 && st_buf_lba >= 0 && st_next < st_end && st_next == st_buf_lba + st_buf_n &&
+        st_buf_n >= ST_RING - ST_PAUSE_ROOM) { scd_rom_pause(1); st_paused = 1; st_pauses++; }
+#endif /* DX-ROMPAUSE end */
     if (st_next < 0 || st_buf_lba < 0 || st_buf_n >= ST_RING || st_next >= st_end ||
         st_next != st_buf_lba + st_buf_n)
         return;
@@ -216,6 +259,9 @@ static int md_cmd4_p(int c, int a, int b, int d, int e) { send_md_cmd4(c, a, b, 
 static void cd_chunk_read(uint8_t *dst, int lba, int n, int file_end)
 {
     int k = 0;
+#if OL_ROMPAUSE /* DX-ROMPAUSE begin */
+    if (st_paused) { st_paused = 0; if (st_next >= 0) scd_rom_pause(0); }   /* (the drive on from its place) */
+#endif /* DX-ROMPAUSE end */
     if (st_buf_lba >= 0 && lba >= st_buf_lba && lba < st_buf_lba + st_buf_n) {
         const int skip = lba - st_buf_lba;               /* sectors read ahead that are not wanted */
         st_buf_pos = (st_buf_pos + skip) % ST_RING; st_buf_lba = lba; st_buf_n -= skip;
