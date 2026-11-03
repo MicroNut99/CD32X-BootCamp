@@ -262,6 +262,9 @@ static void cd_chunk_read(uint8_t *dst, int lba, int n, int file_end)
 #if DX_FBVDP /* DX-FBVDP begin */
 #define MD_CMD_FB_LIST        39         /* FBVDP: hw_md.s fb_list(op, list) */
 #endif /* DX-FBVDP end */
+#if OL_TILEP /* DX-TILEP begin */
+#define MD_CMD_TILE_COPY      40         /* TILEP: hw_md.s tile_copy(p, off) */
+#endif /* DX-TILEP end */
 /* KOBO K19: hw_md.s set_vdp_reg - one VDP register word */
 
 /* KOBO K19 - GREEN DIAGNOSTIC TEXT.  1 = printed as before (C on the pad shows/hides it).
@@ -1312,6 +1315,23 @@ hb_done:    ;
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
 #endif
+#if OL_TILEP /* DX-TILEP begin */
+        else if (cmd == 99) {
+            /* TILEP-2 (Metal Slug CD32X, 3 Nov 2026; ledger section 25): a tile page's cache.  A game's sprite
+               tiles are cut into 2 MB pages (window 1, CMD 68); a page keeps slots for tiles that are in another
+               page, and its leaves say, of each tile it does not have, the page q and index j that do.  COMM2 =
+               the page window 1 shows (p, 1-6), COMM8L = where the tile part ('MSPG') starts in every page.  The
+               tiles themselves the SH2 hands to the listener's routine 40 (hw_md.s tile_copy) one by one
+               through COMM4-COMM10 while this command runs (TILEP-1, a command a tile through routine 26, took
+               ~10 ms a tile in ares).  Reply COMM12 = the tiles copied, 0xFFFF refused. */
+            uint32_t a2 = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF;
+            uint32_t a8 = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128);
+            int p = (int)(a2 & 7), r = -1;
+            if (p >= 1 && p <= 6 && a8 < 0x1FFF00) r = do_md_cmd2(MD_CMD_TILE_COPY, p, (int)a8);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512C, r < 0 ? 0xFFFF : r & 0xFFFF);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
+        }
+#endif /* DX-TILEP end */
 #if DX_GENPLANE /* DX-GENPLANE begin */
         /* DX-GENPLANE (Dracula X CD32X, GENPLANE=1 bash build.sh): SuperTux CD32X REV's commands 62-67,
            taken unchanged from MicroNut99/SuperTuxCD32X_REV cd32x/subcpu/main.c (REV2: 62-66, REV4: 67).

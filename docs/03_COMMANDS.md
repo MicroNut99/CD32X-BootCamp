@@ -63,16 +63,17 @@ status, is the command ledger in https://github.com/MicroNut99/docs: the Kobo PD
 | **67** | cart → VRAM map columns | COMM2 = VRAM address of the first column's top word; COMM8L = (columns − 1) << 30 \| words a column << 22 \| cart offset | COMM12 = 1 ok, 0 refused | 1–4 columns of 1–255 words, 128 bytes apart (a 64-cell plane); all inside one 1 MB bank of the window. MD 37 `copy_vram_col` (GENPLANE) |
 | **78** | V scroll line split | COMM2 = index 0–15: COMM8L = entry (line << 20 \| V scroll A << 10 \| V scroll B); COMM2 = `0x8000 \| count`: show that list, its first count entries (0 = off) | — | **Only in `VSPLIT=1` builds (needs `GENPLANE=1`).** Entry 0 = the top of the picture, the others in line order. The Genesis H interrupt (every line, level 4; `$A12006` → `hint_vs`) writes VSRAM where an entry starts and puts entry 0 back after line 223. **Two lists (D5):** entries go into the list not shown; a commit while the splits run takes effect at the end of the picture, the vblank at which a 32X swap asked for after it is shown (the first commit shows at once). Level 4 is masked only while a listener routine that touches the VDP runs (not 3, 11, 19-22), so a split due then can land late on that picture. MD 38 `set_vs_line` |
 | **79** | The Genesis VDP from the 32X frame buffer | 0: run the list at frame buffer offset COMM8L; 1: the commit (run what the lists kept) | COMM12 = 1 ok, 0 a bad list | **Only in `FBVDP=1` builds (needs `GENPLANE=1 VSPLIT=1`).** The SH2 writes a list of runs into the frame buffer it draws in (`0x1nnn` control words, `0x2nnn` data words, `0x3nnn` kept for the commit, `0x0000` the end), gives the frame buffer to the 68000 (`FM` = 0) for the command and takes it back after. For what a running game makes each frame: map words, converted tiles, H scroll tables, colours (about 6.3 µs a word in ares). MD 39 `fb_list`. Ledger §24 |
+| **99** | A tile page's cache (Metal Slug CD32X) | COMM2 = the page window 1 shows (1-6), COMM8L = where the tile part (`MSPG`) starts in every page | COMM12 = the tiles copied, `0xFFFF` refused | **Only in `TILEP=1` builds, on the EverDrive launcher's listener (MODE1 + M1PAGE).** While it runs, the SH2 hands the 68000 the tiles one by one through COMM4-COMM10 (`0x8000 \| k` in COMM12 asks for tile k, `0x4000 \| k` in COMM2 says it is there, `0x7FFF` = no more); the 68000 copies each from page q into a slot of page p and patches the page's leaf. Both SH2s must stay off the cart meanwhile. MD 40 `tile_copy`. Ledger §25 |
 
 **Free numbers.** Free on every stack, per the ledger's list:
 
 - 39–43, 49, 55;
-- 81-83, 85-89 and 91 and up (72–75 went to Rayman and `sdcard/` on 26–27 Oct, ledger §17-18; 76 / 77 are
+- 81-83, 85-89, 91-98 and 100 and up (72–75 went to Rayman and `sdcard/` on 26–27 Oct, ledger §17-18; 76 / 77 are
   kept for `sdcard/`'s move off 74 / 75, §18; 78 is `VSPLIT`'s, 31 Oct; 79 is `FBVDP`'s, 3 Nov, §24; 84 and 90 are
-  `traytest/`'s, 2 Nov, §22).
+  `traytest/`'s, 2 Nov, §22; 99 is `TILEP`'s, 3 Nov, §25).
 
 Do not take these: 62–67 (this stack's `GENPLANE`, SuperTux REV, Rayman), 67 and 69–71 (OpenJazz REV), 72–75
-(Rayman, `sdcard/`), 76–77 (`sdcard/`'s move), 78 (this stack's `VSPLIT`), 79 (this stack's `FBVDP`), 80 (Sonic CD 2011), 84 and 90 (`traytest/`: CD status, the tray).
+(Rayman, `sdcard/`), 76–77 (`sdcard/`'s move), 78 (this stack's `VSPLIT`), 79 (this stack's `FBVDP`), 80 (Sonic CD 2011), 84 and 90 (`traytest/`: CD status, the tray), 99 (this stack's `TILEP`).
 
 A number must never mean two things on any stack. Your command must sit behind a build switch in
 `main.c`, which is compiled with **HWFLAGS** (not CCFLAGS).
@@ -123,6 +124,7 @@ run time:
 | 36 / 37 | `set_vsram` / `copy_vram_col` | **`GENPLANE=1` only** (`MD_CMD_END` 38, else 36): one VSRAM word; `copy_vram` with the auto-increment at 128 (a map column). SuperTux REV2 / REV4's routines, unchanged |
 | 38 | `set_vs_line` | **`VSPLIT=1` only** (`MD_CMD_END` 39): the split list of command 78 (two lists, switched by `hint_vs` at the end of a picture); with it, the H interrupt handler `hint_vs` and the dispatcher's level-4 mask during the routines that touch the VDP |
 | 39 | `fb_list` | **`FBVDP=1` only** (`MD_CMD_END` 40): command 79's list from the 32X frame buffer to the VDP's ports; 256 words kept for the commit (`fb_keep`) |
+| 40 | `tile_copy` | **`TILEP=1` only** (`MD_CMD_END` 41; 36-39 `cmd_nop` when their switches are off): command 99's tiles, each copied with RV = 1 from page q into page p's slot (MODE1-9's banks, W on only for the writes into the cart, MODE1-6); needs MODE1 + M1PAGE, else returns -1 |
 | 18 | `INIT_32X` | The 32X power-up (boot only) |
 
 **Rule:** the 68000 reads the Sub-CPU's command flag twice and acts only when both reads match (HW10). A

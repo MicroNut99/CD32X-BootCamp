@@ -37,6 +37,9 @@
         .equ    MD_CMD_END, 36              /* KOBO K19: + set_vdp_reg (34); D32X M1: + start_d32xr (35) */
 .endif                                      | DX-GENPLANE end
 .endif                                      | DX-VSPLIT end
+.ifdef DX_TILEP                             | DX-TILEP begin
+        .equ    MD_CMD_END, 41              /* + tile_copy (40): TILEP, a tile page's cache (36-39 cmd_nop if off) */
+.endif                                      | DX-TILEP end
 
 | MODE1-1 (Makefile MODE1=1, docs/12): the listener for a CARTRIDGE boot (the Sega CD's "mode 1"), started
 | by edboot/EDCD.32X from a Mega EverDrive PRO.  There the cart is at 0x000000 and the Sega CD at 0x400000
@@ -431,14 +434,36 @@ cmd_table:
         .word   chilly_rv_memcpy - cmd_table    /* 33 */
         .word   set_vdp_reg - cmd_table         /* 34  KOBO K19 */
         .word   start_d32xr - cmd_table         /* 35  D32X M1 */
+.ifdef DX_TILEP                             | DX-TILEP begin
+.ifndef DX_GENPLANE
+        .word   cmd_nop - cmd_table             /* 36  (its switch off: TILEP keeps the numbers) */
+        .word   cmd_nop - cmd_table             /* 37  (its switch off: TILEP keeps the numbers) */
+        .word   cmd_nop - cmd_table             /* 38  (its switch off: TILEP keeps the numbers) */
+        .word   cmd_nop - cmd_table             /* 39  (its switch off: TILEP keeps the numbers) */
+        .word   tile_copy - cmd_table           /* 40  TILEP */
+.endif
+.endif                                      | DX-TILEP end
 .ifdef DX_GENPLANE                          | DX-GENPLANE begin
         .word   set_vsram - cmd_table           /* 36  SuperTux REV2 */
         .word   copy_vram_col - cmd_table       /* 37  SuperTux REV4 */
+.ifdef DX_TILEP                             | DX-TILEP begin
+.ifndef DX_VSPLIT
+        .word   cmd_nop - cmd_table             /* 38  (its switch off: TILEP keeps the numbers) */
+        .word   cmd_nop - cmd_table             /* 39  (its switch off: TILEP keeps the numbers) */
+        .word   tile_copy - cmd_table           /* 40  TILEP */
+.endif
+.endif                                      | DX-TILEP end
 .ifdef DX_VSPLIT                            | DX-VSPLIT begin
         .word   set_vs_line - cmd_table         /* 38  VSPLIT */
 .ifdef DX_FBVDP                             | DX-FBVDP begin
         .word   fb_list - cmd_table             /* 39  FBVDP (needs VSPLIT) */
 .endif                                      | DX-FBVDP end
+.ifdef DX_TILEP                             | DX-TILEP begin
+.ifndef DX_FBVDP
+        .word   cmd_nop - cmd_table             /* 39  (its switch off: TILEP keeps the numbers) */
+.endif
+        .word   tile_copy - cmd_table           /* 40  TILEP */
+.endif                                      | DX-TILEP end
 
 | VSPLIT (needs GENPLANE): the V scroll of planes A and B changed part-way down the screen, from a list of
 | up to 16 entries, by the Genesis H interrupt (level 4, every line).  Mega-CD manual: on H-INT the main
@@ -2057,6 +2082,196 @@ m1_buf:
         rts
         .endif
 
+.ifdef DX_TILEP                             | DX-TILEP begin
+| TILEP-2 (Metal Slug CD32X, 3 Nov 2026; ledger section 25): int tile_copy(int p, int off) - CMD 99's tiles
+| copied by the 68000 alone, the SH2 handing them over through the 32X COMM registers (one command for all
+| a picture's tiles; TILEP-1 took some 15 listener calls a tile, ~10 ms).  Window 1 shows page p; off = where
+| the tile part ('MSPG') starts in every page.  For entry k (0, 1, ...) the routine puts 0x8000 | k (12 bits)
+| in COMM12; the SH2 then puts the leaf's offset in the page / 4 (COMM4, and COMM6 bits 0-2 its bits 16-18),
+| the page q holding the tile (COMM6 bits 8-10), its index j in q (COMM8) and the slot s (COMM10), and last
+| 0x4000 | k in COMM2; 0x7FFF in COMM2 = no more.  Each tile with RV = 1 and no interrupt: window 1 = page q
+| (CTRL4-7 = 4q..4q+3), its rows (128 bytes) and flags (4) to m1_buf; window 1 = what m1_wb says (page p);
+| then with W on and no other write: the slot's last leaf gets its value back (the slot table: that leaf's
+| offset, its value before), the rows and flags into slot s (index: the header's first slot + s), the
+| table = this leaf, 0x80000000 | q << 24 | j, and last the leaf = index << 16 | 0xFFFE.  Returns the
+| tiles done, -1 refused (page p, off, or no 'MSPG').  Needs MODE1 and M1PAGE (else refused).
+tile_copy:
+        movem.l d2-d7/a2-a6,-(sp)
+        moveq   #-1,d0
+        .if OL_MODE1
+        .if OL_M1PAGE
+        move.l  48(sp),d6               | p
+        move.l  52(sp),d7               | off
+        lea     0xA15100,a6
+        cmpi.l  #1,d6
+        blo     9f
+        cmpi.l  #6,d6
+        bhi     9f
+        cmpi.l  #0x1FFF00,d7
+        bhs     9f
+        movea.l d7,a5
+        adda.l  #0x200000,a5            | the part, window 1
+        move.w  sr,-(sp)
+        move.w  #0x2700,sr
+        bset    #0,7(a6)                | RV = 1: page p's header
+        lea     tc_hdr(pc),a4
+        moveq   #-1,d5
+        cmpi.l  #0x4D535047,(a5)
+        bne.b   1f
+        move.l  28(a5),(a4)             | rows
+        move.l  24(a5),4(a4)            | flags
+        move.l  36(a5),8(a4)            | the first slot's index
+        move.l  44(a5),12(a4)           | the slot table
+        moveq   #0,d5
+1:      bclr    #0,7(a6)
+        move.w  (sp)+,sr
+        tst.l   d5
+        bmi     9f
+        tst.l   8(a4)
+        beq     9f
+2:      move.w  d5,d0                   | entry k: ready
+        andi.w  #0x0FFF,d0
+        move.w  d0,d1
+        ori.w   #0x8000,d0
+        ori.w   #0x4000,d1
+        move.w  d0,0x2C(a6)
+        move.l  #0x80000,d0             | (bounded: ~2 s)
+3:      move.w  0x22(a6),d2
+        cmp.w   d1,d2
+        beq.b   4f
+        cmpi.w  #0x7FFF,d2
+        beq.b   8f
+        subq.l  #1,d0
+        bne.b   3b
+        bra.b   8f
+4:      moveq   #0,d3
+        move.w  0x24(a6),d3             | the leaf / 4, low
+        moveq   #0,d4
+        move.w  0x26(a6),d4             | its high bits, q
+        moveq   #0,d2
+        move.w  0x28(a6),d2             | j
+        moveq   #0,d1
+        move.w  0x2A(a6),d1             | s
+        bsr     tc_one
+        addq.l  #1,d5
+        bra.b   2b
+8:      move.l  d5,d0
+9:
+        .endif
+        .endif
+        movem.l (sp)+,d2-d7/a2-a6
+        rts
+
+        .if OL_MODE1
+        .if OL_M1PAGE
+| one tile: d3/d4 the leaf (COMM4, COMM6), d2 j, d1 s; a4 page p's header values, a5 the part, a6 0xA15100
+tc_one:
+        movem.l d5/a2-a3,-(sp)
+        move.w  d4,d0
+        lsr.w   #8,d0
+        andi.l  #7,d0                   | q
+        beq     9f
+        cmpi.w  #6,d0
+        bhi     9f
+        andi.l  #7,d4
+        swap    d4
+        move.w  d3,d4
+        add.l   d4,d4
+        add.l   d4,d4                   | the leaf's offset in the page
+        cmpi.l  #0x200000,d4
+        bhs     9f
+        move.l  d0,d3                   | (the table's value: 0x80000000 | q << 24 | j)
+        ror.l   #8,d3
+        or.l    d2,d3
+        bset    #31,d3
+        lsl.w   #2,d0                   | bank 4q
+        move.w  sr,-(sp)
+        move.w  #0x2700,sr
+        bset    #0,7(a6)                | RV = 1
+        lea     0xA130F8,a0             | window 1 = page q
+        move.w  d0,(a0)+
+        addq.w  #1,d0
+        move.w  d0,(a0)+
+        addq.w  #1,d0
+        move.w  d0,(a0)+
+        addq.w  #1,d0
+        move.w  d0,(a0)+
+        lea     m1_buf(pc),a1
+        cmpi.l  #0x4D535047,(a5)
+        bne.b   5f                      | (not a page part: nothing copied)
+        move.l  d2,d5
+        lsl.l   #7,d5
+        movea.l a5,a0
+        adda.l  28(a5),a0
+        adda.l  d5,a0                   | q's rows of tile j
+        moveq   #32-1,d5
+1:      move.l  (a0)+,(a1)+
+        dbra    d5,1b
+        move.l  d2,d5
+        lsl.l   #2,d5
+        movea.l a5,a0
+        adda.l  24(a5),a0
+        move.l  0(a0,d5.l),(a1)         | its flags (m1_buf + 128)
+        moveq   #0,d0
+        bra.b   6f
+5:      moveq   #-1,d0
+6:      lea     m1_wb+8(pc),a0          | window 1 = page p again
+        lea     0xA130F8,a2
+        move.w  (a0)+,(a2)+
+        move.w  (a0)+,(a2)+
+        move.w  (a0)+,(a2)+
+        move.w  (a0)+,(a2)+
+        tst.l   d0
+        bne.b   7f
+        move.l  d1,d5
+        lsl.l   #3,d5
+        movea.l a5,a3
+        adda.l  12(a4),a3
+        adda.l  d5,a3                   | slot s's entry in the table
+        move.l  8(a4),d2
+        add.l   d1,d2                   | the slot's index
+        move.l  (a3),d0                 | the slot's last leaf
+        lea     m1_buf(pc),a1
+        move.l  d2,d5
+        lsl.l   #7,d5
+        movea.l a5,a0
+        adda.l  (a4),a0
+        adda.l  d5,a0                   | p's rows of the slot
+        move.l  d2,d5
+        lsl.l   #2,d5
+        movea.l a5,a2
+        adda.l  4(a4),a2
+        adda.l  d5,a2                   | its flags
+        swap    d2
+        move.w  #0xFFFE,d2              | the leaf's value
+        move.w  #OL_M1CTRL0_W1,0xA130F0 | W on: from here only writes into the cart
+        tst.l   d0
+        beq.b   2f
+        cmpi.l  #0x200000,d0
+        bhs.b   2f
+        movea.l d0,a1
+        adda.l  #0x200000,a1
+        move.l  4(a3),(a1)              | the slot's last tile: its leaf back
+        lea     m1_buf(pc),a1
+2:      moveq   #32-1,d5
+3:      move.l  (a1)+,(a0)+
+        dbra    d5,3b
+        move.l  (a1),(a2)
+        move.l  d4,(a3)+
+        move.l  d3,(a3)
+        movea.l d4,a0
+        adda.l  #0x200000,a0
+        move.l  d2,(a0)                 | last: the leaf, once its rows are there
+        move.w  #OL_M1CTRL0_W0,0xA130F0 | W off
+7:      bclr    #0,7(a6)
+        move.w  (sp)+,sr
+9:      movem.l (sp)+,d5/a2-a3
+        rts
+        .align  2
+tc_hdr: .long   0, 0, 0, 0              | page p's rows, flags, first slot, slot table (offsets in the part)
+        .endif
+        .endif
+.endif                                      | DX-TILEP end
 | =============================================================================
 | 68K EXCEPTION TRAP (V71, restored in K29) - DIAGNOSTIC, changes nothing unless the 68K
 | faults.  Hooks vectors 2..11 (bus, address, illegal, div0, CHK, TRAPV, privilege, trace,

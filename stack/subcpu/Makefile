@@ -75,6 +75,16 @@ endif
 PAD2 ?= 0
 HWFLAGS += -DOL_PAD2=$(PAD2)
 # DX-PAD2 end
+# DX-TILEP begin
+# TILEP=1: command 99, a tile page's cache - tiles copied from one window-1 page into the slots of another
+# (main.c, and the listener's routine 40 tile_copy, hw_md.s, with MODE1-9's page registers): Metal Slug
+# CD32X.  Without it: unchanged.  Ledger section 25.
+TILEP ?= 0
+HWFLAGS += -DOL_TILEP=$(TILEP)
+ifeq ($(TILEP),1)
+ASFLAGS_GENPLANE += --defsym DX_TILEP=1
+endif
+# DX-TILEP end
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional
 # DX-GENPLANE begin
