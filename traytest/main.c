@@ -30,6 +30,11 @@
  * the BIOS even if the header read shows nothing), and the last five changes with the drive's full status
  * word.  The subtitle (the owner): "MODEL 1: OPEN/CLOSE TEST".
  *
+ * T5 (the owner, 3 Nov 2026: "I need a 32X.bin only for this test"): the same test also as a 32X cartridge
+ * ROM, <NAME>.32X, started from the Mega EverDrive PRO with no disc - the BootCamp's EDCD launcher
+ * (edboot/, docs/12) around a MODE1=1 build of the same Sub-CPU program, with this program as its SH2
+ * program.  The subtitle says which: CART or DISC.
+ *
  * Commands 84 and 90 are merged into a copy of the stack by traytest/merge_tray.py (TRAYTEST=1);
  * ledger section 22.  cdapi.c, 32x.h and font8x8.h are hello's.
  */
@@ -38,7 +43,10 @@
 #include "cdapi.h"
 #include "font8x8.h"
 
-#define TRAYTEST_NAME     "TRAY TEST T4"
+#define TRAYTEST_NAME     "TRAY TEST T5"
+#ifndef TRAY_FROM_CART
+#define TRAY_FROM_CART    0           /* build_traytest.sh: 1 = the cartridge ROM (<NAME>.32X), 0 = the disc */
+#endif
 #define CD_CMD_STATUS     84          /* traytest/merge_tray.py */
 #define CD_CMD_TRAY       90
 
@@ -335,10 +343,12 @@ static void watch(uint16_t bios, uint8_t drive)
         else say(pend_moved ? "OPEN: TRAY MOVING " : "OPEN: WAITING ", dt, 0, C_YELLOW);
     }
     else                                    /* CLOSE: the disc read (2000 or drive 09 seen), then paused (0500 /
-                                               04); or no disc */
+                                               04) or playing (0100: a music CD can start by itself); or no disc */
     {
         if (pend_read && !(bios & 0x8000) && code == 0x05 && drive == 0x04)
             { say("CLOSE OK: DISC READ IN ", dt, 0, C_GREEN); pend = -1; }
+        else if (pend_read && !(bios & 0x8000) && code == 0x01)   /* T5: a music CD may start playing */
+            { say("CLOSE OK: READ, PLAYING, ", dt, 0, C_GREEN); pend = -1; }
         else if (pend_changed && !(bios & 0x8000) && (code == 0x10 || drive == 0x0B))
             { say("CLOSE OK: NO DISC, ", dt, 0, C_GREEN); pend = -1; }
         else if (dt >= CLOSE_WAIT)
@@ -461,6 +471,7 @@ int main(void)
         clear(C_BLACK);
         text(24, 4, "CD32X BOOTCAMP - " TRAYTEST_NAME, C_YELLOW);
         text(24, 13, "MODEL 1: OPEN/CLOSE TEST", C_GREY);
+        text(248, 13, TRAY_FROM_CART ? "(CART)" : "(DISC)", C_CYAN);   /* T5: how it was started */
 
         const int held = (pad & keys) != 0 && prev != 0xFFFF;   /* A (or C, START) is down now */
         const int flash = act_btn >= 0 && gTicks - said_t < 30;  /* half a second after a button acted */

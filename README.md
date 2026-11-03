@@ -106,7 +106,7 @@ SEGA_TOOLCHAIN=/opt/sega REGION=EU bash build.sh       # another toolchain place
 STREAM=1 CARTW=1 DISC_NAME=BootCampFast bash build.sh  # faster loads (emulation-tested only)
 GAME=probe DISC_NAME=CD32X_PROBE_V1 EDCD=1 bash build.sh  # the timing probe (probe/README.md)
 GAME=timeprobe CART=16 DISC_NAME=CD32X_TIMEPROBE bash build.sh  # does /TIME reach the cart through the 32X? (timeprobe/README.md)
-bash traytest/build_traytest.sh disc CD32X_TRAYTEST_T4               # open / close the Sega CD tray from the screen; no cart needed (traytest/README.md)
+bash traytest/build_traytest.sh disc CD32X_TRAYTEST_T5               # the tray test: a disc (no cart needed) and a .32X for the EverDrive PRO (no disc needed) (traytest/README.md)
 ```
 
 The EverDrive PRO programs build on their own (same `ROOTDIR=` / `SEGA_TOOLCHAIN=`):

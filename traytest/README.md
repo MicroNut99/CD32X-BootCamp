@@ -5,6 +5,17 @@ screen, or a game). Most Model 1 units are said not to open from a game. This di
 BIOS to open and close the tray. Whether that works or not, **a photo of the screen is the record**: the screen
 carries everything needed to tell why.
 
+**T5 (3 Nov 2026): also as a 32X cartridge ROM, `CD32X_TRAYTEST_T5.32X` - no disc needed.**
+- It is the BootCamp's EDCD launcher (`edboot/`, [docs/12](../docs/12_CARTRIDGE_BOOT.md)), unchanged.
+- Inside it: a cartridge-boot build of the same Sub-CPU program (`MODE1=1`), and this test as its SH2 program.
+- Start it from the **Mega EverDrive PRO** with a CD in the tray or none: it never reads the disc.
+- Its Sub-CPU program also leaves out the start-up disc read (`TRAY_NODISC=1`, below). The tray may hold a
+  music CD or nothing, and on a music CD that read never ends (ares, 3 Nov 2026).
+- The subtitle says `(CART)` or `(DISC)`, so a photo shows how the test was started.
+- In a cartridge boot the BIOS ROM is at 0x400000, so the header is read at 0x400100.
+- The disc version is built as well (`CD32X_TRAYTEST_T5.cue` / `.bin`) and needs no cart.
+- RESULT counts `CLOSE OK: READ, PLAYING` too: after CLOSE with a music CD, the BIOS may start playing it.
+
 **T4 (2 Nov 2026): the screen is the record.**
 - A RESULT line says in words what OPEN or CLOSE did (`OPEN OK IN 2.3 S`, `OPEN FAILED: NO CHANGE, 10 S`, ...).
 - The screen also shows the BIOS's whole status table in hex and the BIOS ROM's own name, version and region.
@@ -23,7 +34,7 @@ is left alone: the 4 MB RAM cart, the 16 MB cart, the Mega EverDrive PRO, or non
   black screen).
 - T2 added the visible button presses (below); T1 had no sign of a press.
 
-**Status: untested on a console (2 Nov 2026).** Run in ares only (below). The two commands it uses are the
+**Status: untested on a console (3 Nov 2026).** Run in ares only (below). The two commands it uses are the
 ledger's section 22 proposals 84 and 90, built here for the first time. T4 adds three reads to command 84.
 None of them changes anything:
 - the BIOS ROM's header, read by the 68000 with listener routine 21 at 0x100-0x1FF (not read by the stack before);
@@ -36,13 +47,13 @@ From the BootCamp folder (WSL):
 
 ```
 cd /mnt/s/KoboPort/sega-toolchain-12.1/sega/CD32X-BootCamp
-bash /mnt/s/KoboPort/sega-toolchain-12.1/sega/CD32X-BootCamp/traytest/build_traytest.sh /mnt/s/KoboPort/sega-toolchain-12.1/sega/CD32X-BootCamp/disc CD32X_TRAYTEST_T4 2>&1 | tee /mnt/s/KoboPort/sega-toolchain-12.1/sega/CD32X-BootCamp/build_traytest_log.txt
+bash /mnt/s/KoboPort/sega-toolchain-12.1/sega/CD32X-BootCamp/traytest/build_traytest.sh /mnt/s/KoboPort/sega-toolchain-12.1/sega/CD32X-BootCamp/disc CD32X_TRAYTEST_T5 2>&1 | tee /mnt/s/KoboPort/sega-toolchain-12.1/sega/CD32X-BootCamp/build_traytest_log.txt
 ```
 
-It makes `disc/CD32X_TRAYTEST_T4.cue` + `.bin`. The second argument is the disc's name: give every disc you burn
-its own. `ROOTDIR=` / `SEGA_TOOLCHAIN=` / `REGION=` work as for `build.sh`.
+It makes `disc/CD32X_TRAYTEST_T5.32X` (the cartridge ROM) and `disc/CD32X_TRAYTEST_T5.cue` + `.bin` (the disc).
+The second argument is the name: give every disc and ROM its own. `ROOTDIR=` / `SEGA_TOOLCHAIN=` / `REGION=` work as for `build.sh`.
 
-The build works in a temporary **copy** of the BootCamp's `stack/` and `tools/`:
+The build works in a temporary **copy** of the BootCamp's `stack/`, `tools/`, `edboot/` and `edtest/src/`:
 
 1. `merge_tray.py` puts commands 84 and 90 into the copy's `stack/subcpu/main.c` behind `TRAYTEST ?= 0`, and a
    start-up switch behind `TRAY_NOCART ?= 0`: the stack's own no-cart mode (`KOBO_NOCART 1`), so the start-up
@@ -52,14 +63,24 @@ The build works in a temporary **copy** of the BootCamp's `stack/` and `tools/`:
    replaces CDLOADER in the copy. `sdram.c`'s start is CDLOADER's own start-up, line for line.
 3. The copy's Sub-CPU program and disc image are made with `TRAYTEST=1 TRAY_NOCART=1` (as `build.sh` step 5).
 4. The test tone goes on as track 2 (as `build.sh` step 6).
+5. The cartridge ROM (T5):
+   - the test program again, built with `TRAY_FROM_CART=1` (the screen says CART);
+   - the Sub-CPU program again, with `MODE1=1` (as `build.sh EDCD=1`) and `TRAY_NODISC=1`. That switch is in the
+     merge too: the start-up's disc read (`InitCD`: DRVINIT, the wait for the track list, the search for the
+     volume descriptor) is not made. The test reads no files; its CLOSE button does DRVINIT itself;
+   - the copy's `edboot/build_edcd.sh` around both.
 
-The BootCamp's own `stack/` is never touched (`check_boot.py` before and after). With both switches off, the merged
-copy builds the same Sub-CPU program as the stack, byte for byte (`CDROMPlayer.bin` md5 checked, 2 Nov 2026).
+The BootCamp's own `stack/` is never touched (`check_boot.py` before and after). With the switches off, the merged
+copy builds the same Sub-CPU program as the stack, byte for byte, both the disc's and the `MODE1=1` one
+(`CDROMPlayer.bin` md5s checked, 3 Nov 2026).
 
 ## Run it
 
-Sega CD + 32X. No cartridge needed; whatever cart is in the slot is not read or written. The test screen comes up
-after the Sega CD logo.
+- **The cartridge ROM** (`CD32X_TRAYTEST_T5.32X`): Sega CD + 32X + Mega EverDrive PRO. Copy it to the SD card,
+  start it from the EverDrive's menu. No disc needed; any CD in the tray is fine. The screen says `(CART)`.
+  Until the first CLOSE, the BIOS may show `READING DISC` (2000): this start-up leaves the drive alone.
+- **The disc** (`CD32X_TRAYTEST_T5.cue`): Sega CD + 32X, no cartridge needed; whatever cart is in the slot is not
+  read or written. The test screen comes up after the Sega CD logo. The screen says `(DISC)`.
 
 - **LEFT / RIGHT** choose a button (yellow edge), **A** (or C, or START) presses it.
 - **You see every press:**
@@ -103,6 +124,7 @@ What the screen shows, top to bottom (command 84; the BIOS's status table is `CD
 | `OPEN FAILED: MOVED, NOT OPEN` (red) | The drive said "tray moving" but never "open" |
 | `OPEN FAILED: LAST DRIVE xx` (red) | Things changed, but not to "open"; xx = the drive's last code (07 = command error) |
 | `CLOSE OK: DISC READ IN x S` (green) | The disc was read (BIOS 2000 or drive 09 seen), then paused (0500, drive 04) |
+| `CLOSE OK: READ, PLAYING, x S` (green) | The disc was read, then the BIOS started playing it (0100): a music CD can do that |
 | `CLOSE OK: NO DISC, x S` (green) | The tray closed with no disc in it (BIOS 1000 or drive 0B) |
 | `CLOSE: READING DISC x S` (yellow) | Still watching |
 | `CLOSE FAILED: NO CHANGE, 20 S` / `... LAST DRIVE xx` (red) | As for OPEN |
@@ -130,7 +152,18 @@ For a unit that does not open, these show why:
 
 The list keeps the last five changes.
 
-## In ares (2 Nov 2026)
+## In ares (3 Nov 2026)
+
+T5's cartridge ROM, started the way the console starts it (ares's EverDrive PRO with the ROM as its boot program):
+- With the test disc in the tray: runs. OPEN gives `OPEN FAILED: LAST DRIVE 07` (no tray in ares), CLOSE gives
+  `CLOSE OK: DISC READ`. The BIOS header is read at 0x400100: `BR 000003-1.10  U`.
+- With a music-only CD in the tray: runs, CLOSE reads it (tracks 01-01).
+- Before `TRAY_NODISC`, with the music CD it never got past the start-up (the volume-descriptor read).
+- ares cannot run with no disc at all.
+
+T5's disc with no cart: unchanged, `(DISC)`.
+
+### 2 Nov 2026
 
 T4 in ares with no cart: OPEN gives `OPEN FAILED: LAST DRIVE 07` (red), as expected with no tray (below). CLOSE
 then gives `CLOSE OK: DISC READ IN 0.4 S`. The BIOS lines read `BR 000003-1.10  U  (C)SEGA 1992.OCT` and

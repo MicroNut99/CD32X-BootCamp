@@ -4,8 +4,8 @@
     python3 traytest/merge_tray.py /tmp/bootcamp-copy .
 
 The boot stack is never edited (stack/ is the console-proven one; tools/check_boot.py guards it).  This
-puts two Sub-CPU commands and a start-up switch into a COPY of stack/subcpu (main.c, Makefile), behind
-switches that are off by default (TRAYTEST ?= 0, TRAY_NOCART ?= 0), and proves the merge can be taken out again: without the TRAYTEST blocks the copy's
+puts two Sub-CPU commands and two start-up switches into a COPY of stack/subcpu (main.c, Makefile), behind
+switches that are off by default (TRAYTEST ?= 0, TRAY_NOCART ?= 0, TRAY_NODISC ?= 0), and proves the merge can be taken out again: without the TRAYTEST blocks the copy's
 files are byte for byte what they were.  The copy's BOOT_FILES.md5 is updated (only the copy's).
 Same pattern as sdcard/subcpu/merge_sdsave.py.
 
@@ -32,11 +32,17 @@ The commands (ledger CD32X_COMMAND_LEDGER_ADDITIONS.md section 22; untested on a
                                  COMM12 = the low word of where its _BURAM jump goes (0x5F1A): the two differ
                                           from one BIOS version to the next
                       COMM2 = 0x20-0x5F: COMM8L = the 68000's long at 0x100 + 4n (n = COMM2 - 0x20): the BIOS
-                                 ROM's header (name, date, version, region), through listener routine 21
+                                 ROM's header (name, date, version, region), through listener routine 21.
+                                 Built with MODE1=1 (T5, the cartridge ROM): 0x400100 + 4n, where the
+                                 Sega CD's ROM is in a cartridge boot (docs/12)
                       (no CDBSTAT call for 3, 4 and 0x20-0x5F)
 
 and one switch for the start-up (T3, no cart):
 
+  TRAY_NODISC=1       (T5, the cartridge ROM) the start-up's disc read is not made: InitCD (DRVINIT, the wait for
+                      the track list, the search for the disc's volume descriptor).  Started from a cartridge,
+                      the tray may hold a music CD or nothing, and on a music CD that read never ends (ares,
+                      3 Nov 2026).  The test reads no files; its CLOSE button does DRVINIT itself.
   TRAY_NOCART=1       the stack's own no-cart mode (KOBO_NOCART 1, main.c "KOBO STORAGE MODE"): the start-up
                       cart check is not made, so the cart is never read or written.  For a disc whose SH2
                       program runs from SDRAM (traytest/sdram.c) and needs no cart.  Only with TRAYTEST=1.
@@ -76,8 +82,9 @@ MAIN = """/* TRAYTEST { (CD32X-BootCamp traytest/merge_tray.py: the drive's tray
             int op = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF;
             uint32_t l;
             int w = 0;
-            if (op >= 0x20 && op < 0x60) {      /* T4: the BIOS ROM's header, 68000 0x100-0x1FF */
-                l = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0x100 + ((op - 0x20) << 2));
+            if (op >= 0x20 && op < 0x60) {      /* T4: the BIOS ROM's header, 68000 0x100-0x1FF (T5: 0x400100-
+                                                   0x4001FF in a cartridge boot, where the Sega CD's ROM is) */
+                l = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, (TRAY_MODE1 ? 0x400100 : 0x100) + ((op - 0x20) << 2));
             } else if (op == 3) {               /* T4: the gate array's $FF8000, the Mega Drive's version */
                 w = *(const volatile uint16_t *)0xFFFF8000;
                 l = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_16, 0xA10000) & 0xFFFF;
@@ -120,14 +127,35 @@ __attribute__((used)) static const char tray_nocart_marker[] = "TRAY-NOCART: NO 
 /* } TRAYTEST */
 """
 
+MAIN_NODISC_AT = "    uint16_t init_err = InitCD();\n"
+MAIN_NODISC_BEFORE = """/* TRAYTEST { (CD32X-BootCamp traytest/merge_tray.py) TRAY_NODISC=1: no start-up disc read (InitCD), for the
+   tray test's cartridge ROM (T5): the tray may hold a music CD or nothing; the test reads no files */
+#if TRAYTEST && TRAY_NODISC
+    uint16_t init_err = 0;
+    __attribute__((used)) static const char tray_nodisc_marker[] = "TRAY-NODISC: NO START-UP DISC READ";
+#else
+/* } TRAYTEST */
+"""
+MAIN_NODISC_AFTER = """/* TRAYTEST { */
+#endif
+/* } TRAYTEST */
+"""
+
 MAKE_AFTER = "CARTW ?= 0\nHWFLAGS += -DOL_CARTW=$(CARTW)\n"
 MAKE = """# TRAYTEST { TRAYTEST=1: the drive's tray (CMD 90) and the CD status (CMD 84) - CD32X-BootCamp traytest/,
-# ledger section 22.  Untested on a console.  TRAY_NOCART=1 (with TRAYTEST=1): no start-up cart check.
+# ledger section 22.  Untested on a console.  With TRAYTEST=1: TRAY_NOCART=1 no start-up cart check,
+# TRAY_NODISC=1 no start-up disc read (InitCD).
 TRAYTEST ?= 0
 TRAY_TRAY ?= 90
 TRAY_STATUS ?= 84
 TRAY_NOCART ?= 0
-HWFLAGS += -DTRAYTEST=$(TRAYTEST) -DTRAY_CMD_TRAY=$(TRAY_TRAY) -DTRAY_CMD_STATUS=$(TRAY_STATUS) -DTRAY_NOCART=$(TRAY_NOCART)
+TRAY_NODISC ?= 0
+HWFLAGS += -DTRAYTEST=$(TRAYTEST) -DTRAY_CMD_TRAY=$(TRAY_TRAY) -DTRAY_CMD_STATUS=$(TRAY_STATUS) -DTRAY_NOCART=$(TRAY_NOCART) -DTRAY_NODISC=$(TRAY_NODISC)
+ifeq ($(MODE1),1)
+HWFLAGS += -DTRAY_MODE1=1
+else
+HWFLAGS += -DTRAY_MODE1=0
+endif
 # } TRAYTEST
 """
 
@@ -181,6 +209,8 @@ def main():
             print("    note: %s of the copy is not the BootCamp's (another merge first?) - checked against the copy" % n)
     new = dict(files)
     new["main.c"] = insert(new["main.c"], MAIN_NOCART_AFTER, MAIN_NOCART)
+    new["main.c"] = insert(new["main.c"], MAIN_NODISC_AT, MAIN_NODISC_BEFORE, after=False)
+    new["main.c"] = insert(new["main.c"], MAIN_NODISC_AT, MAIN_NODISC_AFTER)
     new["main.c"] = insert(new["main.c"], MAIN_BEFORE, MAIN, after=False)
     new["Makefile"] = insert(new["Makefile"], MAKE_AFTER, MAKE)
     for n, t in new.items():
