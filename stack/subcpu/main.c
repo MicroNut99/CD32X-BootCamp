@@ -1682,7 +1682,7 @@ z_done:
         else if (cmd == 79) {
             int op = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF;
             uint32_t off = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128) & 0x1FFFE;
-            int r = op <= 1 ? do_md_cmd2(MD_CMD_FB_LIST, op, (int)(0x840000 + off)) : 0;
+            int r = op <= 3 ? do_md_cmd2(MD_CMD_FB_LIST, op, (int)(0x840000 + off)) : 0;   /* (2 / 3: docs/66) */
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512C, r & 1);
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }

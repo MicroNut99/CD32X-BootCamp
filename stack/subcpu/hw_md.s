@@ -652,7 +652,12 @@ copy_vram_col:
 |                   so the tables it keeps in both go into the other one once the swap has been; the SH2 gives the
 |                   68000 the frame buffer for the commit then)
 | op 0: run the list at 'list' (68000 address: 0x840000 + the SH2's frame buffer offset); op 1: the commit -
-| run what was kept, then write the pairs, then forget both. Returns 1, or 0 (a header it doesn't know, or no room to keep: the rest
+| run what was kept, then write the pairs, then forget both. Ops 2 / 3 (DraculaX docs/66): run the list as op 0,
+| then show 32X frame buffer 0 / 1 (FBCTL FS, written here: the 32X swaps at the next vblank) and run the kept
+| runs from vblank_int at that vblank - the scroll and colours change at the line the 32X's picture does, however
+| late the Sub-CPU is; if the swap is already shown (the list ended in a blank), the kept runs and the pairs now.
+| Op 1 then writes the pairs (the SH2 sends it once it sees the swap). Kept runs still armed when a command
+| comes (vblank_int held off) are run first. Returns 1, or 0 (a header it doesn't know, or no room to keep: the rest
 | is not run). The control and data runs set the VDP's address and increment themselves: nothing is assumed
 | of the VDP's state, and the increment is left as the list leaves it. Runs with level 4 masked (the
 | dispatcher: hint_vs writes VSRAM), so nothing moves the VDP's address under it.
@@ -663,7 +668,9 @@ fb_list:
         movem.l d2-d3/a2-a3,-(sp)
         movea.l 24(sp),a0               | (the arguments past the 4 registers saved)
         move.l  20(sp),d3               | op
-        beq.w   1f
+        bsr.w   fb_overdue              | (runs kept for a vblank whose interrupt has not run them: now)
+        cmpi.l  #1,d3
+        bne.w   1f                      | ops 0, 2, 3: a list
         lea     fb_keep(pc),a0          | the commit: what was kept, then empty
         move.w  -2(a0),d0
         clr.w   -2(a0)
@@ -688,8 +695,8 @@ fb_list:
         beq.w   10f
         cmpi.w  #0x3000,d0
         bne.w   9f
-        tst.l   d3
-        bne.w   9f                      | (kept runs hold no keep)
+        cmpi.l  #1,d3
+        beq.w   9f                      | (kept runs hold no keep)
         lea     fb_keep(pc),a3          | 0x3nnn: kept
         move.w  -2(a3),d0
         move.w  d0,d2
@@ -709,8 +716,8 @@ fb_list:
         dbra    d1,3b
         bra.w   2b
 10:
-        tst.l   d3
-        bne.w   9f                      | (no pairs inside the commit's runs)
+        cmpi.l  #1,d3
+        beq.w   9f                      | (no pairs inside the commit's runs)
         lea     fb_jrn_n(pc),a3         | 0x4nnn: pairs kept for the commit
         move.w  (a3),d0
         move.w  d0,d2
@@ -731,8 +738,31 @@ fb_list:
         dbra    d1,4b
         bra.w   2b
 8:
-        tst.l   d3
-        beq.w   12f
+        cmpi.l  #1,d3
+        beq.w   13f                     | op 1: the pairs
+        cmpi.l  #2,d3
+        blo.w   12f                     | op 0: done
+        move.w  sr,-(sp)                | ops 2 / 3: the 32X to show frame buffer op - 2 (it swaps at the next
+        move.w  #0x2700,sr              | vblank, at once in a blank), the kept runs at that vblank
+        moveq   #1,d0
+        and.w   d3,d0
+        move.w  d0,0xA1518A             | (FBCTL FS: the frame buffer is the 68000's, FM = 0)
+        moveq   #7,d1
+14:
+        dbra    d1,14b
+        move.w  0xA1518A,d1
+        eor.w   d0,d1
+        btst    #0,d1
+        bne.b   15f
+        bsr.w   fb_vrun                 | shown already (the list ended in a blank): the kept runs now,
+        move.w  (sp)+,sr                | and the pairs (the buffer not shown is the one drawn in next)
+        bra.w   13f
+15:
+        lea     fb_armed(pc),a3         | not yet: vblank_int runs them
+        move.w  #1,(a3)
+        move.w  (sp)+,sr
+        bra.w   12f
+13:
         lea     fb_jrn_n(pc),a3         | the commit, after its runs: the pairs kept into the frame buffer (the
         move.w  (a3),d0                 | one the SH2 draws in next: the swap has been)
         beq.w   12f
@@ -757,7 +787,57 @@ fb_list:
         movem.l (sp)+,d2-d3/a2-a3
         rts
 
+| fb_vrun: the kept runs now, then nothing kept or armed (called with interrupts masked, or from vblank_int)
+fb_vrun:
+        movem.l d0-d1/a0-a2,-(sp)
+        lea     fb_armed(pc),a0
+        clr.w   (a0)
+        lea     fb_keep(pc),a0
+        move.w  -2(a0),d0
+        clr.w   -2(a0)
+        add.w   d0,d0
+        clr.w   0(a0,d0.w)              | (their end)
+        lea     0xC00000,a2
+        lea     0xC00004,a1
+1:
+        move.w  (a0)+,d0
+        move.w  d0,d1
+        andi.w  #0x0FFF,d1
+        andi.w  #0xF000,d0
+        beq.b   9f
+        subq.w  #1,d1
+        bmi.b   1b
+        cmpi.w  #0x1000,d0
+        beq.b   3f
+2:
+        move.w  (a0)+,(a2)              | (data)
+        dbra    d1,2b
+        bra.b   1b
+3:
+        move.w  (a0)+,(a1)              | (control)
+        dbra    d1,3b
+        bra.b   1b
+9:
+        movem.l (sp)+,d0-d1/a0-a2
+        rts
+
+| fb_overdue: runs armed for a vblank whose interrupt did not run them (interrupts off meanwhile): now
+fb_overdue:
+        move.w  fb_armed(pc),d0
+        beq.b   1f
+        move.w  sr,-(sp)
+        move.w  #0x2700,sr
+        move.w  fb_armed(pc),d0
+        beq.b   2f
+        bsr.w   fb_vrun
+2:
+        move.w  (sp)+,sr
+1:
+        rts
+
         .align  2
+fb_armed:
+        .word   0                       | 1: the kept runs wait for the vblank (ops 2 / 3)
 fb_jrn_n:
         .word   0                       | fb_jrn's count, in words
         .word   0                       | fb_keep's count, in words
@@ -1818,6 +1898,13 @@ message6:
 
 vblank_int:
         movem.l d0-d1/a0-a1,-(sp)
+.ifdef DX_FBVDP                             | DX-FBVDP begin
+        lea     fb_armed(pc),a0         | FBVDP ops 2 / 3: the kept runs at the vblank the 32X shows their picture
+        tst.w   (a0)
+        beq.b   0f
+        bsr.w   fb_vrun
+0:
+.endif                                      | DX-FBVDP end
         .if OL_MODE1 && OL_M1MINVB
         bra.b   vb_ifl2                 /* MODE1-4: level 2 to the Sub-CPU only */
         .endif
