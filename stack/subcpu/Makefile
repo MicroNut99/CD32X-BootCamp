@@ -101,6 +101,13 @@ ifeq ($(MODE1),1)
 HWFLAGS += -DOL_ZMODE1=1
 endif
 # DX-ZCHUNK end
+# DX-CDVOL begin
+# CDVOL=<1-0x3FF>: the CD audio's volume (BIOS FDRSET at each track's start, main.c CDVOL-1) instead of full (0x400):
+# the music's balance with the PCM effects (Metal Slug CD32X: the effects ~10 dB under the music in ares, level with
+# it in the arcade).  Without it: unchanged.  Ledger section 28.
+CDVOL ?= 0
+HWFLAGS += -DOL_CDVOL=$(CDVOL)
+# DX-CDVOL end
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional
 # DX-GENPLANE begin

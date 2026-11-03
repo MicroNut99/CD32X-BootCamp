@@ -53,6 +53,9 @@ extern int  scd_bios_call(int fn, int d1, void *a0);
 #ifndef OL_FMVRING
 #define OL_FMVRING 0            /* FMV-2: CMD 46 ring mode for streamed movies (Makefile FMVRING) */
 #endif
+#ifndef OL_CDVOL /* DX-CDVOL begin */
+#define OL_CDVOL 0              /* CDVOL-1: 1-0x3FF = the CD audio's volume (Makefile CDVOL); 0 = full, as before */
+#endif /* DX-CDVOL end */
 #ifndef OL_ZCHUNK /* DX-ZCHUNK begin */
 #define OL_ZCHUNK 0             /* ZCHUNK-1: command 100, CMD 46 from an LZ4-packed file (Makefile ZCHUNK) */
 #endif /* DX-ZCHUNK end */
@@ -795,7 +798,11 @@ static int cdda_start(int track, int *st_out, int once)   /* OL-4 play once */
     bios_wait_ready(0);
     scd_bios_call(0x0089, 0, 0);            
     scd_bios_call(0x0002, 0, 0);            
+#if OL_CDVOL /* DX-CDVOL begin */
+    scd_bios_call(0x0085, OL_CDVOL & 0x3FF, 0);   /* CDVOL-1: the CD audio's volume (FDRSET, 0-0x3FF; 0x400 full) */
+#else /* DX-CDVOL else */
     scd_bios_call(0x0085, 0x0400, 0);       
+#endif /* DX-CDVOL end */
     cdda_track_word = (uint16_t)track;
     scd_bios_call(once ? 0x0012 : 0x0013, 0, &cdda_track_word);   /* MSCPLAY1 once / MSCPLAYR repeat */  
     st = scd_cd_status();

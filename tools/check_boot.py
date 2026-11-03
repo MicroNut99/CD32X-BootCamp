@@ -49,7 +49,7 @@ def _block(name):
 
 
 # the switched blocks, outermost first (a VSPLIT block's 'else' part may hold a GENPLANE block)
-SWITCHED = [_block(b"VSPLIT"), _block(b"GENPLANE"), _block(b"PAD2"), _block(b"FBVDP"), _block(b"TILEP"), _block(b"ROMPAUSE"), _block(b"ZCHUNK")]   # (FBVDP: also nested in VSPLIT's)
+SWITCHED = [_block(b"VSPLIT"), _block(b"GENPLANE"), _block(b"PAD2"), _block(b"FBVDP"), _block(b"TILEP"), _block(b"ROMPAUSE"), _block(b"ZCHUNK"), _block(b"CDVOL")]   # (FBVDP: also nested in VSPLIT's)
 GENPLANE = SWITCHED[1]
 
 
