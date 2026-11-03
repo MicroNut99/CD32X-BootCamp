@@ -655,8 +655,11 @@ copy_vram_col:
 | run what was kept, then write the pairs, then forget both. Ops 2 / 3 (DraculaX docs/66): run the list as op 0,
 | then show 32X frame buffer 0 / 1 (FBCTL FS, written here: the 32X swaps at the next vblank) and run the kept
 | runs from vblank_int at that vblank - the scroll and colours change at the line the 32X's picture does, however
-| late the Sub-CPU is; if the swap is already shown (the list ended in a blank), the kept runs and the pairs now.
-| Op 1 then writes the pairs (the SH2 sends it once it sees the swap). Kept runs still armed when a command
+| late the Sub-CPU is. A list that ends in a vertical blank waits for the display first (DraculaX docs/68: a swap at
+| once in a blank came before the SH2's colours for it); if the swap is shown already all the same, the kept runs and
+| the pairs now.
+| COMM10 = 0xFB00 | the buffer once FS is written (COMM8L, the list's offset, is read before). Op 1 then writes
+| the pairs (the SH2 sends it once it sees the swap). Kept runs still armed when a command
 | comes (vblank_int held off) are run first. Returns 1, or 0 (a header it doesn't know, or no room to keep: the rest
 | is not run). The control and data runs set the VDP's address and increment themselves: nothing is assumed
 | of the VDP's state, and the increment is left as the list leaves it. Runs with level 4 masked (the
@@ -742,11 +745,18 @@ fb_list:
         beq.w   13f                     | op 1: the pairs
         cmpi.l  #2,d3
         blo.w   12f                     | op 0: done
+16:
+        btst    #3,0xC00005             | (the list ended in a vertical blank: wait for the display first, so the
+        bne.b   16b                     | swap is at the next vblank and the SH2 sees it there, as always)
         move.w  sr,-(sp)                | ops 2 / 3: the 32X to show frame buffer op - 2 (it swaps at the next
         move.w  #0x2700,sr              | vblank, at once in a blank), the kept runs at that vblank
         moveq   #1,d0
         and.w   d3,d0
         move.w  d0,0xA1518A             | (FBCTL FS: the frame buffer is the 68000's, FM = 0)
+        move.w  d0,d1
+        ori.w   #0xFB00,d1
+        move.w  d1,0xA1512A             | (COMM10 = 0xFB00 | the buffer: the swap is asked for - the SH2's vblank
+                                        | interrupt knows the swap is at this blank before the command's end)
         moveq   #7,d1
 14:
         dbra    d1,14b
