@@ -647,17 +647,23 @@ copy_vram_col:
 |   0x1nnn + n      n words to the VDP's control port (address commands as two words, register writes)
 |   0x2nnn + n      n words to the data port
 |   0x3nnn + n      kept here (fb_keep, up to FB_KEEP words in all) to run at the commit: runs of 1 and 2 only
+|   0x4nnn + n      n / 2 pairs (word index, word) kept (fb_jrn, up to FB_JRN_N words) and written into the frame
+|                   buffer at the commit, after its runs (DraculaX docs/65: the SH2 sees only the buffer not shown,
+|                   so the tables it keeps in both go into the other one once the swap has been; the SH2 gives the
+|                   68000 the frame buffer for the commit then)
 | op 0: run the list at 'list' (68000 address: 0x840000 + the SH2's frame buffer offset); op 1: the commit -
-| run what was kept, then forget it. Returns 1, or 0 (a header it doesn't know, or no room to keep: the rest
+| run what was kept, then write the pairs, then forget both. Returns 1, or 0 (a header it doesn't know, or no room to keep: the rest
 | is not run). The control and data runs set the VDP's address and increment themselves: nothing is assumed
 | of the VDP's state, and the increment is left as the list leaves it. Runs with level 4 masked (the
 | dispatcher: hint_vs writes VSRAM), so nothing moves the VDP's address under it.
         .equ    FB_KEEP, 256
+        .equ    FB_JRN, 0xFFC000                | (68000 work RAM, 4 KB: nothing else of the stack uses it)
+        .equ    FB_JRN_N, 2048
 fb_list:
         movem.l d2-d3/a2-a3,-(sp)
         movea.l 24(sp),a0               | (the arguments past the 4 registers saved)
         move.l  20(sp),d3               | op
-        beq.b   1f
+        beq.w   1f
         lea     fb_keep(pc),a0          | the commit: what was kept, then empty
         move.w  -2(a0),d0
         clr.w   -2(a0)
@@ -671,23 +677,25 @@ fb_list:
         move.w  d0,d1
         andi.w  #0x0FFF,d1              | the count
         andi.w  #0xF000,d0
-        beq.b   8f                      | 0: the end
+        beq.w   8f                      | 0: the end
         subq.w  #1,d1
-        bmi.b   2b                      | (no words)
+        bmi.w   2b                      | (no words)
         cmpi.w  #0x1000,d0
-        beq.b   3f
+        beq.w   3f
         cmpi.w  #0x2000,d0
-        beq.b   4f
+        beq.w   4f
+        cmpi.w  #0x4000,d0
+        beq.w   10f
         cmpi.w  #0x3000,d0
-        bne.b   9f
+        bne.w   9f
         tst.l   d3
-        bne.b   9f                      | (kept runs hold no keep)
+        bne.w   9f                      | (kept runs hold no keep)
         lea     fb_keep(pc),a3          | 0x3nnn: kept
         move.w  -2(a3),d0
         move.w  d0,d2
         add.w   d1,d2
         cmpi.w  #FB_KEEP-2,d2           | (room for its words and the end word)
-        bhs.b   9f
+        bhs.w   9f
         addq.w  #1,d2
         move.w  d2,-2(a3)
         add.w   d0,d0
@@ -695,18 +703,54 @@ fb_list:
 5:
         move.w  (a0)+,(a3)+
         dbra    d1,5b
-        bra.b   2b
+        bra.w   2b
 3:
         move.w  (a0)+,(a1)              | 0x1nnn: control
         dbra    d1,3b
-        bra.b   2b
+        bra.w   2b
+10:
+        tst.l   d3
+        bne.w   9f                      | (no pairs inside the commit's runs)
+        lea     fb_jrn_n(pc),a3         | 0x4nnn: pairs kept for the commit
+        move.w  (a3),d0
+        move.w  d0,d2
+        add.w   d1,d2
+        cmpi.w  #FB_JRN_N-1,d2
+        bhs.w   9f
+        addq.w  #1,d2
+        move.w  d2,(a3)
+        lea     FB_JRN,a3
+        add.w   d0,d0
+        adda.w  d0,a3
+11:
+        move.w  (a0)+,(a3)+
+        dbra    d1,11b
+        bra.w   2b
 4:
         move.w  (a0)+,(a2)              | 0x2nnn: data
         dbra    d1,4b
-        bra.b   2b
+        bra.w   2b
 8:
+        tst.l   d3
+        beq.w   12f
+        lea     fb_jrn_n(pc),a3         | the commit, after its runs: the pairs kept into the frame buffer (the
+        move.w  (a3),d0                 | one the SH2 draws in next: the swap has been)
+        beq.w   12f
+        clr.w   (a3)
+        lea     FB_JRN,a2
+        lsr.w   #1,d0
+        subq.w  #1,d0
+6:
+        moveq   #0,d1
+        move.w  (a2)+,d1
+        add.l   d1,d1
+        movea.l d1,a1
+        adda.l  #0x840000,a1
+        move.w  (a2)+,(a1)
+        dbra    d0,6b
+12:
         moveq   #1,d0
-        bra.b   7f
+        bra.w   7f
 9:
         moveq   #0,d0
 7:
@@ -714,6 +758,8 @@ fb_list:
         rts
 
         .align  2
+fb_jrn_n:
+        .word   0                       | fb_jrn's count, in words
         .word   0                       | fb_keep's count, in words
 fb_keep:
         .space  FB_KEEP*2
