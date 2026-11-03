@@ -1,8 +1,8 @@
 #!/bin/bash
 # traytest/build_traytest.sh - the tray test disc (traytest/README.md)
 #   bash traytest/build_traytest.sh <out dir> [NAME]
-#     <out dir>/<NAME>.cue + .bin     the disc (default NAME: CD32X_TRAYTEST_T3)
-# T3: no cartridge (Sega CD + 32X only).  Built in a temporary COPY of the BootCamp's stack/ and tools/:
+#     <out dir>/<NAME>.cue + .bin     the disc (default NAME: CD32X_TRAYTEST_T4)
+# No cartridge needed (T3; Sega CD + 32X).  Built in a temporary COPY of the BootCamp's stack/ and tools/:
 #   1. commands 84 / 90 and the no-cart switch into the copy's stack (traytest/merge_tray.py)
 #   2. the test's SH2 program (main.c, sdram.c, hello's cdapi.c) built like CDLOADER, with the copy's
 #      stack/sh2/cdl_crt0.s and cdloader.ld (unchanged), and put in CDLOADER's place: it runs from SDRAM
@@ -14,7 +14,7 @@ set -e
 [ $# -ge 1 ] && [ $# -le 2 ] || { echo "usage: bash traytest/build_traytest.sh <out dir> [NAME]"; exit 1; }
 BC="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$1"; OUT="$(cd "$1" && pwd)"
-NAME="${2:-CD32X_TRAYTEST_T3}"
+NAME="${2:-CD32X_TRAYTEST_T4}"
 if [ -n "${SEGA_TOOLCHAIN:-}" ]; then ROOTDIR="$SEGA_TOOLCHAIN"; export PATH="$PATH:$SEGA_TOOLCHAIN/usr/bin"; fi
 ROOTDIR="${ROOTDIR:-/opt/toolchains/sega}"
 [ -x "$ROOTDIR/sh-elf/bin/sh-elf-gcc" ] || { echo "*** no toolchain at $ROOTDIR (set ROOTDIR= or SEGA_TOOLCHAIN=)"; exit 1; }
@@ -55,7 +55,7 @@ echo "==> 3. the Sub-CPU program and the disc image (TRAYTEST=1 TRAY_NOCART=1)"
 # an unanswered command looks like a hang (ledger 7a): both switches must have reached main.c
 grep -E "gcc .*-DTRAYTEST=1 .*-DTRAY_NOCART=1 .*main\.c" "$T/make.log" > /dev/null || { echo "*** TRAYTEST=1 TRAY_NOCART=1 did not reach main.c"; exit 1; }
 ISO="$T/stack/subcpu/CDROMPlayer.iso"
-grep -a -q "SH2-TRAYTEST-T3-SDRAM" "$ISO" || { echo "*** the test program is not on the disc"; exit 1; }
+grep -a -q "SH2-TRAYTEST-SDRAM" "$ISO" || { echo "*** the test program is not on the disc"; exit 1; }
 ! grep -a -q "SH2-OPENLARA-CD-OL1-LOADER" "$ISO" || { echo "*** CDLOADER is still on the disc"; exit 1; }
 grep -a -q "TRAY-NOCART: NO START-UP CART CHECK" "$ISO" || { echo "*** the start-up cart check is still in the Sub-CPU program"; exit 1; }
 

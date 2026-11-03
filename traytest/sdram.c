@@ -25,7 +25,7 @@
 #define SC_CMD_CLR       (*(volatile uint16_t *)0x2000401A)
 
 /* in the disc image: build_traytest.sh checks for it (and that CDLOADER's marker is not there) */
-__attribute__((used)) const char sh2_build_marker[] = "SH2-TRAYTEST-T3-SDRAM";
+__attribute__((used)) const char sh2_build_marker[] = "SH2-TRAYTEST-SDRAM";
 
 /* what cdl_crt0.s needs besides main.c's pri_vbi_handler, sec_dma1_handler, secondary and the counters */
 void pri_cmd_handler(void) { SC_CMD_CLR = 0; }

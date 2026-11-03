@@ -24,6 +24,16 @@ The commands (ledger CD32X_COMMAND_LEDGER_ADDITIONS.md section 22; untested on a
                                  COMM8L = the time in the track (+12, BCD mm ss ff 00)
                       COMM2 = 2: COMM12 = the drive lights (+2)
                                  COMM8L = the time on the disc (+8, BCD mm ss ff 00)
+                      COMM2 = 0x10-0x17: COMM8L = table bytes 4n-4n+3 (n = COMM2 - 0x10): the whole table
+                      (T4: what a console that does not open shows, for a photo)
+                      COMM2 = 3: COMM12 = the Sub-CPU's register $FF8000 (LEDs, gate array version, reset)
+                                 COMM8L = the 68000's word at $A10000 (the Mega Drive version register, low byte)
+                      COMM2 = 4: COMM8L = where the Sub-CPU BIOS's _CDBIOS jump goes (the long at 0x5F24)
+                                 COMM12 = the low word of where its _BURAM jump goes (0x5F1A): the two differ
+                                          from one BIOS version to the next
+                      COMM2 = 0x20-0x5F: COMM8L = the 68000's long at 0x100 + 4n (n = COMM2 - 0x20): the BIOS
+                                 ROM's header (name, date, version, region), through listener routine 21
+                      (no CDBSTAT call for 3, 4 and 0x20-0x5F)
 
 and one switch for the start-up (T3, no cart):
 
@@ -56,22 +66,40 @@ MAIN = """/* TRAYTEST { (CD32X-BootCamp traytest/merge_tray.py: the drive's tray
            COMM2 = 0: COMM12 = the BIOS status word (+0); COMM8L = the drive's status word (+4) << 16 |
                       first track << 8 | last track (+16 / +17)
            COMM2 = 1: COMM12 = the word at +6 (current track, low byte); COMM8L = the time in the track (+12)
-           COMM2 = 2: COMM12 = the drive lights (+2); COMM8L = the time on the disc (+8) */
+           COMM2 = 2: COMM12 = the drive lights (+2); COMM8L = the time on the disc (+8)
+           COMM2 = 0x10-0x17: COMM8L = table bytes 4n..4n+3 (n = COMM2 - 0x10)
+           T4, no CDBSTAT call: COMM2 = 3: COMM12 = $FF8000, COMM8L = the 68000's word at $A10000;
+           COMM2 = 4: COMM8L = the _CDBIOS jump's target (0x5F24), COMM12 = the _BURAM jump's (low word, 0x5F1A);
+           COMM2 = 0x20-0x5F: COMM8L = the 68000's long at 0x100 + 4n (the BIOS ROM's header) */
         else if (cmd == TRAY_CMD_STATUS) {
             const volatile uint8_t *t = (const volatile uint8_t *)0x5E80;
             int op = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF;
             uint32_t l;
-            int w;
-            scd_bios_call(0x0081, 0, 0);
-            if (op == 1) {
-                w = t[6] << 8 | t[7];
-                l = (uint32_t)t[12] << 24 | (uint32_t)t[13] << 16 | (uint32_t)t[14] << 8 | t[15];
-            } else if (op == 2) {
-                w = t[2] << 8 | t[3];
-                l = (uint32_t)t[8] << 24 | (uint32_t)t[9] << 16 | (uint32_t)t[10] << 8 | t[11];
+            int w = 0;
+            if (op >= 0x20 && op < 0x60) {      /* T4: the BIOS ROM's header, 68000 0x100-0x1FF */
+                l = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0x100 + ((op - 0x20) << 2));
+            } else if (op == 3) {               /* T4: the gate array's $FF8000, the Mega Drive's version */
+                w = *(const volatile uint16_t *)0xFFFF8000;
+                l = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_16, 0xA10000) & 0xFFFF;
+            } else if (op == 4) {               /* T4: the Sub-CPU BIOS's entry points (_CDBIOS, _BURAM) */
+                const volatile uint16_t *j = (const volatile uint16_t *)0x5F00;
+                l = (uint32_t)j[0x24 / 2] << 16 | j[0x26 / 2];
+                w = j[0x1A / 2];
             } else {
-                w = t[0] << 8 | t[1];
-                l = (uint32_t)t[4] << 24 | (uint32_t)t[5] << 16 | (uint32_t)t[16] << 8 | t[17];
+                scd_bios_call(0x0081, 0, 0);
+                if (op >= 0x10 && op < 0x18) {  /* T4: the whole table, four bytes at a time */
+                    const volatile uint8_t *q = t + ((op - 0x10) << 2);
+                    l = (uint32_t)q[0] << 24 | (uint32_t)q[1] << 16 | (uint32_t)q[2] << 8 | q[3];
+                } else if (op == 1) {
+                    w = t[6] << 8 | t[7];
+                    l = (uint32_t)t[12] << 24 | (uint32_t)t[13] << 16 | (uint32_t)t[14] << 8 | t[15];
+                } else if (op == 2) {
+                    w = t[2] << 8 | t[3];
+                    l = (uint32_t)t[8] << 24 | (uint32_t)t[9] << 16 | (uint32_t)t[10] << 8 | t[11];
+                } else {
+                    w = t[0] << 8 | t[1];
+                    l = (uint32_t)t[4] << 24 | (uint32_t)t[5] << 16 | (uint32_t)t[16] << 8 | t[17];
+                }
             }
             do_md_cmd2(MD_CMD_WRITE_32X_32, 0xA15128, (int)l);
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512C, w);
