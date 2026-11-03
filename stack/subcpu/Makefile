@@ -59,6 +59,16 @@ ifeq ($(VSPLIT),1)
 ASFLAGS_GENPLANE += --defsym DX_VSPLIT=1
 endif
 # DX-VSPLIT end
+# DX-FBVDP begin
+# FBVDP=1 (needs GENPLANE=1 VSPLIT=1): command 79, the Genesis VDP written from a list in the 32X frame buffer
+# (hw_md.s fb_list, MD 39: map words, converted tiles, H scroll tables a running game makes).  Without it:
+# unchanged.  Ledger section 24.
+FBVDP ?= 0
+HWFLAGS += -DDX_FBVDP=$(FBVDP)
+ifeq ($(FBVDP),1)
+ASFLAGS_GENPLANE += --defsym DX_FBVDP=1
+endif
+# DX-FBVDP end
 # DX-PAD2 begin
 # PAD2=1: CMD 48's reply has pad 2 in COMM10 (main.c, the pad fast path) instead of the 68K's vblank
 # counter: a game of two players (Metal Slug CD32X).  Without it: unchanged.  Ledger section 10.

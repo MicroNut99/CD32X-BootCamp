@@ -259,6 +259,9 @@ static void cd_chunk_read(uint8_t *dst, int lba, int n, int file_end)
 #if DX_VSPLIT /* DX-VSPLIT begin */
 #define MD_CMD_SET_VS_LINE    38         /* VSPLIT: hw_md.s set_vs_line(index, entry) */
 #endif /* DX-VSPLIT end */
+#if DX_FBVDP /* DX-FBVDP begin */
+#define MD_CMD_FB_LIST        39         /* FBVDP: hw_md.s fb_list(op, list) */
+#endif /* DX-FBVDP end */
 /* KOBO K19: hw_md.s set_vdp_reg - one VDP register word */
 
 /* KOBO K19 - GREEN DIAGNOSTIC TEXT.  1 = printed as before (C on the pad shows/hides it).
@@ -1402,6 +1405,23 @@ hb_done:    ;
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
 #endif /* DX-VSPLIT end */
+#if DX_FBVDP /* DX-FBVDP begin */
+        /* FBVDP (Dracula X CD32X, docs/60; needs GENPLANE and VSPLIT) - 79 "the Genesis VDP from the 32X frame
+           buffer": the words a running game makes each frame (map entries, converted tiles, H scroll tables,
+           colours) - the cart commands 63 / 64 / 67 can't carry them (the SH2 can't write the cart), and 62 / 66
+           take one word a command (about 0.44 ms each).
+             COMM2 = 0: run the list at frame buffer offset COMM8L (even, below 0x20000; the SH2 gave the frame
+                        buffer to the 68000 first, FM = 0, and takes it back after);
+             COMM2 = 1: the commit - run the part the list kept (after the 32X swap: the vblank's register writes).
+           Reply COMM12 = 1 ok, 0 a bad list.  The list's form: hw_md.s fb_list (MD 39). */
+        else if (cmd == 79) {
+            int op = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF;
+            uint32_t off = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128) & 0x1FFFE;
+            int r = op <= 1 ? do_md_cmd2(MD_CMD_FB_LIST, op, (int)(0x840000 + off)) : 0;
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512C, r & 1);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
+        }
+#endif /* DX-FBVDP end */
         else if (cmd == 53) {
             /* K33 - CMD 53 "load sound effects": KOBOSFX.BIN -> PCM chip.  Reply in COMM12:
                number of effects (0 = failed). */

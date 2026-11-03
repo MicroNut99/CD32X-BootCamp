@@ -25,7 +25,11 @@
         .equ    MD_CMD_COPY_WORDS, 25
         .equ    MD_CMD_SAFE_CART_XFER, 26
 .ifdef DX_VSPLIT                            | DX-VSPLIT begin
+.ifdef DX_FBVDP                             | DX-FBVDP begin
+        .equ    MD_CMD_END, 40              /* + fb_list (39): FBVDP, the Genesis VDP from the 32X frame buffer */
+.else                                       | DX-FBVDP else
         .equ    MD_CMD_END, 39              /* + set_vs_line (38): VSPLIT, V scroll changed part-way down */
+.endif                                      | DX-FBVDP end
 .else                                       | DX-VSPLIT else
 .ifdef DX_GENPLANE                          | DX-GENPLANE begin
         .equ    MD_CMD_END, 38              /* + set_vsram (36), copy_vram_col (37): SuperTux REV2 / REV4 */
@@ -432,6 +436,9 @@ cmd_table:
         .word   copy_vram_col - cmd_table       /* 37  SuperTux REV4 */
 .ifdef DX_VSPLIT                            | DX-VSPLIT begin
         .word   set_vs_line - cmd_table         /* 38  VSPLIT */
+.ifdef DX_FBVDP                             | DX-FBVDP begin
+        .word   fb_list - cmd_table             /* 39  FBVDP (needs VSPLIT) */
+.endif                                      | DX-FBVDP end
 
 | VSPLIT (needs GENPLANE): the V scroll of planes A and B changed part-way down the screen, from a list of
 | up to 16 entries, by the Genesis H interrupt (level 4, every line).  Mega-CD manual: on H-INT the main
@@ -606,6 +613,86 @@ copy_vram_col:
         rts
 
 .endif                                      | DX-GENPLANE end
+.ifdef DX_FBVDP                             | DX-FBVDP begin
+| FBVDP (needs GENPLANE and VSPLIT; DraculaX_32X docs/60): int fb_list(int op, short *list);
+| The Genesis VDP written from a list the SH2 put in the 32X frame buffer - the one memory both reach. The SH2
+| gives the frame buffer to the 68000 (FM = 0) before the command and takes it back after; nothing here
+| touches FM. The list is big-endian words, each run a header and its words:
+|   0x0000          the end
+|   0x1nnn + n      n words to the VDP's control port (address commands as two words, register writes)
+|   0x2nnn + n      n words to the data port
+|   0x3nnn + n      kept here (fb_keep, up to FB_KEEP words in all) to run at the commit: runs of 1 and 2 only
+| op 0: run the list at 'list' (68000 address: 0x840000 + the SH2's frame buffer offset); op 1: the commit -
+| run what was kept, then forget it. Returns 1, or 0 (a header it doesn't know, or no room to keep: the rest
+| is not run). The control and data runs set the VDP's address and increment themselves: nothing is assumed
+| of the VDP's state, and the increment is left as the list leaves it. Runs with level 4 masked (the
+| dispatcher: hint_vs writes VSRAM), so nothing moves the VDP's address under it.
+        .equ    FB_KEEP, 256
+fb_list:
+        movem.l d2-d3/a2-a3,-(sp)
+        movea.l 24(sp),a0               | (the arguments past the 4 registers saved)
+        move.l  20(sp),d3               | op
+        beq.b   1f
+        lea     fb_keep(pc),a0          | the commit: what was kept, then empty
+        move.w  -2(a0),d0
+        clr.w   -2(a0)
+        add.w   d0,d0
+        clr.w   0(a0,d0.w)              | (its end)
+1:
+        lea     0xC00000,a2
+        lea     0xC00004,a1
+2:
+        move.w  (a0)+,d0
+        move.w  d0,d1
+        andi.w  #0x0FFF,d1              | the count
+        andi.w  #0xF000,d0
+        beq.b   8f                      | 0: the end
+        subq.w  #1,d1
+        bmi.b   2b                      | (no words)
+        cmpi.w  #0x1000,d0
+        beq.b   3f
+        cmpi.w  #0x2000,d0
+        beq.b   4f
+        cmpi.w  #0x3000,d0
+        bne.b   9f
+        tst.l   d3
+        bne.b   9f                      | (kept runs hold no keep)
+        lea     fb_keep(pc),a3          | 0x3nnn: kept
+        move.w  -2(a3),d0
+        move.w  d0,d2
+        add.w   d1,d2
+        cmpi.w  #FB_KEEP-2,d2           | (room for its words and the end word)
+        bhs.b   9f
+        addq.w  #1,d2
+        move.w  d2,-2(a3)
+        add.w   d0,d0
+        adda.w  d0,a3
+5:
+        move.w  (a0)+,(a3)+
+        dbra    d1,5b
+        bra.b   2b
+3:
+        move.w  (a0)+,(a1)              | 0x1nnn: control
+        dbra    d1,3b
+        bra.b   2b
+4:
+        move.w  (a0)+,(a2)              | 0x2nnn: data
+        dbra    d1,4b
+        bra.b   2b
+8:
+        moveq   #1,d0
+        bra.b   7f
+9:
+        moveq   #0,d0
+7:
+        movem.l (sp)+,d2-d3/a2-a3
+        rts
+
+        .align  2
+        .word   0                       | fb_keep's count, in words
+fb_keep:
+        .space  FB_KEEP*2
+.endif                                      | DX-FBVDP end
 
 | D32X M1: void start_d32xr(void) - never returns.
 | D32XR's ROM is in the RAM cart.  Interrupts off, cart bank 0, RV off (the SH2 must reach the

@@ -8,7 +8,7 @@
 #   SEGA_TOOLCHAIN=<folder>             the same, plus <folder>/usr/bin on PATH (genisoimage)
 #   DIAG=1                              the diagnostic disc: the stack's boot text on (docs/09_ERROR_CODES.md)
 #   REGION=US | EU | JP                 the boot block for the console's region (default US; only US is tested)
-#   STREAM= CARTW= FMVRING= SLOTS= CART= GENPLANE= VSPLIT= the Sub-CPU's build switches (stack/subcpu/Makefile; all off by default)
+#   STREAM= CARTW= FMVRING= SLOTS= CART= GENPLANE= VSPLIT= FBVDP= the Sub-CPU's build switches (stack/subcpu/Makefile; all off by default)
 #   EDCD=1                              also edboot/EDCD.32X: the disc started from a Mega EverDrive PRO, which
 #                                       stays the cartridge (docs/12_CARTRIDGE_BOOT.md).  The disc still boots
 #                                       the normal way too (its game ROM's 68000 jump table is the only change).
@@ -117,6 +117,13 @@ if [ "${VSPLIT:-0}" = 1 ]; then
   grep -E "gcc .*-DDX_VSPLIT=1 .*main\.c" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** VSPLIT=1 did not reach main.c"; exit 1; }
   "$ROOTDIR/m68k-elf/bin/m68k-elf-nm" "$HERE/stack/subcpu/CDROMPlayer.elf" | grep -q " hint_vs$" || { echo "*** VSPLIT=1: the listener has no hint_vs"; exit 1; }
   echo "==> VSPLIT=1: command 78 in main.c, set_vs_line (38) and hint_vs in hw_md.s"
+fi
+# DX-FBVDP: FBVDP=1 (needs GENPLANE=1 VSPLIT=1) - command 79, the Genesis VDP from a list in the 32X frame buffer
+if [ "${FBVDP:-0}" = 1 ]; then
+  [ "${GENPLANE:-0}" = 1 ] && [ "${VSPLIT:-0}" = 1 ] || { echo "*** FBVDP=1 needs GENPLANE=1 VSPLIT=1"; exit 1; }
+  grep -E "gcc .*-DDX_FBVDP=1 .*main\.c" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** FBVDP=1 did not reach main.c"; exit 1; }
+  "$ROOTDIR/m68k-elf/bin/m68k-elf-nm" "$HERE/stack/subcpu/CDROMPlayer.elf" | grep -q " fb_list$" || { echo "*** FBVDP=1: the listener has no fb_list"; exit 1; }
+  echo "==> FBVDP=1: command 79 in main.c, fb_list (39) in hw_md.s"
 fi
 ISO="$HERE/stack/subcpu/CDROMPlayer.iso"
 grep -a -q "SH2-OPENLARA-CD-OL1-LOADER" "$ISO" || { echo "*** the disc has no CDLOADER - stopping"; exit 1; }
