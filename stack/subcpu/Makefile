@@ -59,6 +59,12 @@ ifeq ($(VSPLIT),1)
 ASFLAGS_GENPLANE += --defsym DX_VSPLIT=1
 endif
 # DX-VSPLIT end
+# DX-PAD2 begin
+# PAD2=1: CMD 48's reply has pad 2 in COMM10 (main.c, the pad fast path) instead of the 68K's vblank
+# counter: a game of two players (Metal Slug CD32X).  Without it: unchanged.  Ledger section 10.
+PAD2 ?= 0
+HWFLAGS += -DOL_PAD2=$(PAD2)
+# DX-PAD2 end
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional
 # DX-GENPLANE begin

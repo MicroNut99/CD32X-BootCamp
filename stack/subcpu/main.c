@@ -839,7 +839,13 @@ hb_done:    ;
                16 bits) in ONE 32-bit write.  The SH2 uses the counter to run Kobo's logic at
                its fixed 30 ms step, whatever the frame rate.  COMM10 is only used by the
                start-up handshake, long finished by now. */
+#if OL_PAD2 /* DX-PAD2 begin */
+            /* PAD2-1 (Metal Slug CD32X, 3 Nov 2026): COMM10 = pad 2 (GET_PAD(1), the 68K's vblank copy,
+               0xF000 = no pad) instead of the 68K's vblank counter, for a game of two players */
+            do_md_cmd2(MD_CMD_WRITE_32X_32, 0xA15128, ((uint32_t)pad << 16) | GET_PAD(1));
+#else /* DX-PAD2 else */
             do_md_cmd2(MD_CMD_WRITE_32X_32, 0xA15128, ((uint32_t)pad << 16) | (GET_TICKS & 0xFFFF));
+#endif /* DX-PAD2 end */
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);     /* done           */
             continue;
         }

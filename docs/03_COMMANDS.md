@@ -40,7 +40,7 @@ status, is the command ledger in https://github.com/MicroNut99/docs: the Kobo PD
 | **38** | open file | COMM2 = file number (`game_files.h`) | COMM8L = length, 0 = not on the disc | Also sets the cart slot for the next CMD 46: file n → slot n × 128 KB, or the slot `game_files.h` gives it |
 | **46** | chunk → cart | COMM2 = chunk (32 KB); bit 15 = skip the read-back. COMM8L = the file's length | COMM12 = 0 ok, 1 bad | The 68000 writes the cart with RV = 1; the SH2s' cart reads wait meanwhile. Clear caches afterwards. Switches (off by default here, emulation-tested only): `FMVRING` bit 14 = ring mode (movies), reply \| 0x100; `CARTW` word copy (3× faster); `STREAM` read-ahead. |
 | **47** | chunk compare | as 46 | COMM12 = 0 same, 1 different | Nothing is written; used for "is it already in the cart?" |
-| **48** | pad (+ sound effect) | COMM0 high byte = PCM effect (0 = none); COMM2 = its volume | COMM8 = pad 1 (`SEGA_CTRL_*`, `0xF000` = no pad); COMM10 = the 68000's tick counter | Answered first in the Sub-CPU's loop. Send it once a frame. |
+| **48** | pad (+ sound effect) | COMM0 high byte = PCM effect (0 = none); COMM2 = its volume | COMM8 = pad 1 (`SEGA_CTRL_*`, `0xF000` = no pad); COMM10 = the 68000's tick counter, or pad 2 when the Sub-CPU program is built `PAD2=1` (ledger 23) | Answered first in the Sub-CPU's loop. Send it once a frame. |
 | **45** | play CD track | COMM2 = track; bit 15 = play once (else repeat) | — | Disc track N. Rule: no CD data reads while it plays. |
 | **54** | stop CD audio | — | — | Send it before any CD data read (`cd_load` does) |
 | **53** | load PCM effects | COMM2 = n: `SFXnn.BIN` | COMM12 = number of effects (0 = failed) | Packs as made by OpenLara's `make_sfx_packs.py` (8-bit samples, a table) |
