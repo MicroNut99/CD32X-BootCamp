@@ -4,8 +4,8 @@
     python3 traytest/merge_tray.py /tmp/bootcamp-copy .
 
 The boot stack is never edited (stack/ is the console-proven one; tools/check_boot.py guards it).  This
-puts two Sub-CPU commands into a COPY of stack/subcpu (main.c, Makefile), behind a switch that is off by
-default (TRAYTEST ?= 0), and proves the merge can be taken out again: without the TRAYTEST blocks the copy's
+puts two Sub-CPU commands and a start-up switch into a COPY of stack/subcpu (main.c, Makefile), behind
+switches that are off by default (TRAYTEST ?= 0, TRAY_NOCART ?= 0), and proves the merge can be taken out again: without the TRAYTEST blocks the copy's
 files are byte for byte what they were.  The copy's BOOT_FILES.md5 is updated (only the copy's).
 Same pattern as sdcard/subcpu/merge_sdsave.py.
 
@@ -24,6 +24,12 @@ The commands (ledger CD32X_COMMAND_LEDGER_ADDITIONS.md section 22; untested on a
                                  COMM8L = the time in the track (+12, BCD mm ss ff 00)
                       COMM2 = 2: COMM12 = the drive lights (+2)
                                  COMM8L = the time on the disc (+8, BCD mm ss ff 00)
+
+and one switch for the start-up (T3, no cart):
+
+  TRAY_NOCART=1       the stack's own no-cart mode (KOBO_NOCART 1, main.c "KOBO STORAGE MODE"): the start-up
+                      cart check is not made, so the cart is never read or written.  For a disc whose SH2
+                      program runs from SDRAM (traytest/sdram.c) and needs no cart.  Only with TRAYTEST=1.
 """
 import hashlib, os, subprocess, sys
 
@@ -75,13 +81,25 @@ MAIN = """/* TRAYTEST { (CD32X-BootCamp traytest/merge_tray.py: the drive's tray
 /* } TRAYTEST */
 """
 
+MAIN_NOCART_AFTER = "#define KOBO_NOCART     0          /* HW1: CART MODE - real hardware WITH the cart plugged in */\n"
+MAIN_NOCART = """/* TRAYTEST { (CD32X-BootCamp traytest/merge_tray.py) TRAY_NOCART=1: the stack's no-cart mode for the tray
+   test (T3): its SH2 program runs from SDRAM, so the start-up cart check is not made and no cart is needed */
+#if TRAYTEST && TRAY_NOCART
+#undef KOBO_NOCART
+#define KOBO_NOCART     1
+__attribute__((used)) static const char tray_nocart_marker[] = "TRAY-NOCART: NO START-UP CART CHECK";   /* build_traytest.sh looks for it */
+#endif
+/* } TRAYTEST */
+"""
+
 MAKE_AFTER = "CARTW ?= 0\nHWFLAGS += -DOL_CARTW=$(CARTW)\n"
 MAKE = """# TRAYTEST { TRAYTEST=1: the drive's tray (CMD 90) and the CD status (CMD 84) - CD32X-BootCamp traytest/,
-# ledger section 22.  Untested on a console.
+# ledger section 22.  Untested on a console.  TRAY_NOCART=1 (with TRAYTEST=1): no start-up cart check.
 TRAYTEST ?= 0
 TRAY_TRAY ?= 90
 TRAY_STATUS ?= 84
-HWFLAGS += -DTRAYTEST=$(TRAYTEST) -DTRAY_CMD_TRAY=$(TRAY_TRAY) -DTRAY_CMD_STATUS=$(TRAY_STATUS)
+TRAY_NOCART ?= 0
+HWFLAGS += -DTRAYTEST=$(TRAYTEST) -DTRAY_CMD_TRAY=$(TRAY_TRAY) -DTRAY_CMD_STATUS=$(TRAY_STATUS) -DTRAY_NOCART=$(TRAY_NOCART)
 # } TRAYTEST
 """
 
@@ -134,6 +152,7 @@ def main():
         if files[n] != bootcamp[n]:
             print("    note: %s of the copy is not the BootCamp's (another merge first?) - checked against the copy" % n)
     new = dict(files)
+    new["main.c"] = insert(new["main.c"], MAIN_NOCART_AFTER, MAIN_NOCART)
     new["main.c"] = insert(new["main.c"], MAIN_BEFORE, MAIN, after=False)
     new["Makefile"] = insert(new["Makefile"], MAKE_AFTER, MAKE)
     for n, t in new.items():
@@ -146,7 +165,7 @@ def main():
         die("check_boot.py --update failed in the copy:\n" + r.stdout + r.stderr)
     for n in names:
         same = "the BootCamp's" if files[n] == bootcamp[n] else "the copy's as it was"
-        print("    %s: + %d TRAYTEST block; without it byte for byte %s (md5 %s)"
+        print("    %s: + %d TRAYTEST block(s); without them byte for byte %s (md5 %s)"
               % (n, new[n].count(BEGIN), same, hashlib.md5(files[n].encode()).hexdigest()[:8]))
 
 

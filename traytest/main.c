@@ -1,7 +1,8 @@
 /* traytest - open and close the Sega CD's tray from buttons on the screen (CD32X BootCamp)
  *
  * For the Sega CD Model 1 above all: its tray is motorised and it has no eject button, so only
- * software opens it.  The game runs from the RAM cart, so the disc can come out while it runs.
+ * software opens it.  The program runs from the 32X's SDRAM (T3, sdram.c), so the disc can come out while
+ * it runs, and no cartridge is needed: Sega CD + 32X only.
  *
  * On the screen: four buttons (LEFT / RIGHT choose, A presses)
  *   OPEN   CMD 90, COMM2 = 1: BIOS DRVOPEN 0x0A - the drive stops and the tray opens
@@ -18,22 +19,26 @@
  * ("OPENING THE TRAY") for three seconds.  The rest of the time the banner shows the drive's state in
  * large letters ("TRAY OPEN", "READING DISC", "NO DISC", "PLAYING").
  *
+ * T3 (the owner, 2 Nov 2026: "we cannot have the test tied to a MedPro or 16MB cart"): built like CDLOADER
+ * (the stack's cdl_crt0.s and cdloader.ld, with sdram.c) and put in CDLOADER's place, with the stack's
+ * start-up cart check off (TRAY_NOCART=1).  No RAM cart, EverDrive or 16 MB cart.
+ *
  * Commands 84 and 90 are merged into a copy of the stack by traytest/merge_tray.py (TRAYTEST=1);
- * ledger section 22.  Everything else is hello's (cdapi.c, crt0.s, the 68000 side).
+ * ledger section 22.  cdapi.c, 32x.h and font8x8.h are hello's.
  */
 #include <stdint.h>
 #include "32x.h"
 #include "cdapi.h"
 #include "font8x8.h"
 
-#define TRAYTEST_NAME     "TRAY TEST T2"
+#define TRAYTEST_NAME     "TRAY TEST T3"
 #define CD_CMD_STATUS     84          /* traytest/merge_tray.py */
 #define CD_CMD_TRAY       90
 
 #define COMM8_32   (*(volatile uint32_t *)0x20004028)
 #define COMM12_16  (*(volatile uint16_t *)0x2000402C)
 
-/* ---- what crt0.s needs from the program ---- */
+/* ---- what the start-up (stack/sh2/cdl_crt0.s) needs from the program; sdram.c has the rest ---- */
 volatile uint32_t gTicks = 0;
 volatile unsigned mars_pwdt_ovf_count = 0;
 volatile unsigned mars_swdt_ovf_count = 0;
@@ -324,7 +329,7 @@ int main(void)
 
         clear(C_BLACK);
         text(24, 6, "CD32X BOOTCAMP - " TRAYTEST_NAME, C_YELLOW);
-        text(24, 18, "MODEL 1: NO EJECT BUTTON", C_GREY);
+        text(24, 18, "CART NOT USED - MODEL 1 HAS NO EJECT", C_GREY);   /* T3: runs with any cart in, or none */
         box(8, 29, 304, 1, C_BLUE);
 
         const int held = (pad & keys) != 0 && prev != 0xFFFF;   /* A (or C, START) is down now */
