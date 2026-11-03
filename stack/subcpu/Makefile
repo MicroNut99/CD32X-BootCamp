@@ -92,6 +92,15 @@ endif
 ROMPAUSE ?= 0
 HWFLAGS += -DOL_ROMPAUSE=$(ROMPAUSE)
 # DX-ROMPAUSE end
+# DX-ZCHUNK begin
+# ZCHUNK=1 (with STREAM=1): command 100, CMD 46 from a file whose 32 KB chunks are LZ4 blocks (main.c ZCHUNK-1):
+# the drive reads about half as much.  Metal Slug CD32X.  Without it: unchanged.  Ledger section 27.
+ZCHUNK ?= 0
+HWFLAGS += -DOL_ZCHUNK=$(ZCHUNK)
+ifeq ($(MODE1),1)
+HWFLAGS += -DOL_ZMODE1=1
+endif
+# DX-ZCHUNK end
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional
 # DX-GENPLANE begin

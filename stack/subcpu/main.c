@@ -53,6 +53,9 @@ extern int  scd_bios_call(int fn, int d1, void *a0);
 #ifndef OL_FMVRING
 #define OL_FMVRING 0            /* FMV-2: CMD 46 ring mode for streamed movies (Makefile FMVRING) */
 #endif
+#ifndef OL_ZCHUNK /* DX-ZCHUNK begin */
+#define OL_ZCHUNK 0             /* ZCHUNK-1: command 100, CMD 46 from an LZ4-packed file (Makefile ZCHUNK) */
+#endif /* DX-ZCHUNK end */
 #ifndef OL_ROMPAUSE /* DX-ROMPAUSE begin */
 #define OL_ROMPAUSE 0           /* ROMPAUSE-1: the read-ahead pauses the drive instead of losing sectors (Makefile ROMPAUSE) */
 #endif /* DX-ROMPAUSE end */
@@ -217,7 +220,12 @@ extern int do_md_cmd3(int cmd, int arg1, int arg2, int arg3);
    for the next command, the drive goes on delivering sectors; they would be lost (its buffer
    holds only a few), so cd_pump takes each one as it arrives into st_buf - the start of the
    next chunk.  cd_chunk_read uses what st_buf holds and reads the rest. */
+#if OL_ZCHUNK /* DX-ZCHUNK begin */
+#define ST_RING 96                                   /* ZCHUNK-1: 192 KB - a packed chunk is ~8 sectors; the drive outruns
+                                                        the unpacking, and each stop of the drive costs a seek */
+#else /* DX-ZCHUNK else */
 #define ST_RING 32                                   /* sectors (64 KB): two chunks */
+#endif /* DX-ZCHUNK end */
 static uint8_t st_buf[ST_RING * 2048] __attribute__((aligned(4)));
 static int st_buf_lba = -1, st_buf_n, st_buf_pos;      /* sector st_buf_lba is in slot st_buf_pos */
 extern int wait_md_cmd(void);
@@ -260,7 +268,11 @@ static void cd_chunk_read(uint8_t *dst, int lba, int n, int file_end)
 {
     int k = 0;
 #if OL_ROMPAUSE /* DX-ROMPAUSE begin */
-    if (st_paused) { st_paused = 0; if (st_next >= 0) scd_rom_pause(0); }   /* (the drive on from its place) */
+    if (st_paused && (st_next < 0 || !(st_buf_lba >= 0 && lba >= st_buf_lba && lba + n <= st_buf_lba + st_buf_n) ||
+                      st_buf_lba + st_buf_n - (lba + n) <= ST_RING / 4)) {
+        st_paused = 0;                                   /* (the drive on from its place: when the ring runs low, or */
+        if (st_next >= 0) scd_rom_pause(0);              /*  the chunk is not all in it - one seek for many chunks) */
+    }
 #endif /* DX-ROMPAUSE end */
     if (st_buf_lba >= 0 && lba >= st_buf_lba && lba < st_buf_lba + st_buf_n) {
         const int skip = lba - st_buf_lba;               /* sectors read ahead that are not wanted */
@@ -275,6 +287,160 @@ static void cd_chunk_read(uint8_t *dst, int lba, int n, int file_end)
         st_buf_lba = lba + n; st_buf_n = 0; st_buf_pos = 0;   /* the read-ahead goes on from here */
     }
 }
+#if OL_ZCHUNK /* DX-ZCHUNK begin */
+/* ZCHUNK-1 (Metal Slug CD32X, 3 Nov 2026; ledger section 27): command 100 = CMD 46 from a packed file - its chunks
+   (32 KB each) LZ4 blocks, so the drive (150 KB/s at most) reads half as much.  The file: sector 0 = 'MSZ1', the
+   number of chunks (u32), then 12 bytes a chunk (big-endian): its first sector (u16), its sectors (u16), the
+   packed length (u32; bit 31 = stored as it is), the chunk's length (u32); each chunk from a sector's start, in
+   order, so the stream reads on from one to the next.  The block is read into zbuf and unpacked into Word RAM where
+   CMD 46 reads its chunk; the read-ahead is pumped every 4 KB of output. */
+static uint32_t saved_lba, saved_len;         /* (tentative: CMD 38's, defined below) */
+static uint8_t zt[2048] __attribute__((aligned(4)));
+static uint8_t zbuf[34 * 1024] __attribute__((aligned(4)));
+static uint32_t zt_lba = 0xFFFFFFFFu;
+static uint32_t zbe32(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
+/* the unpacker, in 68000 code (C took ~230 ms a chunk in ares, 140 KB/s: slower than the drive): tokens, literals,
+   matches as LZ4's block format, the long ones 16 bytes at a time; every 4 KB of output the read-ahead is pumped
+   (zpump).  The blocks are our own (tools/edcd/zpack.py): the output's end is checked every 4 KB and at the end,
+   not at each sequence.  -1: a bad block. */
+void zpump(void) { cd_pump(); }
+extern int lz4_unpack(const uint8_t *s, int slen, uint8_t *d, int dmax);
+__asm__(
+    "       .pushsection .text\n"
+    "       .align  2\n"
+    "       .globl  lz4_unpack\n"
+    "lz4_unpack:\n"
+    "       movem.l %d2-%d7/%a2-%a6,-(%sp)\n"
+    "       movea.l 48(%sp),%a0\n"            /* the block */
+    "       move.l  52(%sp),%d7\n"
+    "       movea.l 56(%sp),%a1\n"            /* the output */
+    "       move.l  60(%sp),%d6\n"
+    "       lea     0(%a0,%d7.l),%a2\n"       /* the block's end */
+    "       movea.l %a1,%a5\n"
+    "       lea     0(%a1,%d6.l),%a6\n"       /* the output's end */
+    "       lea     4096(%a1),%a4\n"          /* the next pump */
+    "       moveq   #15,%d5\n"
+    "       moveq   #0,%d0\n"
+    "       moveq   #0,%d1\n"
+    "       moveq   #0,%d2\n"
+    "       moveq   #0,%d3\n"
+    "0:     move.b  (%a0)+,%d0\n"             /* the token (d0's upper bytes stay 0) */
+    "       move.w  %d0,%d1\n"
+    "       lsr.w   #4,%d1\n"                 /* literals */
+    "       beq.s   3f\n"
+    "       cmp.w   %d5,%d1\n"
+    "       beq.s   1f\n"
+    "       subq.w  #1,%d1\n"
+    "21:    move.b  (%a0)+,(%a1)+\n"          /* (short: byte by byte) */
+    "       dbra    %d1,21b\n"
+    "       bra.s   3f\n"
+    "1:     move.b  (%a0)+,%d2\n"             /* (15 or more) */
+    "       add.w   %d2,%d1\n"
+    "       not.b   %d2\n"
+    "       beq.s   1b\n"
+    "       bsr     70f\n"
+    "3:     cmpa.l  %a2,%a0\n"
+    "       bhs     8f\n"                     /* (the last sequence: literals only) */
+    "       move.b  1(%a0),%d3\n"
+    "       lsl.w   #8,%d3\n"
+    "       move.b  (%a0),%d3\n"              /* the offset (little-endian) */
+    "       addq.l  #2,%a0\n"
+    "       movea.l %a1,%a3\n"
+    "       suba.l  %d3,%a3\n"
+    "       and.w   %d5,%d0\n"
+    "       cmp.w   %d5,%d0\n"
+    "       beq.s   4f\n"
+    "       addq.w  #3,%d0\n"                 /* (the length - 1) */
+    "51:    move.b  (%a3)+,(%a1)+\n"
+    "       dbra    %d0,51b\n"
+    "       moveq   #0,%d0\n"
+    "       cmpa.l  %a4,%a1\n"
+    "       blo.s   0b\n"
+    "       bra.s   6f\n"
+    "4:     move.b  (%a0)+,%d2\n"             /* (19 or more) */
+    "       add.w   %d2,%d0\n"
+    "       not.b   %d2\n"
+    "       beq.s   4b\n"
+    "       addq.w  #4,%d0\n"
+    "       move.w  %d0,%d1\n"
+    "       exg     %a0,%a3\n"
+    "       bsr     70f\n"
+    "       exg     %a0,%a3\n"
+    "       moveq   #0,%d0\n"
+    "       cmpa.l  %a4,%a1\n"
+    "       blo     0b\n"
+    "6:     lea     4096(%a1),%a4\n"
+    "       cmpa.l  %a6,%a1\n"
+    "       bhi.s   9f\n"                     /* (past the output's end: a bad block) */
+    "       movem.l %d0-%d3/%a0-%a1,-(%sp)\n"
+    "       jsr     zpump\n"
+    "       movem.l (%sp)+,%d0-%d3/%a0-%a1\n"
+    "       bra     0b\n"
+    /* d1 bytes (a0)+ -> (a1)+, 16 at a time */
+    "70:    move.w  %d1,%d4\n"
+    "       lsr.w   #4,%d4\n"
+    "       and.w   %d5,%d1\n"
+    "       add.w   %d1,%d1\n"
+    "       neg.w   %d1\n"
+    "       jmp     72f(%pc,%d1.w)\n"
+    "71:    move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "       move.b  (%a0)+,(%a1)+\n"
+    "72:    dbra    %d4,71b\n"
+    "       rts\n"
+    "8:     move.l  %a1,%d0\n"
+    "       sub.l   %a5,%d0\n"
+    "       cmpa.l  %a6,%a1\n"
+    "       bls.s   10f\n"
+    "9:     moveq   #-1,%d0\n"
+    "10:    movem.l (%sp)+,%d2-%d7/%a2-%a6\n"
+    "       rts\n"
+    "       .popsection\n"
+);
+/* chunk c of the open file (saved_lba, saved_len) into dst: its length, or -1 */
+static int zchunk_read(int c, uint8_t *dst, int file_end)
+{
+    if (zt_lba != saved_lba) {
+        cd_chunk_read(zt, (int)saved_lba, 1, file_end);
+        if (zt[0] != 'M' || zt[1] != 'S' || zt[2] != 'Z' || zt[3] != '1') return -1;
+        zt_lba = saved_lba;
+    }
+    if (c < 0 || (uint32_t)c >= zbe32(zt + 4) || 8 + 12 * c + 12 > 2048) return -1;
+    const uint8_t *e = zt + 8 + 12 * c;
+    int sec = e[0] << 8 | e[1], ns = e[2] << 8 | e[3];
+    uint32_t pl = zbe32(e + 4), raw = zbe32(e + 8), plen = pl & 0x7FFFFFFF;
+    if (ns < 1 || ns * 2048 > (int)sizeof zbuf || plen > (uint32_t)ns * 2048 || raw > 32768) return -1;
+    cd_chunk_read(zbuf, (int)saved_lba + sec, ns, file_end);
+    if (pl & 0x80000000u) { memcpy(dst, zbuf, raw); return plen == raw ? (int)raw : -1; }
+    return lz4_unpack(zbuf, (int)plen, dst, (int)raw) == (int)raw ? (int)raw : -1;
+}
+/* the next chunk unpacked ahead, into zout, while the 68000 copies this one to the cart (one command of 32 KB, the
+   cartridge-boot listener's m1_xfer: its interrupts masked 1 KB at a time) - the SH2 asks for c + 1 next, mostly */
+#ifndef OL_ZMODE1
+#define OL_ZMODE1 0
+#endif
+static uint8_t zout[32768] __attribute__((aligned(4)));
+static int zpre_c = -1;
+static uint32_t zpre_lba;
+static void zprefetch(int c, int file_end)
+{
+    zpre_c = -1;
+    if (zchunk_read(c, zout, file_end) == (int)sizeof zout) { zpre_c = c; zpre_lba = saved_lba; }
+}
+#endif /* DX-ZCHUNK end */
 #endif
 
 #define MD_CMD_CLEAR_B        4
@@ -984,7 +1150,11 @@ hb_done:    ;
             }
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0); 
         }
+#if OL_ZCHUNK /* DX-ZCHUNK begin */
+        else if (cmd == CMD_CHUNK_TO_CART || cmd == CMD_CHUNK_COMPARE || cmd == 100) {
+#else /* DX-ZCHUNK else */
         else if (cmd == CMD_CHUNK_TO_CART || cmd == CMD_CHUNK_COMPARE) {
+#endif /* DX-ZCHUNK end */
             int chunk = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122);
             int novfy = chunk & 0x8000;          /* OL-13: level loads skip the read-back */
 #if OL_FMVRING
@@ -1046,6 +1216,14 @@ hb_done:    ;
 #else
             if (n > 0) {
 #if OL_STREAM
+#if OL_ZCHUNK /* DX-ZCHUNK begin */
+                if (cmd == 100) {                /* ZCHUNK-1: the chunk from its packed block (unpacked ahead: copied) */
+                    if (zpre_c == chunk && zpre_lba == saved_lba && bytes == (int)sizeof zout)
+                        memcpy((void *)0x0C0000, zout, sizeof zout);
+                    else if (zchunk_read(chunk, (uint8_t *)0x0C0000, (int)(saved_lba + (saved_len + 2047) / 2048)) != bytes) bad = 2;
+                    zpre_c = -1;
+                } else
+#endif /* DX-ZCHUNK end */
                 cd_chunk_read((uint8_t *)0x0C0000, saved_lba + chunk * 16, n,   /* STREAM-1 */
                               (int)(saved_lba + (saved_len + 2047) / 2048));
 #else
@@ -1065,6 +1243,13 @@ hb_done:    ;
                    Command 27 masks the 68000's interrupts, so the pieces are 4 KB (8 ms, less than
                    a frame: the vblank waits, it is never lost).  Arguments: source, destination. */
                 (void)piece;
+#if OL_ZCHUNK /* DX-ZCHUNK begin */
+                if (cmd == 100 && OL_ZMODE1 && !bad) {   /* ZCHUNK-1: the copy, and meanwhile the next chunk unpacked */
+                    send_md_cmd3(MD_CMD_SAFE_CART_XFER_W, 0x200000, 0x400000 + coff, bytes);
+                    zprefetch(chunk + 1, (int)(saved_lba + (saved_len + 2047) / 2048));
+                    md_wait_pumping();
+                } else
+#endif /* DX-ZCHUNK end */
                 if (cmd != CMD_CHUNK_COMPARE)
                     for (p = 0; p < bytes; p += 0x1000)
                         do_md_cmd3(MD_CMD_SAFE_CART_XFER_W, 0x200000 + p, 0x400000 + coff + p,
@@ -1075,6 +1260,10 @@ hb_done:    ;
                         do_md_cmd3(MD_CMD_CHILLY_RV_MEMCPY, 0x400000 + coff + p, 0x200000 + p,
                                    bytes - p < piece ? bytes - p : piece);
 #endif
+#if OL_ZCHUNK /* DX-ZCHUNK begin */
+                if (cmd == 100) { switch_banks(); goto z_done; }   /* (ZCHUNK: no read-back, no window checks, no text -
+                                                                       5 listener calls a chunk fewer) */
+#endif /* DX-ZCHUNK end */
 #if OL_FMVRING
                 if (ring) do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512C, 0);
 #endif
@@ -1146,6 +1335,9 @@ hb_done:    ;
 #endif
                     n == 0 ? "EMPTY" : bad ? "BAD" : (CART_VERIFY_READBACK ? "OK" : "NOVFY"));
             print_diag(temp, tbuf, 2, 13);
+#if OL_ZCHUNK /* DX-ZCHUNK begin */
+z_done:
+#endif /* DX-ZCHUNK end */
 #if OL_FMVRING
             if (ring) bad |= 0x100;              /* FMV-2: "ring mode known" - the SH2 tests it */
 #endif
