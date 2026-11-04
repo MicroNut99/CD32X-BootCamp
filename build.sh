@@ -131,6 +131,11 @@ if [ "${CDRING:-0}" = 1 ]; then
   grep -E "gcc .*-DOL_CDRING=1 .*main\.c" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** CDRING=1 did not reach main.c"; exit 1; }
   echo "==> CDRING=1: command 91 in main.c"
 fi
+# DX-FBCART: FBCART=1 - command 101, the 32X frame buffer into the cart (ledger 30)
+if [ "${FBCART:-0}" = 1 ]; then
+  grep -E "gcc .*-DOL_FBCART=1 .*main\.c" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** FBCART=1 did not reach main.c"; exit 1; }
+  echo "==> FBCART=1: command 101 in main.c"
+fi
 ISO="$HERE/stack/subcpu/CDROMPlayer.iso"
 grep -a -q "SH2-OPENLARA-CD-OL1-LOADER" "$ISO" || { echo "*** the disc has no CDLOADER - stopping"; exit 1; }
 [ -f "$HERE/stack/subcpu/cd/$ROMNAME" ] || { echo "*** $ROMNAME (GAME_ROM_NAME) is not on the disc - stopping"; exit 1; }

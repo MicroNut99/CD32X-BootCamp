@@ -114,6 +114,12 @@ HWFLAGS += -DOL_CDVOL=$(CDVOL)
 CDRING ?= 0
 HWFLAGS += -DOL_CDRING=$(CDRING)
 # DX-CDRING end
+# DX-FBCART begin
+# FBCART=1: command 101, the 32X frame buffer into the cart at any even place (main.c FBCART-1): a game whose RAM lives in
+# the cart, written back from the SH2 through the frame buffer (ledger 30; DraculaX_32X docs/72)
+FBCART ?= 0
+HWFLAGS += -DOL_FBCART=$(FBCART)
+# DX-FBCART end
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional
 # DX-GENPLANE begin

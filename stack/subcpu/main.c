@@ -62,6 +62,9 @@ extern int  scd_bios_call(int fn, int d1, void *a0);
 #ifndef OL_CDRING /* DX-CDRING begin */
 #define OL_CDRING 0             /* CDRING-1: command 91, sectors of the open file into the cart (Makefile CDRING) */
 #endif /* DX-CDRING end */
+#ifndef OL_FBCART /* DX-FBCART begin */
+#define OL_FBCART 0             /* FBCART-1: command 101, the 32X frame buffer into the cart (Makefile FBCART) */
+#endif /* DX-FBCART end */
 #ifndef OL_ROMPAUSE /* DX-ROMPAUSE begin */
 #define OL_ROMPAUSE 0           /* ROMPAUSE-1: the read-ahead pauses the drive instead of losing sectors (Makefile ROMPAUSE) */
 #endif /* DX-ROMPAUSE end */
@@ -1724,6 +1727,27 @@ z_done:
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
 #endif /* DX-CDRING end */
+#if OL_FBCART /* DX-FBCART begin */
+        /* FBCART-1 (Dracula X CD32X, 3 Nov 2026; ledger section 30) - 101 "the 32X frame buffer into the cart": a game
+           whose writable memory is bigger than the SH2's keeps it in the cart and writes it back there (the SH2 cannot
+           write the cart; DraculaX docs/72: the PC Engine's RAM banks).
+             COMM2 = the frame buffer byte offset >> 4 (the 68000 reads it at 0x840000 + offset: the SH2 gives it the
+             frame buffer, FM = 0, before the command); COMM8L = bits 0-23 the cart byte offset (even, below the save
+             area), bits 24-27 the length in 2 KB - 1 (2-32 KB).
+           Reply COMM12 = 0 ok, 1 refused (odd, or past the cart's or the frame buffer's end).  The copy: the
+           listener's safe_cart_xfer_w (words, RV on, interrupts off), 4 KB at a time. */
+        else if (cmd == 101) {
+            uint32_t fo = (uint32_t)(do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF) << 4, p;
+            uint32_t a8 = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128);
+            uint32_t coff = a8 & 0xFFFFFF, len = (((a8 >> 24) & 15) + 1) * 2048;
+            int bad = (coff & 1) || coff + len > 0x3F0000 || fo + len > 0x20000;
+            if (!bad)
+                for (p = 0; p < len; p += 0x1000)
+                    do_md_cmd3(MD_CMD_SAFE_CART_XFER_W, 0x840000 + fo + p, 0x400000 + coff + p, len - p < 0x1000 ? len - p : 0x1000);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512C, bad);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
+        }
+#endif /* DX-FBCART end */
         else if (cmd == 53) {
             /* K33 - CMD 53 "load sound effects": KOBOSFX.BIN -> PCM chip.  Reply in COMM12:
                number of effects (0 = failed). */
