@@ -2398,13 +2398,11 @@ tc_one:
         adda.l  #0x200000,a1
         move.l  4(a3),(a1)              | the slot's last tile: its leaf back
         lea     m1_buf(pc),a1
-2:      move.l  d6,-(sp)
-        .rept   8                       | (16 bytes a step, as above)
-        movem.l (a1)+,d0-d1/d5-d6
-        movem.l d0-d1/d5-d6,(a0)
+2:      .rept   8                       | (16 bytes a step, as above; d7 is free here: tile_copy saved it and
+        movem.l (a1)+,d0-d1/d5/d7       |  no write but the cart's while W is on - no push)
+        movem.l d0-d1/d5/d7,(a0)
         lea     16(a0),a0
         .endr
-        move.l  (sp)+,d6
         move.l  (a1),(a2)
         move.l  d4,(a3)+
         move.l  d3,(a3)
