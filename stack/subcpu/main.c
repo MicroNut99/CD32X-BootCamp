@@ -59,6 +59,9 @@ extern int  scd_bios_call(int fn, int d1, void *a0);
 #ifndef OL_ZCHUNK /* DX-ZCHUNK begin */
 #define OL_ZCHUNK 0             /* ZCHUNK-1: command 100, CMD 46 from an LZ4-packed file (Makefile ZCHUNK) */
 #endif /* DX-ZCHUNK end */
+#ifndef OL_CDPAUSE /* DX-CDPAUSE begin */
+#define OL_CDPAUSE 0            /* CDPAUSE-1: command 81, the CD music paused / resumed in place (Makefile CDPAUSE) */
+#endif /* DX-CDPAUSE end */
 #ifndef OL_CDRING /* DX-CDRING begin */
 #define OL_CDRING 0             /* CDRING-1: command 91, sectors of the open file into the cart (Makefile CDRING) */
 #endif /* DX-CDRING end */
@@ -1470,6 +1473,19 @@ z_done:
             scd_bios_call(0x0002, 0, 0);
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
+#if OL_CDPAUSE /* DX-CDPAUSE begin */
+        else if (cmd == 81) {
+            /* CDPAUSE-1 (Metal Slug CD32X, 4 Nov 2026; ledger section 22b's proposal 81, as Rayman CD32X built it in
+               its copy): COMM2 = 1 pauses the CD music where it is (BIOS MSCPAUSEON 0x03), 0 plays on from there
+               (MSCPAUSEOFF 0x04) - 54 then 45 would start the track from its top. Both are queued BIOS calls: the
+               drive is let finish first, as 54 does. A drive paused past the spin-down delay (60 s) goes to standby;
+               MSCPAUSEOFF then starts the kept play again with a seek (section 22a). Reply: none. */
+            int on = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122);
+            bios_wait_ready(0);
+            scd_bios_call(on ? 0x0003 : 0x0004, 0, 0);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
+        }
+#endif /* DX-CDPAUSE end */
         else if (cmd == 56 || cmd == 59) {
             /* K36 - CMD 56 load / CMD 59 save the backup-RAM file.  Reply COMM12: 1 ok, 0 not. */
             int ok = cmd == 56 ? bram_load() : bram_save();

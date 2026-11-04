@@ -108,6 +108,12 @@ endif
 CDVOL ?= 0
 HWFLAGS += -DOL_CDVOL=$(CDVOL)
 # DX-CDVOL end
+# DX-CDPAUSE begin
+# CDPAUSE=1: command 81, the CD music paused where it is / played on from there (BIOS MSCPAUSEON / MSCPAUSEOFF, main.c
+# CDPAUSE-1): Metal Slug CD32X's CD player.  Without it: unchanged.  Ledger section 31.
+CDPAUSE ?= 0
+HWFLAGS += -DOL_CDPAUSE=$(CDPAUSE)
+# DX-CDPAUSE end
 # DX-CDRING begin
 # CDRING=1: command 91, sectors of the open file into the cart at any place (main.c CDRING-1): a game reading its own
 # disc image while it runs keeps a ring of them in the cart.  Dracula X CD32X.  Without it: unchanged.  Ledger section 29.
