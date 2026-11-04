@@ -2347,9 +2347,11 @@ tc_one:
         movea.l a5,a0
         adda.l  28(a5),a0
         adda.l  d5,a0                   | q's rows of tile j
-        moveq   #32-1,d5
-1:      move.l  (a0)+,(a1)+
-        dbra    d5,1b
+        .rept   8                       | (16 bytes a step: movem, ~25 % fewer clocks than a long at a time)
+        movem.l (a0)+,d0/d5/a2-a3
+        movem.l d0/d5/a2-a3,(a1)
+        lea     16(a1),a1
+        .endr
         move.l  d2,d5
         lsl.l   #2,d5
         movea.l a5,a0
@@ -2365,7 +2367,7 @@ tc_one:
         move.w  (a0)+,(a2)+
         move.w  (a0)+,(a2)+
         tst.l   d0
-        bne.b   7f
+        bne     7f
         move.l  d1,d5
         lsl.l   #3,d5
         movea.l a5,a3
@@ -2396,9 +2398,13 @@ tc_one:
         adda.l  #0x200000,a1
         move.l  4(a3),(a1)              | the slot's last tile: its leaf back
         lea     m1_buf(pc),a1
-2:      moveq   #32-1,d5
-3:      move.l  (a1)+,(a0)+
-        dbra    d5,3b
+2:      move.l  d6,-(sp)
+        .rept   8                       | (16 bytes a step, as above)
+        movem.l (a1)+,d0-d1/d5-d6
+        movem.l d0-d1/d5-d6,(a0)
+        lea     16(a0),a0
+        .endr
+        move.l  (sp)+,d6
         move.l  (a1),(a2)
         move.l  d4,(a3)+
         move.l  d3,(a3)
