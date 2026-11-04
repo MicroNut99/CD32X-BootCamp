@@ -59,6 +59,9 @@ extern int  scd_bios_call(int fn, int d1, void *a0);
 #ifndef OL_ZCHUNK /* DX-ZCHUNK begin */
 #define OL_ZCHUNK 0             /* ZCHUNK-1: command 100, CMD 46 from an LZ4-packed file (Makefile ZCHUNK) */
 #endif /* DX-ZCHUNK end */
+#ifndef OL_CDRING /* DX-CDRING begin */
+#define OL_CDRING 0             /* CDRING-1: command 91, sectors of the open file into the cart (Makefile CDRING) */
+#endif /* DX-CDRING end */
 #ifndef OL_ROMPAUSE /* DX-ROMPAUSE begin */
 #define OL_ROMPAUSE 0           /* ROMPAUSE-1: the read-ahead pauses the drive instead of losing sectors (Makefile ROMPAUSE) */
 #endif /* DX-ROMPAUSE end */
@@ -1687,6 +1690,40 @@ z_done:
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
 #endif /* DX-FBVDP end */
+#if OL_CDRING /* DX-CDRING begin */
+        /* CDRING-1 (Dracula X CD32X, 3 Nov 2026; ledger section 29) - 91 "sectors of the open file into the cart at
+           any place": a game that reads its own disc image while it runs (the PC Engine's data track, 20.8 MB, read
+           as its game asks: DraculaX docs/69) keeps a ring of them in the cart, where CMD 46's slots can't go.
+             COMM2 = the first sector in the file (CMD 38 opened it); COMM8L = bits 0-23 the cart byte offset (2 KB
+             aligned, below the save area), bits 24-27 the sectors - 1 (1-16).
+           Reply COMM12 = 0 ok, 1 refused (past the file's end or the cart's).  With STREAM the drive reads ahead as
+           for CMD 46; the copy as CMD 46's (CARTW: words). */
+        else if (cmd == 91) {
+            int sec = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF, bad = 0, p;
+            uint32_t a8 = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128);
+            uint32_t coff = a8 & 0xFFFFFF; int n = (int)((a8 >> 24) & 15) + 1;
+            int last = (int)((saved_len + 2047) / 2048);
+            if (sec + n > last) n = last - sec;
+            if (n <= 0 || (coff & 2047) || coff + (uint32_t)n * 2048 > 0x3F0000) bad = 1;
+            else {
+#if OL_STREAM
+                cd_chunk_read((uint8_t *)0x0C0000, (int)saved_lba + sec, n, (int)saved_lba + last);
+#else
+                scd_sub_read((void *)0x0C0000, saved_lba + sec, n);
+#endif
+                switch_banks();
+                for (p = 0; p < n * 2048; p += 0x1000)
+#if OL_CARTW
+                    do_md_cmd3(MD_CMD_SAFE_CART_XFER_W, 0x200000 + p, 0x400000 + coff + p, n * 2048 - p < 0x1000 ? n * 2048 - p : 0x1000);
+#else
+                    do_md_cmd3(MD_CMD_CHILLY_RV_MEMCPY, 0x400000 + coff + p, 0x200000 + p, n * 2048 - p < 0x1000 ? n * 2048 - p : 0x1000);
+#endif
+                switch_banks();
+            }
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512C, bad);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
+        }
+#endif /* DX-CDRING end */
         else if (cmd == 53) {
             /* K33 - CMD 53 "load sound effects": KOBOSFX.BIN -> PCM chip.  Reply in COMM12:
                number of effects (0 = failed). */

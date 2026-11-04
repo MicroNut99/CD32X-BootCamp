@@ -74,6 +74,7 @@ fi
 echo "==> 3. the game's data files"
 if [ -d "$G/cd" ] && [ -n "$(ls -A "$G/cd")" ]; then
   for f in "$G"/cd/*; do
+    case "$f" in *.TRK) continue;; esac   # (CDRING: read by command 91 a few sectors at a time, never whole: ledger 29)
     n=$(stat -c %s "$f")
     # one array of names serves both the level slot (100 + n, cart 0x200000-0x3EFFFF) and the resident
     # slot (200 + n, cart 0x080000-0x1FFFFF): a bigger file would run into the next area
@@ -124,6 +125,11 @@ if [ "${FBVDP:-0}" = 1 ]; then
   grep -E "gcc .*-DDX_FBVDP=1 .*main\.c" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** FBVDP=1 did not reach main.c"; exit 1; }
   "$ROOTDIR/m68k-elf/bin/m68k-elf-nm" "$HERE/stack/subcpu/CDROMPlayer.elf" | grep -q " fb_list$" || { echo "*** FBVDP=1: the listener has no fb_list"; exit 1; }
   echo "==> FBVDP=1: command 79 in main.c, fb_list (39) in hw_md.s"
+fi
+# DX-CDRING: CDRING=1 - command 91, sectors of the open file into the cart (ledger 29)
+if [ "${CDRING:-0}" = 1 ]; then
+  grep -E "gcc .*-DOL_CDRING=1 .*main\.c" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** CDRING=1 did not reach main.c"; exit 1; }
+  echo "==> CDRING=1: command 91 in main.c"
 fi
 ISO="$HERE/stack/subcpu/CDROMPlayer.iso"
 grep -a -q "SH2-OPENLARA-CD-OL1-LOADER" "$ISO" || { echo "*** the disc has no CDLOADER - stopping"; exit 1; }

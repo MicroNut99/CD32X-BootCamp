@@ -108,6 +108,12 @@ endif
 CDVOL ?= 0
 HWFLAGS += -DOL_CDVOL=$(CDVOL)
 # DX-CDVOL end
+# DX-CDRING begin
+# CDRING=1: command 91, sectors of the open file into the cart at any place (main.c CDRING-1): a game reading its own
+# disc image while it runs keeps a ring of them in the cart.  Dracula X CD32X.  Without it: unchanged.  Ledger section 29.
+CDRING ?= 0
+HWFLAGS += -DOL_CDRING=$(CDRING)
+# DX-CDRING end
 LDFLAGS = -T $(LDSCRIPTSDIR)/cd.ld -Wl,-Map=output.map -nostdlib
 ASFLAGS = -m68000 --register-prefix-optional
 # DX-GENPLANE begin
