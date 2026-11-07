@@ -524,6 +524,14 @@ set_vs_line:
         move.w  d1,0xC00000             | plane B
         lea     hint_vs(pc),a1
         move.w  a1,0xA12006             | the H-INT vector's low word -> hint_vs
+        .if OL_MODE1
+        | VSPLIT-MODE1 (Sapphire CD32X, 7 Nov 2026, ledger 21b): a cartridge boot (EDCD) takes the 68000's
+        | vectors from the cart, not the Sega CD: its level 4 vector goes to the RAM jump table's H-INT entry
+        | (edboot: jmp at 0xFFFD0C, made "jmp 0xFFFDAE", an rte), and 0xA12006 redirects nothing. So the
+        | jump's target is pointed at hint_vs too. Level 4 is masked here (the dispatcher), so no H
+        | interrupt meets the target half written.
+        move.l  a1,0xFFFD0E
+        .endif
         move.w  #0x8A00,(a0)            | H interrupt every line
         move.w  #0x8014,(a0)            | register 0: IE1 (H interrupt) on
         moveq   #0,d0
