@@ -196,4 +196,4 @@ runs `set_vs_line` with level 4 masked, so no H interrupt meets the target half 
 | Sapphire's stage 3 test frame (one split at line 203), `EDCD=1 GENPLANE=1 VSPLIT=1` on the EverDrive board | before: 3,233 of 71,680 pixels off (the HUD's lines); **after: 0 of 71,680**, at two frames, `4B10` |
 
 **Open on the console:** the same as ledger §21 (where the console's H interrupt lands on the line), now for
-the EDCD boot too. The ledger's §21b (MicroNut99/docs) is to be written from this section.
+the EDCD boot too. Ledger §21b (MicroNut99/docs `009a13a`).
