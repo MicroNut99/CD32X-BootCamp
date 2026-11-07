@@ -174,3 +174,26 @@ takes the 68000's data), and a direct 68000 write to window 0 is dropped.  With 
 works on the console (`EDCD_H3`) boots BootCamp and OpenLara in ares, and the earlier one with W always on
 (`EDCD_DIAG_H2`) fails there as it did on the console.  The model is deterministic, not exact: the console
 never said which word changes or how long the window is.
+
+## The H interrupt in a cartridge boot (VSPLIT, 7 Nov 2026)
+
+**Found by Sapphire CD32X (its docs/05 §3), fixed at the owner's request.** In a CD boot the 68000 runs from
+the Sega CD's vectors, and the Mega-CD gate array's `$A12006` gives the H interrupt's handler (the low word, the
+high word from the vector at `$70`). In a cartridge boot the vectors are the cart's: `EDCD.32X`'s table sends
+level 4 to the RAM jump table at `$FFFD0C`, which the launcher fills with `jmp $FFFDAE` (an `rte`; step 2 of
+`edboot/edcd_md.s`), and `$A12006` redirects nothing. So command 78's split (`VSPLIT`) never ran on EDCD: the
+plane kept its top V scroll on every line.
+
+**The fix (`stack/subcpu/hw_md.s`, `set_vs_line`, inside the `DX-VSPLIT` block, under `.if OL_MODE1`):** when the
+splits are turned on, `hint_vs`'s address is also written to the jump's target at `$FFFD0E`. The dispatcher
+runs `set_vs_line` with level 4 masked, so no H interrupt meets the target half written. A CD boot's listener
+(`OL_MODE1` = 0) assembles exactly as before.
+
+| Test (ares, `ARES_32X_TIMING=console`) | Result |
+|---|---|
+| default build (`hello`) | `APP.BIN` and `CDLOADER.BIN` byte-identical to `63d1798`'s |
+| `GENPLANE=1 VSPLIT=1`, CD boot | `APP.BIN` byte-identical to `63d1798`'s |
+| Sapphire's stage 3 test frame (one split at line 203), `EDCD=1 GENPLANE=1 VSPLIT=1` on the EverDrive board | before: 3,233 of 71,680 pixels off (the HUD's lines); **after: 0 of 71,680**, at two frames, `4B10` |
+
+**Open on the console:** the same as ledger §21 (where the console's H interrupt lands on the line), now for
+the EDCD boot too. The ledger's §21b (MicroNut99/docs) is to be written from this section.
