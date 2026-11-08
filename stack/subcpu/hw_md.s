@@ -552,6 +552,9 @@ hint_vs:
         addq.w  #1,d0                   | the line about to be drawn
         cmpi.w  #224,d0
         blo.b   1f
+.ifdef DX_VSSWAP                            | DX-VSSWAP begin
+        bra.b   2f                      | (a pending list: fb_vrun switches it, at command 79's swap)
+.endif                                      | DX-VSSWAP end
         move.w  6(a1),d1                | the picture is over: a pending list?
         bmi.b   2f
         move.w  d1,(a1)
@@ -836,6 +839,29 @@ fb_vrun:
         dbra    d1,3b
         bra.b   1b
 9:
+.ifdef DX_VSSWAP                            | DX-VSSWAP begin
+        lea     vs_vars(pc),a0          | a V-split list committed while the splits ran: shown from this picture
+        move.w  6(a0),d1                | (Sapphire CD32X docs/26: its swap, not the end of the picture it came in)
+        bmi.b   10f
+        move.w  d1,(a0)
+        move.w  #-1,6(a0)
+        eori.w  #64,4(a0)
+        move.w  #1,2(a0)                | (vs_pos: the next entry after the top one)
+10:
+        tst.w   (a0)                    | splits running: the shown list's top entry is VSRAM 0 as the kept runs just
+        beq.b   11f                     | left it, so hint_vs puts back this picture's own top after the last split
+        move.l  #0x00000010,0xC00004    | (the SH2 need not send command 78 for a change of the top alone)
+        move.w  0xC00000,d0             | VSRAM 0: plane A
+        move.w  0xC00000,d1             | VSRAM 1: plane B
+        andi.l  #0x3FF,d0
+        andi.l  #0x3FF,d1
+        lsl.l   #8,d0
+        lsl.l   #2,d0
+        or.l    d1,d0
+        move.w  4(a0),d1                | the shown list
+        move.l  d0,8(a0,d1.w)           | its entry 0
+11:
+.endif                                      | DX-VSSWAP end
         movem.l (sp)+,d0-d1/a0-a2
         rts
 

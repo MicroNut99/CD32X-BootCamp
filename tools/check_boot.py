@@ -13,7 +13,8 @@ differ without failing the check:
   - the blocks marked DX-GENPLANE (build switch GENPLANE, default 0: commands 62-67, listener 36 / 37) and
     DX-VSPLIT (VSPLIT, default 0: command 78, listener 38 and the H interrupt) and DX-PAD2 (PAD2, default 0:
     pad 2 in CMD 48's reply) and DX-FBVDP (FBVDP, default 0: command 79, listener 39): taken out before the hash,
-    and checked exactly against stack/GENPLANE_BLOCKS.md5 instead
+    and DX-VSSWAP (VSSWAP, default 0: the V splits switched at command 79's swap): and checked exactly against
+    stack/GENPLANE_BLOCKS.md5 instead
   - the four lines of the diagnostic disc (tools/diag_switch.py: KOBO_DIAG_TEXT, KOBO_BOOT_TEXT in main.c,
     the display line in hw_md.s, the CMD 52 argument in cdloader_sh2.c): either their release or their
     diagnostic form is accepted (build.sh checks a release disc has the release lines).
@@ -49,7 +50,7 @@ def _block(name):
 
 
 # the switched blocks, outermost first (a VSPLIT block's 'else' part may hold a GENPLANE block)
-SWITCHED = [_block(b"VSPLIT"), _block(b"GENPLANE"), _block(b"PAD2"), _block(b"FBVDP"), _block(b"TILEP"), _block(b"ROMPAUSE"), _block(b"ZCHUNK"), _block(b"CDVOL"), _block(b"CDRING"), _block(b"FBCART"), _block(b"CDPAUSE")]   # (FBVDP: also nested in VSPLIT's)
+SWITCHED = [_block(b"VSPLIT"), _block(b"GENPLANE"), _block(b"PAD2"), _block(b"FBVDP"), _block(b"TILEP"), _block(b"ROMPAUSE"), _block(b"ZCHUNK"), _block(b"CDVOL"), _block(b"CDRING"), _block(b"FBCART"), _block(b"CDPAUSE"), _block(b"VSSWAP")]   # (FBVDP: also nested in VSPLIT's; VSSWAP: Sapphire CD32X docs/26)
 GENPLANE = SWITCHED[1]
 
 
