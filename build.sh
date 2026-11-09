@@ -8,7 +8,7 @@
 #   SEGA_TOOLCHAIN=<folder>             the same, plus <folder>/usr/bin on PATH (genisoimage)
 #   DIAG=1                              the diagnostic disc: the stack's boot text on (docs/09_ERROR_CODES.md)
 #   REGION=US | EU | JP                 the boot block for the console's region (default US; only US is tested)
-#   STREAM= CARTW= FMVRING= SLOTS= CART= GENPLANE= VSPLIT= FBVDP= the Sub-CPU's build switches (stack/subcpu/Makefile; all off by default)
+#   STREAM= CARTW= FMVRING= SLOTS= CART= GENPLANE= VSPLIT= FBVDP= HWIN= the Sub-CPU's build switches (stack/subcpu/Makefile; all off by default)
 #   EDCD=1                              also edboot/EDCD.32X: the disc started from a Mega EverDrive PRO, which
 #                                       stays the cartridge (docs/12_CARTRIDGE_BOOT.md).  The disc still boots
 #                                       the normal way too (its game ROM's 68000 jump table is the only change).
@@ -131,6 +131,12 @@ if [ "${VSSWAP:-0}" = 1 ]; then
   [ "${FBVDP:-0}" = 1 ] || { echo "*** VSSWAP=1 needs FBVDP=1"; exit 1; }
   grep -q "DX_VSSWAP=1" "$HERE/stack/subcpu/make.log" || { echo "*** VSSWAP=1 did not reach hw_md.s"; exit 1; }
   echo "==> VSSWAP=1: the V-split list switched at command 79's swap (fb_vrun)"
+fi
+# DX-HWIN: HWIN=1 (needs FBVDP=1) - command 79's lists let VSPLIT's H interrupt in between runs (ledger 33)
+if [ "${HWIN:-0}" = 1 ]; then
+  [ "${FBVDP:-0}" = 1 ] || { echo "*** HWIN=1 needs FBVDP=1"; exit 1; }
+  grep -E "defsym DX_HWIN=1" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** HWIN=1 did not reach hw_md.s"; exit 1; }
+  echo "==> HWIN=1: fb_list lets the H interrupt in before each control run"
 fi
 # DX-CDRING: CDRING=1 - command 91, sectors of the open file into the cart (ledger 29)
 if [ "${CDRING:-0}" = 1 ]; then

@@ -78,6 +78,16 @@ ifeq ($(VSSWAP),1)
 ASFLAGS_GENPLANE += --defsym DX_VSSWAP=1
 endif
 # DX-VSSWAP end
+# DX-HWIN begin
+# HWIN=1 (needs FBVDP=1): command 79's lists let VSPLIT's H interrupt in before each control run, so a split due
+# while a long list runs is late by a run, not by the list (Dracula X CD32X docs/110).  Without it: unchanged.
+# Ledger section 33.
+HWIN ?= 0
+HWFLAGS += -DDX_HWIN=$(HWIN)
+ifeq ($(HWIN),1)
+ASFLAGS_GENPLANE += --defsym DX_HWIN=1
+endif
+# DX-HWIN end
 # DX-PAD2 begin
 # PAD2=1: CMD 48's reply has pad 2 in COMM10 (main.c, the pad fast path) instead of the 68K's vblank
 # counter: a game of two players (Metal Slug CD32X).  Without it: unchanged.  Ledger section 10.

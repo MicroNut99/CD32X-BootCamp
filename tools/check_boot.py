@@ -50,7 +50,7 @@ def _block(name):
 
 
 # the switched blocks, outermost first (a VSPLIT block's 'else' part may hold a GENPLANE block)
-SWITCHED = [_block(b"VSPLIT"), _block(b"GENPLANE"), _block(b"PAD2"), _block(b"FBVDP"), _block(b"TILEP"), _block(b"ROMPAUSE"), _block(b"ZCHUNK"), _block(b"CDVOL"), _block(b"CDRING"), _block(b"FBCART"), _block(b"CDPAUSE"), _block(b"VSSWAP")]   # (FBVDP: also nested in VSPLIT's; VSSWAP: Sapphire CD32X docs/26)
+SWITCHED = [_block(b"VSPLIT"), _block(b"GENPLANE"), _block(b"PAD2"), _block(b"FBVDP"), _block(b"TILEP"), _block(b"ROMPAUSE"), _block(b"ZCHUNK"), _block(b"CDVOL"), _block(b"CDRING"), _block(b"FBCART"), _block(b"CDPAUSE"), _block(b"VSSWAP"), _block(b"HWIN")]   # (FBVDP: also nested in VSPLIT's; VSSWAP: Sapphire CD32X docs/26)
 GENPLANE = SWITCHED[1]
 
 

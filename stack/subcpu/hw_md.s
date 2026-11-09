@@ -694,6 +694,19 @@ fb_list:
         lea     0xC00000,a2
         lea     0xC00004,a1
 2:
+.ifdef DX_HWIN                              | DX-HWIN begin
+        move.w  sr,d0                   | HWIN (Dracula X CD32X docs/110; ledger section 33): VSPLIT's H interrupt
+        andi.w  #0x0700,d0              | let in between a list's runs - before a control run, where no address
+        cmpi.w  #0x0400,d0              | is half-set and no data run's address is in use (the next run sets its
+        bne.b   19f                     | own); only as the command's call (level 4 masked by the dispatcher),
+        move.w  (a0),d0                 | never in the vertical blank's kept runs. A split due meanwhile runs
+        andi.w  #0xF000,d0              | late by a run, not by the whole list
+        cmpi.w  #0x1000,d0
+        bne.b   19f
+        move.w  #0x2300,sr
+        move.w  #0x2400,sr
+19:
+.endif                                      | DX-HWIN end
         move.w  (a0)+,d0
         move.w  d0,d1
         andi.w  #0x0FFF,d1              | the count
