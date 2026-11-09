@@ -126,6 +126,12 @@ if [ "${FBVDP:-0}" = 1 ]; then
   "$ROOTDIR/m68k-elf/bin/m68k-elf-nm" "$HERE/stack/subcpu/CDROMPlayer.elf" | grep -q " fb_list$" || { echo "*** FBVDP=1: the listener has no fb_list"; exit 1; }
   echo "==> FBVDP=1: command 79 in main.c, fb_list (39) in hw_md.s"
 fi
+# DX-VSSWAP: VSSWAP=1 (needs FBVDP=1) - the V splits switched at command 79's swap (Sapphire CD32X docs/26)
+if [ "${VSSWAP:-0}" = 1 ]; then
+  [ "${FBVDP:-0}" = 1 ] || { echo "*** VSSWAP=1 needs FBVDP=1"; exit 1; }
+  grep -q "DX_VSSWAP=1" "$HERE/stack/subcpu/make.log" || { echo "*** VSSWAP=1 did not reach hw_md.s"; exit 1; }
+  echo "==> VSSWAP=1: the V-split list switched at command 79's swap (fb_vrun)"
+fi
 # DX-CDRING: CDRING=1 - command 91, sectors of the open file into the cart (ledger 29)
 if [ "${CDRING:-0}" = 1 ]; then
   grep -E "gcc .*-DOL_CDRING=1 .*main\.c" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** CDRING=1 did not reach main.c"; exit 1; }

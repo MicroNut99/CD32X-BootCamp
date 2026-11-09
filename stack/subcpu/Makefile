@@ -69,6 +69,15 @@ ifeq ($(FBVDP),1)
 ASFLAGS_GENPLANE += --defsym DX_FBVDP=1
 endif
 # DX-FBVDP end
+# DX-VSSWAP begin
+# VSSWAP=1 (needs FBVDP=1; Sapphire CD32X docs/26): a V-split list committed by command 78 while the splits run is
+# switched at the vblank command 79's swap shows (fb_vrun), not at the end of the picture it came in.  The SH2 can
+# send it before the list, whatever line the list ends on.  Without it: unchanged.  Ledger section 24b.
+VSSWAP ?= 0
+ifeq ($(VSSWAP),1)
+ASFLAGS_GENPLANE += --defsym DX_VSSWAP=1
+endif
+# DX-VSSWAP end
 # DX-PAD2 begin
 # PAD2=1: CMD 48's reply has pad 2 in COMM10 (main.c, the pad fast path) instead of the 68K's vblank
 # counter: a game of two players (Metal Slug CD32X).  Without it: unchanged.  Ledger section 10.
