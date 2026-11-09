@@ -759,6 +759,12 @@ fb_list:
 16:
         btst    #3,0xC00005             | (the list ended in a vertical blank: wait for the display first, so the
         bne.b   16b                     | swap is at the next vblank and the SH2 sees it there, as always)
+.ifdef DX_VSSWAP                            | DX-VSSWAP begin
+17:
+        tst.w   0xA1518A                | (and the 32X's: its blank can end after the Genesis's. An FS write still
+        bmi.b   17b                     | in it swaps at once, and the kept runs - VSRAM's top - come after line 0
+                                        | began: Sapphire CD32X docs/35)
+.endif                                      | DX-VSSWAP end
         move.w  sr,-(sp)                | ops 2 / 3: the 32X to show frame buffer op - 2 (it swaps at the next
         move.w  #0x2700,sr              | vblank, at once in a blank), the kept runs at that vblank
         moveq   #1,d0
