@@ -62,6 +62,9 @@ extern int  scd_bios_call(int fn, int d1, void *a0);
 #ifndef OL_CDPAUSE /* DX-CDPAUSE begin */
 #define OL_CDPAUSE 0            /* CDPAUSE-1: command 81, the CD music paused / resumed in place (Makefile CDPAUSE) */
 #endif /* DX-CDPAUSE end */
+#ifndef OL_USBLOG /* DX-USBLOG begin */
+#define OL_USBLOG 0             /* USBLOG-1: command 102, 12 bytes out of the Mega EverDrive PRO's USB port (Makefile USBLOG) */
+#endif /* DX-USBLOG end */
 #ifndef OL_CDRING /* DX-CDRING begin */
 #define OL_CDRING 0             /* CDRING-1: command 91, sectors of the open file into the cart (Makefile CDRING) */
 #endif /* DX-CDRING end */
@@ -1486,6 +1489,42 @@ z_done:
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
 #endif /* DX-CDPAUSE end */
+#if OL_USBLOG /* DX-USBLOG begin */
+        else if (cmd == 102) {
+            /* USBLOG-1 (Metal Slug CD32X, 10 Nov 2026; ledger section 32): a test build's log, out of the Mega EverDrive
+               PRO's USB port to the PC (a virtual COM port). COMM2 != 0: a record - COMM2, 4, 6, 8, 10 and 14 = 12
+               bytes, high byte first, kept here (16 at most; more are dropped); COMM0 cleared once they are read, no RV.
+               COMM2 = 0: send the records kept, sent by the SH2 as a command that sets RV (the slave parked, the master
+               waiting in SDRAM): the cart takes /TIME writes only with RV = 1 when the 32X is on (BootCamp docs/12,
+               console 25 Oct 2026). The 68000 hands the cart's MCU krikzz's USB write (edio everdrive.c
+               ed_cmd_usb_wr: '+', ~'+', CMD_USB_WR 0x22, ~0x22, the length high byte first, the bytes) through its
+               FIFO, FIFODATA 0xA130D1 (lib_base/base_io.sv: decoded for every mapper), by the listener's routine 41
+               usb_out (hw_md.s; needs TILEP=1). Reply: none. */
+            static uint8_t usb_q[6 + 12 * 16];
+            static int usb_n;
+            static const uint32_t at[6] = { 0xA15122, 0xA15124, 0xA15126, 0xA15128, 0xA1512A, 0xA1512E };
+            uint16_t w0 = (uint16_t)do_md_cmd1(MD_CMD_READ_32X_16, at[0]);
+            if (w0) {
+                if (usb_n < 16) {
+                    uint8_t *q = usb_q + 6 + 12 * usb_n++;
+                    for (int i = 0; i < 6; i++) {
+                        uint16_t w = i ? (uint16_t)do_md_cmd1(MD_CMD_READ_32X_16, at[i]) : w0;
+                        q[2 * i] = (uint8_t)(w >> 8); q[2 * i + 1] = (uint8_t)w;
+                    }
+                }
+            } else if (usb_n) {
+                int len = 12 * usb_n, n = 6 + len;
+                usb_q[0] = '+'; usb_q[1] = '+' ^ 0xFF; usb_q[2] = 0x22; usb_q[3] = 0x22 ^ 0xFF;
+                usb_q[4] = (uint8_t)(len >> 8); usb_q[5] = (uint8_t)len;
+                for (int i = 0; i < n; i++) PB(i) = usb_q[i];
+                switch_banks();                                   /* Word RAM -> 68000 */
+                do_md_cmd2(41, XM(0), n);                         /* (the listener's usb_out: RV = 1, the bytes) */
+                switch_banks();
+                usb_n = 0;
+            }
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
+        }
+#endif /* DX-USBLOG end */
         else if (cmd == 56 || cmd == 59) {
             /* K36 - CMD 56 load / CMD 59 save the backup-RAM file.  Reply COMM12: 1 ok, 0 not. */
             int ok = cmd == 56 ? bram_load() : bram_save();

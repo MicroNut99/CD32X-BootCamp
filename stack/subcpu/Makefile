@@ -133,6 +133,16 @@ HWFLAGS += -DOL_CDVOL=$(CDVOL)
 CDPAUSE ?= 0
 HWFLAGS += -DOL_CDPAUSE=$(CDPAUSE)
 # DX-CDPAUSE end
+# DX-USBLOG begin
+# USBLOG=1 (needs TILEP=1): command 102, records from the SH2 out of the Mega EverDrive PRO's USB port (main.c USBLOG-1,
+# the listener's routine 41 usb_out, hw_md.s): a test build's log to the PC.  Metal Slug CD32X.  Without it: unchanged.
+# Ledger section 32.
+USBLOG ?= 0
+HWFLAGS += -DOL_USBLOG=$(USBLOG)
+ifeq ($(USBLOG),1)
+ASFLAGS_GENPLANE += --defsym DX_USBLOG=1
+endif
+# DX-USBLOG end
 # DX-CDRING begin
 # CDRING=1: command 91, sectors of the open file into the cart at any place (main.c CDRING-1): a game reading its own
 # disc image while it runs keeps a ring of them in the cart.  Dracula X CD32X.  Without it: unchanged.  Ledger section 29.
