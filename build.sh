@@ -13,6 +13,8 @@
 #                                       stays the cartridge (docs/12_CARTRIDGE_BOOT.md).  The disc still boots
 #                                       the normal way too (its game ROM's 68000 jump table is the only change).
 #                                       With it: M1WORDS=1 (EDCD's listener writes the cart in words), EDCD_W0=<bank>
+#                                       PACKED=1 EDCD_PACKED=1 (with EDCD_W0): the ROM comes with a packed launcher
+#                                       from the SD card, nothing of it from the disc (ledger 35, docs/12)
 #                                       (the EverDrive bank for the cart's first 512 KB; default 0)
 # Every switch is listed in README.md, "How to build".
 #
@@ -99,7 +101,8 @@ fi
 
 echo "==> 4. the SH2 loader (stack/sh2, unchanged)"
 make -C "$HERE/stack/sh2" -f Makefile.cdloader clean > /dev/null
-make -C "$HERE/stack/sh2" -f Makefile.cdloader ROOTDIR="$ROOTDIR"
+make -C "$HERE/stack/sh2" -f Makefile.cdloader ROOTDIR="$ROOTDIR" ${PACKED:+PACKED=$PACKED} | tee "$HERE/stack/sh2/cdloader.log"   # PACKED=1: ledger 35 (the ROM with a packed EDCD.32X)
+if [ "${PACKED:-0}" = 1 ]; then grep -q -- "-DCDL_PACKED=1 cdloader_sh2.c" "$HERE/stack/sh2/cdloader.log" || { echo "*** PACKED=1 did not reach cdloader_sh2.c"; exit 1; }; fi
 
 echo "==> 5. the Sub-CPU program + the disc image (stack/subcpu)"
 # REGION=EU / JP: the toolchain's EU_BOOT.BIN / JP_BOOT.BIN boot block for those consoles (only US is tested)

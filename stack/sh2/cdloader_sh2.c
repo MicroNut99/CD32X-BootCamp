@@ -81,6 +81,9 @@ void *memmove(void *d, const void *s, size_t n) { return memcpy(d, s, n); }
 #define SC_CRAM          ((volatile uint16_t *)0x20004200)
 #define SC_FRAMEBUFFER   ((volatile uint16_t *)0x24000000)
 
+#ifndef CDL_PACKED /* DX-PACKED begin */
+#define CDL_PACKED 0
+#endif /* DX-PACKED end */
 #define CMD_OPEN_FILE      38
 #define CMD_CHUNK_TO_CART  46
 #define CMD_CHUNK_COMPARE  47                /* M1c: compare a chunk, no write */
@@ -298,6 +301,12 @@ int main(void) {
     splash_show();                       /* OL-5 */
 #endif
 
+#if CDL_PACKED /* DX-PACKED begin */
+    /* PACKED-1 (Dracula X CD32X, 11 Nov 2026; ledger section 35): the game's ROM came with the launcher from the SD
+       card into window 0's bank (a packed EDCD.32X, tools/pack_game.py) - "EDPK" at the bank's end (EDCD's w0_move
+       clears it when the launcher is not a packed one) and prep_rom's "CDB2".  Nothing is read from the disc. */
+    if (rd32(0x7FFF0) == 0x4544504Bu && rd32(0x3BC) == 0x43444232u) { show_status(0x4D08); goto loaded; }
+#endif /* DX-PACKED end */
     /* ---- 1. the ROM image into the cart ---- */
     SC_COMM2 = FILE_D32XR;
     wait_cmd(CMD_OPEN_FILE);

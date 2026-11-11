@@ -8,6 +8,10 @@ CC      = $(PREFIX)gcc
 LD      = $(PREFIX)ld
 OBJC    = $(PREFIX)objcopy
 CCFLAGS = -c -std=c11 -m2 -mb -O2 -Wall -ffunction-sections -fdata-sections -D__32X__ -DMARS
+# DX-PACKED begin
+PACKED ?= 0
+CCFLAGS += -DCDL_PACKED=$(PACKED)
+# DX-PACKED end
 
 all: CDLOADER.32x
 

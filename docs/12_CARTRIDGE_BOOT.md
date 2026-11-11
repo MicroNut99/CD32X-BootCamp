@@ -124,6 +124,14 @@ first, `MARS_CMD_PARK`, and acknowledged).  The listener is unchanged: the rule 
 (`0xC000`; it changed nothing on the console).  The diagnostic build has more (`M1MINVB`, `M1NOVINT`,
 `EDCD_QUIET`), described in `build.sh`.
 
+**PACKED-1: the game's ROM with a packed launcher (11 Nov 2026, ledger section 35; Dracula X CD32X).** A packed
+launcher (Evolution3: `edboot/pack_edcd.py`, the menu loads the whole file into the banks) can carry the program too,
+so a program fix is a new file on the SD card, not a new disc. Build with `PACKED=1 EDCD_PACKED=1 EDCD_W0=<bank>`:
+EDCD makes `<bank>` window 0 and, when its own header has `EDPK` at 0x1E0, leaves the bank as the card loaded it;
+CDLOADER finds `EDPK` at the bank's + 0x7FFF0 and the ROM's `CDB2`, shows `4D08` and copies nothing from the disc.
+Both switches off: CDLOADER and EDCD byte for byte as before. `EDCD_W0` itself had never assembled (`|` in an
+operand starts a comment): mended the same day. ares only so far.
+
 ## Run it
 
 Genesis + Sega CD + 32X, the EverDrive PRO in the 32X slot, the disc in the Sega CD. Copy `EDCD.32X` to

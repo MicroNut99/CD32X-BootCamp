@@ -25,6 +25,9 @@
         .ifndef ED_W0
         .equ    ED_W0, 0
         .endif
+        .ifndef ED_PACKED
+        .equ    ED_PACKED, 0
+        .endif
         .ifndef ED_CTRL0
         .equ    ED_CTRL0, 0x8000
         .endif
@@ -178,7 +181,12 @@ _start:
 w0_move:
         move.b  #1,0xA15107
         move.w  #ED_W0,0xA130F2         /* window 1 = the new bank */
-        move.w  #ED_CTRL0|0x2000,0xA130F0 /* W on for this copy only (no other 68000 write until off) */
+        move.w  #ED_CTRL0+0x2000,0xA130F0 /* W on for this copy only (no other 68000 write until off) */
+        .if ED_PACKED                   /* PACKED-1 (ledger section 35; build_edcd.sh EDCD_PACKED=1) */
+        cmpi.l  #0x4544504B,0x0001E0    /* "EDPK" in this ROM's header (tools/pack_game.py): the game is in */
+        beq.b   3f                      /* bank ED_W0 already, from the SD card - nothing of it is touched */
+        move.l  #0,0x0FFFF0             /* not packed: no stale "EDPK" at the bank's end for CDLOADER */
+        .endif
         lea     0x000100,a0
         lea     0x080100,a1
         move.w  #(0x800-0x100)/2-1,d0
@@ -189,7 +197,7 @@ w0_move:
         moveq   #62,d0
 2:      move.l  #0x000003F0,(a1)+
         dbra    d0,2b
-        move.w  #1,0xA130F2             /* window 1 = bank 1 again */
+3:      move.w  #1,0xA130F2             /* window 1 = bank 1 again */
         move.w  #ED_CTRL0+ED_W0,0xA130F0 /* window 0 = the new bank, W off again */
         move.b  #0,0xA15107
         jmp     0x600000

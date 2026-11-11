@@ -46,3 +46,4 @@ edsave2/build/
 edsave2/src-md/*.o
 edsave2/src-md/*.bin
 edsave2/output.map
+stack/sh2/cdloader.log
