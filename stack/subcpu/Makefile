@@ -88,6 +88,15 @@ ifeq ($(HWIN),1)
 ASFLAGS_GENPLANE += --defsym DX_HWIN=1
 endif
 # DX-HWIN end
+# DX-PADVB begin
+# PADVB=1: the 68000's vertical blank handler also writes pad 1 into COMM4 once the game has put 0x5056 in COMM6
+# (hw_md.s vblank_int), so an SH2 can read the pad every frame without CMD 48 (Dracula X CD32X docs/187: the pad
+# reached the game only once a picture).  Without it: unchanged.  Ledger section 37.
+PADVB ?= 0
+ifeq ($(PADVB),1)
+ASFLAGS_GENPLANE += --defsym DX_PADVB=1
+endif
+# DX-PADVB end
 # DX-PAD2 begin
 # PAD2=1: CMD 48's reply has pad 2 in COMM10 (main.c, the pad fast path) instead of the 68K's vblank
 # counter: a game of two players (Metal Slug CD32X).  Without it: unchanged.  Ledger section 10.
@@ -135,7 +144,7 @@ HWFLAGS += -DOL_CDPAUSE=$(CDPAUSE)
 # DX-CDPAUSE end
 # DX-TPSG begin
 # TPSG=1: command 103, the PC Engine's PSG played by the PCM chip from the cart core's write ring (main.c TPSG-1, tpsg.c /
-# tpsg.h / tpsg_tab.h): Sapphire CD32X's sound effects.  Without it: unchanged.  Ledger section 36.
+# tpsg.h / tpsg_tab.h): Sapphire CD32X's sound effects.  Without it: unchanged.  Ledger section 37.
 TPSG ?= 0
 HWFLAGS += -DOL_TPSG=$(TPSG)
 # (the player's files are the kit's tpsg/ folder: TPSG_DIR, for a build that runs from a copy of stack/ - EDCD's)

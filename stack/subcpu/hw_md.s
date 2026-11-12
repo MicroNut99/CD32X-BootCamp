@@ -1985,6 +1985,12 @@ vblank_int:
         bsr.w   get_pad
         addq.l  #4,sp
         move.w  d0,0xA12018
+.ifdef DX_PADVB                             | DX-PADVB begin
+        cmpi.w  #0x5056,0xA15126        | PADVB-1 (ledger 37): the game has asked ("PV" in COMM6, after its start: the
+        bne.b   7f                      | SH2s' boot keeps "S_OK" in COMM4 / COMM6) - pad 1 as get_pad gives it, in
+        move.w  d0,0xA15124             | COMM4 at every vertical blank: no command, no wait for the command loop
+7:
+.endif                                      | DX-PADVB end
 
         pea     1.w
         bsr.w   get_pad

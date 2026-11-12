@@ -124,6 +124,12 @@ first, `MARS_CMD_PARK`, and acknowledged).  The listener is unchanged: the rule 
 (`0xC000`; it changed nothing on the console).  The diagnostic build has more (`M1MINVB`, `M1NOVINT`,
 `EDCD_QUIET`), described in `build.sh`.
 
+**PADVB-1: the pad at every vertical blank (12 Nov 2026, ledger section 37; Dracula X CD32X).** `PADVB=1`: once the
+game has put `0x5056` in COMM6, the 68000's blank handler writes pad 1 (CMD 48's word) into COMM4 at every blank, so
+an SH2 reads the pad each frame without a command - for a game whose 68000 is busy with long listener routines. The
+game sets the key after its start only (the boot keeps `S_OK` in COMM4 / COMM6), and must not use COMM4 or COMM6
+for anything else. Off by default; emulation only so far.
+
 **PACKED-1: the game's ROM with a packed launcher (11 Nov 2026, ledger section 35; Dracula X CD32X).** A packed
 launcher (Evolution3: `edboot/pack_edcd.py`, the menu loads the whole file into the banks) can carry the program too,
 so a program fix is a new file on the SD card, not a new disc. Build with `PACKED=1 EDCD_PACKED=1 EDCD_W0=<bank>`:
