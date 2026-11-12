@@ -133,6 +133,17 @@ HWFLAGS += -DOL_CDVOL=$(CDVOL)
 CDPAUSE ?= 0
 HWFLAGS += -DOL_CDPAUSE=$(CDPAUSE)
 # DX-CDPAUSE end
+# DX-TPSG begin
+# TPSG=1: command 103, the PC Engine's PSG played by the PCM chip from the cart core's write ring (main.c TPSG-1, tpsg.c /
+# tpsg.h / tpsg_tab.h): Sapphire CD32X's sound effects.  Without it: unchanged.  Ledger section 36.
+TPSG ?= 0
+HWFLAGS += -DOL_TPSG=$(TPSG)
+# (the player's files are the kit's tpsg/ folder: TPSG_DIR, for a build that runs from a copy of stack/ - EDCD's)
+TPSG_DIR ?= $(abspath ../../tpsg)
+ifeq ($(TPSG),1)
+HWFLAGS += -I$(TPSG_DIR)
+endif
+# DX-TPSG end
 # DX-USBLOG begin
 # USBLOG=1 (needs TILEP=1): command 102, records from the SH2 out of the Mega EverDrive PRO's USB port (main.c USBLOG-1,
 # the listener's routine 41 usb_out, hw_md.s): a test build's log to the PC.  Metal Slug CD32X.  Without it: unchanged.

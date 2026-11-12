@@ -62,6 +62,9 @@ extern int  scd_bios_call(int fn, int d1, void *a0);
 #ifndef OL_CDPAUSE /* DX-CDPAUSE begin */
 #define OL_CDPAUSE 0            /* CDPAUSE-1: command 81, the CD music paused / resumed in place (Makefile CDPAUSE) */
 #endif /* DX-CDPAUSE end */
+#ifndef OL_TPSG /* DX-TPSG begin */
+#define OL_TPSG 0               /* TPSG-1: command 103, the PC Engine's PSG played by the PCM chip from a write ring in the cart (Makefile TPSG) */
+#endif /* DX-TPSG end */
 #ifndef OL_USBLOG /* DX-USBLOG begin */
 #define OL_USBLOG 0             /* USBLOG-1: command 102, 12 bytes out of the Mega EverDrive PRO's USB port (Makefile USBLOG) */
 #endif /* DX-USBLOG end */
@@ -714,6 +717,64 @@ static void pcm_play(int id, int vol) {
     write_byte(PCM_ONOFF, pcm_onoff);
 }
 
+#if OL_TPSG /* DX-TPSG begin */
+/* TPSG-1 (Sapphire CD32X, 12 Nov 2026; ledger section 36): the PC Engine's PSG on the PCM chip. A PC Engine game's cart
+   core (the Mega EverDrive PRO's FPGA; in ares its model) logs every PSG register write ($0800-$0809) into a ring the
+   68000 can read: a long at the ring's address = 0x5450 << 16 | the count of writes so far (16 bit), and from + 0x100
+   1,024 words, write n at index n & 1023, each register << 8 | value. Command 103 gives the ring's 68000 address; from
+   then on every pass of this loop reads the count (one long through the 68000, routine READ_32X_32 as it is), takes
+   up to 32 new writes and, once it has them all, gives the chip what changed (tpsg.c: a PSG channel = a PCM channel,
+   its waveform a looped piece of wave RAM, its period the chip's step, its volumes ENV and PAN). The SH2s do nothing.
+   PCM channels 0-5 are the PSG's; 6 and 7 stay free. Not with command 48's effects or command 53 (the same wave RAM). */
+#include "tpsg.c"
+static Tpsg tp; static uint32_t tp_ring; static uint16_t tp_seen; static uint8_t tp_bank = 0xFF;
+static void tp_reg(void *u, int ch, int r, uint8_t v) { (void)u; write_byte(PCM_CTRL, (uint8_t)(0xC0 | ch)); write_byte(PCM_ENV + 2 * r, v); tp_bank = 0xFF; }
+static void tp_key(void *u, int ch, int on)
+{
+    (void)u;
+    if (on) pcm_onoff &= (uint8_t)~(1 << ch); else pcm_onoff |= (uint8_t)(1 << ch);
+    write_byte(PCM_ONOFF, pcm_onoff);
+}
+static void tp_ram(void *u, uint16_t a, const uint8_t *d, unsigned n)
+{
+    (void)u;
+    for (unsigned i = 0; i < n; i++, a++) {
+        if (tp_bank != (uint8_t)(a >> 12)) { tp_bank = (uint8_t)(a >> 12); write_byte(PCM_CTRL, (uint8_t)(0x80 | tp_bank)); }   /* sound on, wave bank */
+        write_byte(PCM_WAVE + 2 * (a & 0xFFF), d[i]);
+    }
+}
+static const TpsgOut tp_out = { tp_reg, tp_key, tp_ram, 0 };
+static void tp_start(uint32_t ring)
+{
+    pcm_onoff = 0xFF; write_byte(PCM_ONOFF, 0xFF);               /* all channels off */
+    write_byte(PCM_CTRL, 0x80); tp_bank = 0xFF;
+    tpsg_power(&tp);
+    tp_ring = ring;
+    if (ring) { tp_seen = (uint16_t)do_md_cmd1(MD_CMD_READ_32X_32, ring); tpsg_update(&tp, &tp_out); }   /* (from now: the noise's piece written) */
+}
+static void tp_poll(void)
+{
+    uint32_t h = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, tp_ring);
+    if ((h >> 16) != 0x5450) return;
+    uint16_t n = (uint16_t)((uint16_t)h - tp_seen);
+    if (!n) return;
+    if (n > 1024) { tp_seen = (uint16_t)((uint16_t)h - 1024); n = 1024; }   /* (the ring went round: its oldest write on) */
+    int k = n > 32 ? 32 : n;
+    while (k > 0) {
+        const unsigned i = tp_seen & 1023;
+        if (!(i & 1) && k >= 2) {
+            uint32_t w = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, tp_ring + 0x100 + 2 * i);
+            tpsg_write(&tp, (w >> 24) & 15, (uint8_t)(w >> 16)); tpsg_write(&tp, (w >> 8) & 15, (uint8_t)w);
+            tp_seen += 2; k -= 2;
+        } else {
+            uint16_t w = (uint16_t)do_md_cmd1(MD_CMD_READ_32X_16, tp_ring + 0x100 + 2 * i);
+            tpsg_write(&tp, (w >> 8) & 15, (uint8_t)w);
+            tp_seen++; k--;
+        }
+    }
+    if (tp_seen == (uint16_t)h) tpsg_update(&tp, &tp_out);
+}
+#endif /* DX-TPSG end */
 /* CMD 53: KOBOSFX.BIN -> PCM wave RAM.  Returns the number of effects (0 = failed). */
 static int pcm_load(const char *name) {           /* OL-6: SFX<level>.BIN */
     int64_t fi = scd_open_file(name);
@@ -1050,6 +1111,9 @@ int main(void)
 hb_done:    ;
 #endif
         }
+#if OL_TPSG /* DX-TPSG begin */
+        if (tp_ring) tp_poll();                                    /* TPSG-1: the PSG's new writes to the PCM chip */
+#endif /* DX-TPSG end */
         /* SFXVOL-1: COMM0 (command) and COMM2 (its parameter) in ONE read - the effect's
            volume comes in COMM2 with the pad request, at no extra round trip through the 68K */
         uint32_t cmd32 = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15120);
@@ -1489,6 +1553,15 @@ z_done:
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
 #endif /* DX-CDPAUSE end */
+#if OL_TPSG /* DX-TPSG begin */
+        else if (cmd == 103) {
+            /* TPSG-1: COMM2 = 1 on, COMM8L = the ring's 68000 address (even; the cart's first 512 KB is at 0x880000);
+               COMM2 = 0 off (the PSG's channels silent). Reply COMM12 = 1. No RV, nothing written to the cart. */
+            tp_start(cmdParam ? (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128) & 0xFFFFFE : 0);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512C, 1);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
+        }
+#endif /* DX-TPSG end */
 #if OL_USBLOG /* DX-USBLOG begin */
         else if (cmd == 102) {
             /* USBLOG-1 (Metal Slug CD32X, 10 Nov 2026; ledger section 32): a test build's log, out of the Mega EverDrive
