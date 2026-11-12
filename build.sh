@@ -151,6 +151,11 @@ if [ "${FBCART:-0}" = 1 ]; then
   grep -E "gcc .*-DOL_FBCART=1 .*main\.c" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** FBCART=1 did not reach main.c"; exit 1; }
   echo "==> FBCART=1: command 101 in main.c"
 fi
+# DX-TPSG: TPSG=1 - command 103, the PC Engine's PSG played by the PCM chip from the cart core's write ring (ledger 36)
+if [ "${TPSG:-0}" = 1 ]; then
+  grep -E "gcc .*-DOL_TPSG=1 .*main\.c" "$HERE/stack/subcpu/make.log" > /dev/null || { echo "*** TPSG=1 did not reach main.c"; exit 1; }
+  echo "==> TPSG=1: command 103 in main.c (tpsg/)"
+fi
 ISO="$HERE/stack/subcpu/CDROMPlayer.iso"
 grep -a -q "SH2-OPENLARA-CD-OL1-LOADER" "$ISO" || { echo "*** the disc has no CDLOADER - stopping"; exit 1; }
 [ -f "$HERE/stack/subcpu/cd/$ROMNAME" ] || { echo "*** $ROMNAME (GAME_ROM_NAME) is not on the disc - stopping"; exit 1; }
