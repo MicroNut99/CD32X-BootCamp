@@ -647,11 +647,17 @@ static int safe_cart_present(char *temp, char *tbuf)
 
 static uint16_t cdda_track_word;       
 
+#if OL_TPSG /* DX-TPSG begin */
+static void tp_poll(void); static uint32_t tp_ring;        /* TPSG-1 (below): its ring's reader, called from the drive's wait too */
+#endif /* DX-TPSG end */
 static int bios_wait_ready(unsigned int max_ticks)
 {
     (void)max_ticks;
     while (scd_cd_status() & 0x80000000) {
         bump_fm();
+#if OL_TPSG /* DX-TPSG begin */
+        if (tp_ring) tp_poll();                            /* TPSG-1: the PSG plays on while the drive is waited for (a music start: ~1 s) */
+#endif /* DX-TPSG end */
     }
     return 1;
 }
