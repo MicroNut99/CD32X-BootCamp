@@ -144,7 +144,7 @@ HWFLAGS += -DOL_CDPAUSE=$(CDPAUSE)
 # DX-CDPAUSE end
 # DX-TPSG begin
 # TPSG=1: command 103, the PC Engine's PSG played by the PCM chip from the cart core's write ring (main.c TPSG-1, tpsg.c /
-# tpsg.h / tpsg_tab.h): Sapphire CD32X's sound effects.  Without it: unchanged.  Ledger section 37.
+# tpsg.h / tpsg_tab.h): Sapphire CD32X's sound effects.  Without it: unchanged.  Ledger section 36.
 TPSG ?= 0
 HWFLAGS += -DOL_TPSG=$(TPSG)
 # (the player's files are the kit's tpsg/ folder: TPSG_DIR, for a build that runs from a copy of stack/ - EDCD's)
