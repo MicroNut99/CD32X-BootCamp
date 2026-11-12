@@ -729,7 +729,7 @@ static void pcm_play(int id, int vol) {
    68000 can read: a long at the ring's address = 0x5450 << 16 | the count of writes so far (16 bit), and from + 0x100
    1,024 words, write n at index n & 1023, each register << 8 | value. Command 103 gives the ring's 68000 address; from
    then on every pass of this loop reads the count (one long through the 68000, routine READ_32X_32 as it is), takes
-   up to 32 new writes and, once it has them all, gives the chip what changed (tpsg.c: a PSG channel = a PCM channel,
+   all the new writes (tp_poll) and gives the chip what changed (tpsg.c: a PSG channel = a PCM channel,
    its waveform a looped piece of wave RAM, its period the chip's step, its volumes ENV and PAN). The SH2s do nothing.
    PCM channels 0-5 are the PSG's; 6 and 7 stay free. Not with command 48's effects or command 53 (the same wave RAM). */
 #include "tpsg.c"
@@ -760,25 +760,30 @@ static void tp_start(uint32_t ring)
 }
 static void tp_poll(void)
 {
+    /* TPSG-2 (12 Nov 2026): the count is one long through the 68000; the new writes then come ALL AT ONCE - the 68000's
+       routine 25 copy_words (as it is: any address to any address) copies them from the cart's ring into Word RAM, this
+       side swaps the 1M banks, reads them and swaps back. Two round trips a pass however many writes wait (three when
+       they pass the ring's end). Before, each two writes were a round trip of their own: with the 68000 busy on a
+       picture's list the reader fell more than the ring behind and the effects stopped (Sapphire docs/55-56).
+       Word RAM: the 68000's bank at rest, + TP_WR (0x21E000; the bank this side keeps things in is not written). */
+#define TP_WR 0x1E000
     uint32_t h = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, tp_ring);
     if ((h >> 16) != 0x5450) return;
     uint16_t n = (uint16_t)((uint16_t)h - tp_seen);
     if (!n) return;
     if (n > 1024) { tp_seen = (uint16_t)((uint16_t)h - 1024); n = 1024; }   /* (the ring went round: its oldest write on) */
-    int k = n > 32 ? 32 : n;
-    while (k > 0) {
-        const unsigned i = tp_seen & 1023;
-        if (!(i & 1) && k >= 2) {
-            uint32_t w = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, tp_ring + 0x100 + 2 * i);
-            tpsg_write(&tp, (w >> 24) & 15, (uint8_t)(w >> 16)); tpsg_write(&tp, (w >> 8) & 15, (uint8_t)w);
-            tp_seen += 2; k -= 2;
-        } else {
-            uint16_t w = (uint16_t)do_md_cmd1(MD_CMD_READ_32X_16, tp_ring + 0x100 + 2 * i);
-            tpsg_write(&tp, (w >> 8) & 15, (uint8_t)w);
-            tp_seen++; k--;
-        }
+    const unsigned i = tp_seen & 1023;
+    const unsigned first = 1024 - i < n ? 1024 - i : n;
+    do_md_cmd4(MD_CMD_COPY_WORDS, (int)(tp_ring + 0x100 + 2 * i), 0x200000 + TP_WR, (int)(2 * first), 0);
+    if (n > first) do_md_cmd4(MD_CMD_COPY_WORDS, (int)(tp_ring + 0x100), (int)(0x200000 + TP_WR + 2 * first), (int)(2 * (n - first)), 0);
+    switch_banks();                                               /* the 68000's bank -> this side */
+    {
+        const volatile uint16_t *w = (const volatile uint16_t *)(0x0C0000 + TP_WR);
+        for (unsigned k = 0; k < n; k++) { const uint16_t x = w[k]; tpsg_write(&tp, (x >> 8) & 15, (uint8_t)x); }
     }
-    if (tp_seen == (uint16_t)h) tpsg_update(&tp, &tp_out);
+    switch_banks();                                               /* and back: both banks as they were */
+    tp_seen = (uint16_t)(tp_seen + n);
+    tpsg_update(&tp, &tp_out);
 }
 #endif /* DX-TPSG end */
 /* CMD 53: KOBOSFX.BIN -> PCM wave RAM.  Returns the number of effects (0 = failed). */
