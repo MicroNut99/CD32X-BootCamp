@@ -62,6 +62,9 @@ extern int  scd_bios_call(int fn, int d1, void *a0);
 #ifndef OL_CDPAUSE /* DX-CDPAUSE begin */
 #define OL_CDPAUSE 0            /* CDPAUSE-1: command 81, the CD music paused / resumed in place (Makefile CDPAUSE) */
 #endif /* DX-CDPAUSE end */
+#ifndef OL_CDFADE /* DX-CDFADE begin */
+#define OL_CDFADE 0             /* CDFADE-1: command 104, the CD music's volume set or faded (Makefile CDFADE) */
+#endif /* DX-CDFADE end */
 #ifndef OL_TPSG /* DX-TPSG begin */
 #define OL_TPSG 0               /* TPSG-1: command 103, the PC Engine's PSG played by the PCM chip from a write ring in the cart (Makefile TPSG) */
 #endif /* DX-TPSG end */
@@ -1568,6 +1571,25 @@ z_done:
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
 #endif /* DX-CDPAUSE end */
+#if OL_CDFADE /* DX-CDFADE begin */
+        else if (cmd == 104) {
+            /* CDFADE-1 (Dracula X CD32X, 12 Nov 2026; ledger section 38 - section 22b's proposal for a volume / fade
+               command, whose number 82 had gone to Jumping Flash): COMM2 = the CD music's volume to go to, 0-0x400
+               (0x400 full); COMM8 = the slope - 0: at once (BIOS FDRSET 0x85); else the volume moves towards it that
+               much at each of the BIOS's drive interrupts (FDRCHG 0x86, D1 = target << 16 | slope; 75 a second, measured
+               in ares: a fade from full to nothing in t seconds is a slope of 1024 / (75 t)). Both calls run at once (0x80 and up: not
+               queued), so the drive is not waited for: a fade starts when it is asked. Command 45 still sets the
+               volume full at each track's start, as always (cdda_start) - a game that wants a track to begin
+               quiet sends 104 after 45. Reply: none. */
+            unsigned int tgt = (unsigned int)do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF;
+            unsigned int slope = (unsigned int)do_md_cmd1(MD_CMD_READ_32X_16, 0xA15128) & 0xFFFF;
+            if (tgt > 0x400) tgt = 0x400;
+            if (slope > 0x400) slope = 0x400;
+            if (slope == 0) scd_bios_call(0x0085, (int)tgt, 0);
+            else scd_bios_call(0x0086, (int)(tgt << 16 | slope), 0);
+            do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
+        }
+#endif /* DX-CDFADE end */
 #if OL_TPSG /* DX-TPSG begin */
         else if (cmd == 103) {
             /* TPSG-1: COMM2's low byte = 1 on, COMM8L = the ring's 68000 address (even; the cart's first 512 KB is at

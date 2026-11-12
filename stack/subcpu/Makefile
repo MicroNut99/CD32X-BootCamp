@@ -142,6 +142,12 @@ HWFLAGS += -DOL_CDVOL=$(CDVOL)
 CDPAUSE ?= 0
 HWFLAGS += -DOL_CDPAUSE=$(CDPAUSE)
 # DX-CDPAUSE end
+# DX-CDFADE begin
+# CDFADE=1: command 104, the CD music's volume set at once or faded (BIOS FDRSET / FDRCHG, main.c CDFADE-1): Dracula X
+# CD32X - the PC Engine game's own fade-outs.  Without it: unchanged.  Ledger section 38.
+CDFADE ?= 0
+HWFLAGS += -DOL_CDFADE=$(CDFADE)
+# DX-CDFADE end
 # DX-TPSG begin
 # TPSG=1: command 103, the PC Engine's PSG played by the PCM chip from the cart core's write ring (main.c TPSG-1, tpsg.c /
 # tpsg.h / tpsg_tab.h): Sapphire CD32X's sound effects.  Without it: unchanged.  Ledger section 36.
