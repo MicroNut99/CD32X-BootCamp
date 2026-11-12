@@ -649,6 +649,7 @@ static uint16_t cdda_track_word;
 
 #if OL_TPSG /* DX-TPSG begin */
 static void tp_poll(void); static uint32_t tp_ring;        /* TPSG-1 (below): its ring's reader, called from the drive's wait too */
+static uint16_t tp_cdvol; static uint8_t tp_cdvol_on;       /* TPSG-3: the CD music's volume a game's menu set (103, COMM2 = 3) */
 #endif /* DX-TPSG end */
 static int bios_wait_ready(unsigned int max_ticks)
 {
@@ -887,6 +888,9 @@ static int cdda_start(int track, int *st_out, int once)   /* OL-4 play once */
 #else /* DX-CDVOL else */
     scd_bios_call(0x0085, 0x0400, 0);       
 #endif /* DX-CDVOL end */
+#if OL_TPSG /* DX-TPSG begin */
+    if (tp_cdvol_on) scd_bios_call(0x0085, tp_cdvol, 0);    /* TPSG-3: the volume the menu set, at each track's start too */
+#endif /* DX-TPSG end */
     cdda_track_word = (uint16_t)track;
     scd_bios_call(once ? 0x0012 : 0x0013, 0, &cdda_track_word);   /* MSCPLAY1 once / MSCPLAYR repeat */  
     st = scd_cd_status();
@@ -1566,9 +1570,18 @@ z_done:
 #endif /* DX-CDPAUSE end */
 #if OL_TPSG /* DX-TPSG begin */
         else if (cmd == 103) {
-            /* TPSG-1: COMM2 = 1 on, COMM8L = the ring's 68000 address (even; the cart's first 512 KB is at 0x880000);
-               COMM2 = 0 off (the PSG's channels silent). Reply COMM12 = 1. No RV, nothing written to the cart. */
-            tp_start(cmdParam ? (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128) & 0xFFFFFE : 0);
+            /* TPSG-1: COMM2's low byte = 1 on, COMM8L = the ring's 68000 address (even; the cart's first 512 KB is at
+               0x880000); 0 off (the PSG's channels silent). TPSG-3 (12 Nov 2026, for a game's options menu): 2 = the
+               effects' volume, COMM2's high byte 0 (silent) - 8 (full); 3 = the CD music's volume, COMM8L = 0-0x400
+               (BIOS FDRSET now and at each track's start). Reply COMM12 = 1. No RV, nothing written to the cart. */
+            const int what = cmdParam & 0xFF;
+            if (what == 2) { tpsg_volume(&tp, (unsigned)(cmdParam >> 8) & 0xFF); if (tp_ring) tpsg_update(&tp, &tp_out); }
+            else if (what == 3) {
+                tp_cdvol = (uint16_t)(do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128) & 0x7FF); if (tp_cdvol > 0x400) tp_cdvol = 0x400;
+                tp_cdvol_on = 1;
+                bios_wait_ready(0); scd_bios_call(0x0085, tp_cdvol, 0);
+            }
+            else { const unsigned keep = tp.vol; tp_start(what ? (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128) & 0xFFFFFE : 0); if (tp_ring) tpsg_volume(&tp, keep ? keep : 8); }
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA1512C, 1);
             do_md_cmd2(MD_CMD_WRITE_32X_16, 0xA15120, 0);
         }
