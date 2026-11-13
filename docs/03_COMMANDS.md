@@ -74,11 +74,11 @@ status, is the command ledger in https://github.com/MicroNut99/docs: the Kobo PD
 
 - 39–43, 49, 55;
 - 83, 85-89, 92-98 and 105 and up (101 is `FBCART`'s, 3 Nov, §30; 102 is `USBLOG`'s, §34; 103 is `TPSG`'s, 12 Nov, §36; 104 is `CDFADE`'s, 12 Nov, §38; 81 is `CDPAUSE`'s, §31; 82 is Jumping Flash's, §32) (72–75 went to Rayman and `sdcard/` on 26–27 Oct, ledger §17-18; 76 / 77 are
-  kept for `sdcard/`'s move off 74 / 75, §18; 78 is `VSPLIT`'s, 31 Oct; 79 is `FBVDP`'s, 3 Nov, §24; 84 and 90 are
+  the `sdcard/` kit's save commands as the games build them since 13 Nov (`SDSAVE_OUT=76 SDSAVE_IN=77`: Road Rash, Dracula X), §18; 78 is `VSPLIT`'s, 31 Oct; 79 is `FBVDP`'s, 3 Nov, §24; 84 and 90 are
   `traytest/`'s, 2 Nov, §22; 99 is `TILEP`'s and 100 `ZCHUNK`'s, 3 Nov, §25, §27; 91 is `CDRING`'s, 3 Nov, §29).
 
 Do not take these: 62–67 (this stack's `GENPLANE`, SuperTux REV, Rayman), 67 and 69–71 (OpenJazz REV), 72–75
-(Rayman, `sdcard/`), 76–77 (`sdcard/`'s move), 78 (this stack's `VSPLIT`), 79 (this stack's `FBVDP`), 80 (Sonic CD 2011), 84 and 90 (`traytest/`: CD status, the tray), 99 (this stack's `TILEP`), 100 (this stack's `ZCHUNK`).
+(Rayman, `sdcard/`), 76–77 (`sdcard/` as Road Rash and Dracula X build it: save piece out / in, the EverDrive's bank 31), 78 (this stack's `VSPLIT`), 79 (this stack's `FBVDP`), 80 (Sonic CD 2011), 84 and 90 (`traytest/`: CD status, the tray), 99 (this stack's `TILEP`), 100 (this stack's `ZCHUNK`).
 
 A number must never mean two things on any stack. Your command must sit behind a build switch in
 `main.c`, which is compiled with **HWFLAGS** (not CCFLAGS).
