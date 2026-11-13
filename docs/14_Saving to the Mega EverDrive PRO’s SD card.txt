@@ -1,0 +1,34 @@
+Saving to the Mega EverDrive PRO’s SD card (Sega 32X / CD32X)
+
+The game never writes files to the SD card itself. It writes the cart’s battery-backed save RAM, and the EverDrive’s own software keeps that RAM on the SD card as MEGA/gamedata/<ROM or launcher file name>/bram.srm. That only happens if the ROM’s header declares save RAM.
+
+1. Declare save RAM in the header (required). Without this, nothing reaches the card. At 0x1B0 put an RA entry. U-R-R’s example (8 KB on odd bytes):
+
+python
+rom[0x1B0:0x1BC] = b"RA" + bytes([0xF8, 0x20]) + struct.pack(">II", 0x200001, 0x203FFF)
+
+Then fix the header checksum as usual.
+
+2. A plain 32X cartridge ROM (U-R-R cart/cart_md.s, sram_blob, proven on the console):
+
+The 68000 does the work, with interrupts off (move.w #0x2700,sr).
+Set RV = 1 (move.b #1,0xA15107) so the 68000 sees the cart at 0x000000-0x3FFFFF. Because RV moves the cartridge, the routine must run from 68000 RAM: copy it there at start-up and jsr to it.
+move.b #1,0xA130F1 maps the save RAM at 0x200000 and makes it writable. Read or write odd bytes only: 0x200001, 0x200003, and so on.
+Afterwards, move.b #0,0xA130F1 (save RAM off, ROM back), then RV = 0 and restore SR.
+The SH2s must not read the cart while RV = 1. They get garbage (measured on the console). Have the master SH2 wait on a COMM register until the 68000 is done, and only save between games.
+Over 2 MB of ROM the save RAM overlaps the ROM at 0x200000. That’s fine as long as it’s mapped only while saving.
+Keep a magic number and a checksum in the save block. A blank or garbage save must read as “no save”.
+
+3. A CD32X EverDrive launcher (EDCD_*.32X plus a disc):
+
+The save lives in bank 31, the EverDrive’s battery RAM (256 KB). The launcher’s header needs the RA entry (EDCD_SAVE=1 in the BootCamp build).
+Banks 0-29 (PSRAM) are wiped every time the EverDrive menu runs. Never keep anything there across boots. Banks 28-30 belong to the EverDrive. Don’t touch page 7 except bank 31 as below.
+Don’t invent a bank-31 layout. Use the BootCamp’s save commands and OpenLara’s proven layout (save area in the bank’s first 64 KB, slots at 0x10000). Rayman’s EverDrive build keeps its save at bank-31 offset 0x30000 through commands 72/73. References: MegaEverDrivePro_16MB_RAM/docs/04, Rayman’s SAVES_SEGA_CD.md section 8.
+The save file is named after the launcher. Two builds with the same file name share one save, so give every build a unique EDCD tag.
+
+4. Testing
+
+Console: save, power off, power on, and check the save is still there. Then check that MEGA/gamedata/<name>/bram.srm on the card has a fresh date.
+ares: the save RAM is the cart’s .ram file in Systems.
+
+The header entry, the odd bytes, and the RV / SH2 rule come from U-R-R’s own code. The bank-31 and SD-card details come from the Rayman and BootCamp notes.
