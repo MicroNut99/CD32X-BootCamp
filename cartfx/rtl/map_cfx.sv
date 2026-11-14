@@ -1,6 +1,6 @@
 // map_cfx.sv - krikzz's SSF mapper (map_ssf.sv, unchanged) with the CD32X cart compositor (cfx_core.sv) beside it
 //
-// map_ssf runs as always; this module only takes over (Rayman CD32X's map_rayfx.sv, the same multiplexers):
+// map_ssf runs as always; this module only takes over (Rayman CD32X's multiplexers, the same):
 //  - the PSRAMs, while the console is not using them (the engine reads layers, tiles, maps and sprites there);
 //  - the SRAM (map_ssf never uses it): the engine's two pictures, maps and broken bits; the console reads the shown
 //    picture at cart 0x3E0000-0x3EFFFF, straight from the pins;

@@ -3,8 +3,8 @@
 // What it does, to the bit: cartfx/model/cartfx.h (cartfx.c is the reference this is checked against in Verilator:
 // cartfx/sim). This file: how, on the cart's memories.
 //
-//  - The bus front, the key, the command queue and the two memory channels are Rayman CD32X's rfx_core.sv
-//    (Rayman_32X_RAM fpga/rtl, console-proven 8 Nov 2026), with Metal Slug CD32X's console fix: a command read's
+//  - The bus front, the key, the command queue and the two memory channels are Rayman CD32X's compositor's
+//    (console-proven 8 Nov 2026), with Metal Slug CD32X's console fix: a command read's
 //    address is taken only once it has held steady two clocks, and a new steady address while the read lasts is a
 //    new command.
 //  - The console always wins: it gets a memory the moment it reads or writes it (map_cfx.sv's multiplexers, from the

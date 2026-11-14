@@ -1,5 +1,6 @@
 The cartfx cores, Quartus 25.1std.0 Build 1129 SC Lite on the owner's PC (build_cfx.bat), fpga_work\cfx_out\<game>\mega-pro.rbf.
-map_cfx.sv md5 6dc1411e6adbd72ecf0438eb8ca4c9b9 in both.
+map_cfx.sv md5 6dc1411e6adbd72ecf0438eb8ca4c9b9 in both. (14 Nov: rtl/cfx_core.sv and rtl/map_cfx.sv here differ from the
+files these were built from in two comment lines and one, nothing else - an origin's name taken out; the next build is from these.)
 
 v2.2, 13 Nov 2026 (cfx_core.sv md5 4a9c9e922b4639ec6db12e3c37518676: the sprite list scanned a sprite a clock) - the current one
 game      sha256                                                            md5

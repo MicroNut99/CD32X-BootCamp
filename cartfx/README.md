@@ -3,7 +3,7 @@
 One engine on the EverDrive PRO's FPGA for three games: **Hurrican CD32X**, **Jazz Jackrabbit CD32X REV** and
 **SuperTux CD32X REV**. The master SH2 describes a frame in commands (layers, sprites, the cells to redraw). The engine
 composes it, 16 x 8 pixels at a time, into the cart's own SRAM. The SH2 then copies the finished cells into the 32X
-frame buffer. It grew from Rayman CD32X's compositor (Rayman_32X_RAM `fpga/`, on the console since 8 Nov 2026) and
+frame buffer. It grew from Rayman CD32X's compositor (on the console since 8 Nov 2026) and
 keeps its window, key and command encoding. The design and each game's plan are in the design document
 ("FPGA accelerators for Hurrican, Jazz and SuperTux CD32X") and in each game's `fpga/` folder.
 

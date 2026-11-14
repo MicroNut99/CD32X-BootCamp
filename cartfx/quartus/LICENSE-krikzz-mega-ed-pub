@@ -1,5 +1,6 @@
-hub.sv here is krikzz's mega-ed-pub fpga/mapper/map_ssf/hub.sv with one line changed; map_rayfx.sv and rfx_core.sv
-are written to sit beside krikzz's mapper (map_ssf.sv, used unchanged from mega-ed-pub, not copied here). Its licence:
+hub_<game>.sv here are krikzz's mega-ed-pub fpga/mapper/map_ssf/hub.sv with one line changed; map_cfx.sv and
+cfx_core.sv (../rtl) are written to sit beside krikzz's mapper (map_ssf.sv, used unchanged from mega-ed-pub, copied
+by setup_cfx.sh, not kept here). Its licence:
 
 MIT License
 
