@@ -270,6 +270,7 @@ int main(int argc, char** argv) {
             cfx_read(&model, 0x3E0000 + off, &mv);
             if (hv != mv) { if (bad < 20) printf("frame %d: window %04X engine %04X model %04X\n", fr, off, hv, mv); bad++; }
         }
+        if (getenv("EST")) printf("frame %d: the model's estimate %.2f ms, the engine %.2f ms (counter 4: %.2f ms)\n", fr, model.est * 20e-6, (t1 - t0) * 20e-6, bus_read(CFX_CMD_BASE + 8) * 1.28e-3);
         printf("frame %d (%s): %d cells, %d sprites, the engine done %.2f ms after GO; PSRAM redone %u, SRAM %u\n", fr,
                game == 0 ? "Hurrican" : game == 1 ? "Jazz" : "SuperTux", model.cnt[2], model.cnt[3], (t1 - t0) * 20e-6,
                bus_read(CFX_CMD_BASE + 10), bus_read(CFX_CMD_BASE + 12));

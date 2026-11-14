@@ -25,14 +25,13 @@ game refuses the wrong `.rbf`.
 
 | Game | KEY1 | ID | Logic elements | Memory bits | Worst setup slack (slow 85C) | `mega-pro.rbf` md5 |
 |---|---|---|---|---|---|---|
-| Hurrican | 0x5848 `XH` | 0xC1 | 7,383 (48 %) | 197,792 (38 %) | +4.136 ns | `a3ca5d6deea8968dfad7e2f2f859cad9` |
-| Jazz REV | 0x584A `XJ` | 0xC2 | 7,358 (48 %) | 197,792 (38 %) | +4.358 ns | `a04a93466907e310ec923d28df28a820` |
-| SuperTux REV | 0x5853 `XS` | 0xC3 | 7,352 (48 %) | 197,792 (38 %) | +4.611 ns | `c3b425ad28604f11931bfe32c6b52e60` |
+| Hurrican | 0x5848 `XH` | 0xC1 | 7,433 (48 %) | 197,792 (38 %) | +4.701 ns | `230110564f0a30ec044fa74592b867f9` |
+| Jazz REV | 0x584A `XJ` | 0xC2 | 7,446 (48 %) | 197,792 (38 %) | +4.833 ns | `7c3947b7c34cefa39e30260b8fe92b87` |
+| SuperTux REV | 0x5853 `XS` | 0xC3 | 7,432 (48 %) | 197,792 (38 %) | +3.165 ns | `344ee89e95e1168c252f3a83be9995bd` |
 
-Quartus 25.1std Lite, EP4CE15F23C8, 50 MHz, 13 Nov 2026: timing met at every corner, hold too (worst +0.118 ns,
-fast 0C). krikzz's `map_ssf` alone is 1,754 LEs and 114,688 memory bits. SHA-256 (for ares): Hurrican
-`21a53854c48359c8...`, Jazz `74d8b8b5e840222111...`, SuperTux `768bcc63ed39b01e62...` (full values in
-`quartus/RBF_SHA256.txt`).
+v2.2, Quartus 25.1std Lite, EP4CE15F23C8, 50 MHz, 13 Nov 2026: timing met at every corner, hold too (worst +0.101 ns,
+fast 0C). krikzz's `map_ssf` alone is 1,754 LEs and 114,688 memory bits. The SHA-256 of each (ares knows the cores by
+it) and those of v2.1, the same commands: `quartus/RBF_SHA256.txt`.
 
 To build them again: `bash quartus/setup_cfx.sh <work>`, where `<work>/mega-ed-pub` is krikzz's tree (on the owner's
 PC, `fpga_work`). It lays out `fpga_pro/map_cfx_<game>` (krikzz's `map_ssf` project with its two mapper lines
@@ -75,7 +74,7 @@ they came; the over layers. Then the cell's 64 words go to the SRAM. A layer is 
 size from 2 to 32 pixels; 4 or 8 bits a pixel; the map in PSRAM or SRAM; h-flip, broken bits, a colour offset, the
 16 x 256 shade table). Sprites are keyed, or blended through a 64 KB table of their own. Four PSRAM words are held,
 read up to two ahead in the direction the run goes and no further than the run needs. A pixel takes a clock while its
-word is there, and an empty tile span is passed in one clock.
+word is there, an empty tile span is passed in one clock, and the sprite list is scanned a sprite a clock.
 
 Measured in the simulation (`sim/`, the cart's 50 MHz, the engine alone), on test frames deliberately heavier than the
 games':
@@ -97,12 +96,16 @@ With the console reading the cart 30 % of the time, a full Hurrican frame took 1
   the Jazz and SuperTux builds (`-GKEY1 -GID`) 6 frames each. Debug: `-DDBGPUB --public-flat-rw` with `DBGHIST=1`
   (clocks per state), `DBGRUN`, `DBGFROM`, `DBGW`.
 - Quartus: the table above.
+- The model's estimate of the engine's time (`cfx_t est`, for ares's busy bit): `EST=1` prints it beside the
+  engine's. Within 0-20 % of the engine alone (13 Nov 2026, 15 frames); the console's reads add 10-20 %.
 - **Not checked: the console.** First check: each game's current build with its `.rbf` beside the launcher must run
   exactly as without it (the engine stays off). Then a game's STATUS page with the engine on.
 
 ## Next
 
-1. The model in ares (an `ares_android` branch, never `main` without the owner), recognised by the `.rbf`'s SHA-256.
+1. The model in ares: `ares_android` branch `fpga-cartfx` (never `main` without the owner), recognised by the `.rbf`'s
+   SHA-256: the engine answers once keyed, busy for the model's estimate after a GO, the words sent meanwhile held as
+   the cart's queue holds them; traps for a full queue and for the 68000 writing the cart while the engine composes.
 2. Jazz's side behind `OJ32X_FX=1` (EDCD build only), then SuperTux's, then Hurrican's (the design document's order).
 3. The console: the transparency check above, then each game's STATUS page photographed.
 

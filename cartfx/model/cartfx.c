@@ -71,13 +71,45 @@ static int cfx_layer_pix(cfx_t* fx, const cfx_layer_t* L, int px, int py) {
     return (int)c;
 }
 
+/* the estimate's share of a layer in a cell (see est in cartfx.h): its set-up, its pixels at the PSRAM's word every
+   6 clocks (3 clocks a pixel at 8 bits, 1.5 at 4), a tile map's spans and the entries read; in half clocks */
+static uint32_t cfx_est_layer(const cfx_t* fx, const cfx_layer_t* L, int x0, int y0) {
+    uint32_t h = 2 * 56, px = 0;
+    if (!(L->flags & CFX_L_TILES)) {
+        if (L->w == 0 || L->h == 0) return 2 * 6;
+        px = 128; h += 2 * 8 * 8;                  /* each row's first word: a jump */
+    } else {
+        uint32_t t = L->tile, MW = L->w, MH = L->h, seen[48], ns = 0;
+        if (t == 0 || MW == 0 || MH == 0) return 2 * 6;
+        for (int r = 0; r < 8; r++) {
+            uint32_t ly = ((uint32_t)(y0 + r) + L->y) % (MH * t);
+            for (int i = 0; i < 16; ) {
+                uint32_t lx = ((uint32_t)(x0 + i) + L->x) % (MW * t), u = lx % t, cell = (ly / t) * MW + lx / t;
+                int span = (int)(t - u); if (span > 16 - i) span = 16 - i;
+                uint16_t e = (L->flags & CFX_L_MAPSRAM) ? fx->sram[(L->map + cell) & 0x3FFFF]
+                                                        : (uint16_t)(fx->psram(fx->ctx, (L->map + 2 * cell) & 0xFFFFFF) << 8 |
+                                                                     fx->psram(fx->ctx, (L->map + 2 * cell + 1) & 0xFFFFFF));
+                int brk = L->brk && (fx->sram[(fx->brk + cell / 16) & 0x3FFFF] >> (cell % 16) & 1);
+                uint32_t k = 0; while (k < ns && seen[k] != cell) k++;
+                if (k == ns) { if (ns < 48) seen[ns++] = cell; h += 2 * ((L->flags & CFX_L_MAPSRAM) ? 9 : 18) + (L->brk ? 2 * 10 : 0); }
+                h += 2 * 2;
+                if ((e & 0xFFF) != 0 && !brk) { px += (uint32_t)span; h += 2 * 8; }
+                i += span;
+            }
+        }
+    }
+    return h + px * ((L->flags & CFX_L_4BPP) ? 3u : 6u);
+}
+
 static void cfx_compose(cfx_t* fx, int cx, int cy, int b) {
     uint8_t buf[8][16];
     memset(buf, 0, sizeof(buf));
     int x0 = cx * 16, y0 = cy * 8;
+    uint32_t est = 2 * 90 + 2 * (uint32_t)fx->nspr;     /* the cell: its set-up and write-out; the list scanned */
     for (int l = 0; l < 4; l++) {
         const cfx_layer_t* L = &fx->layer[l];
         if (!(L->flags & CFX_L_ON) || (L->flags & CFX_L_OVER)) continue;
+        est += cfx_est_layer(fx, L, x0, y0);
         for (int r = 0; r < 8; r++) for (int i = 0; i < 16; i++) {
             int c = cfx_layer_pix(fx, L, x0 + i, y0 + r);
             if (c >= 0) buf[r][i] = (uint8_t)c;
@@ -85,32 +117,42 @@ static void cfx_compose(cfx_t* fx, int cx, int cy, int b) {
     }
     for (int s = 0; s < fx->nspr; s++) {
         const cfx_sprite_t* S = &fx->spr[s];
-        for (int r = 0; r < 8; r++) for (int i = 0; i < 16; i++) {
-            int px = x0 + i, py = y0 + r;
-            int di = px - S->x, dj = py - S->y;
-            if (di < 0 || dj < 0 || di >= S->w || dj >= S->h) continue;
-            int si = (S->flags & 1) ? S->w - 1 - di : di, sj = (S->flags & 2) ? S->h - 1 - dj : dj;
-            uint8_t v = fx->psram(fx->ctx, (S->src + (uint32_t)sj * S->stride + (uint32_t)si) & 0xFFFFFF);
-            if (v == 0) continue;
-            uint8_t c = (uint8_t)(v + S->off);
-            if (S->flags & 4) c = fx->psram(fx->ctx, (fx->blend + (uint32_t)c * 256u + buf[r][i]) & 0xFFFFFF);
-            buf[r][i] = c;
+        int drawn = 0;
+        for (int r = 0; r < 8; r++) {
+            int rowpx = 0;
+            for (int i = 0; i < 16; i++) {
+                int px = x0 + i, py = y0 + r;
+                int di = px - S->x, dj = py - S->y;
+                if (di < 0 || dj < 0 || di >= S->w || dj >= S->h) continue;
+                rowpx++;
+                int si = (S->flags & 1) ? S->w - 1 - di : di, sj = (S->flags & 2) ? S->h - 1 - dj : dj;
+                uint8_t v = fx->psram(fx->ctx, (S->src + (uint32_t)sj * S->stride + (uint32_t)si) & 0xFFFFFF);
+                if (v == 0) continue;
+                uint8_t c = (uint8_t)(v + S->off);
+                if (S->flags & 4) { c = fx->psram(fx->ctx, (fx->blend + (uint32_t)c * 256u + buf[r][i]) & 0xFFFFFF); est += 2 * 14; }
+                buf[r][i] = c;
+            }
+            if (rowpx) { drawn = 1; est += 2 * 10 + 6 * (uint32_t)rowpx; }
         }
+        if (drawn) est += 2 * 12;
     }
     for (int l = 0; l < 4; l++) {
         const cfx_layer_t* L = &fx->layer[l];
         if (!(L->flags & CFX_L_ON) || !(L->flags & CFX_L_OVER)) continue;
+        est += cfx_est_layer(fx, L, x0, y0);
         for (int r = 0; r < 8; r++) for (int i = 0; i < 16; i++) {
             int c = cfx_layer_pix(fx, L, x0 + i, y0 + r);
             if (c >= 0) buf[r][i] = (uint8_t)c;
         }
     }
+    fx->est += est / 2;
     for (int r = 0; r < 8; r++) for (int i = 0; i < 16; i += 2)
         fx->sram[cfx_pic_word(b, fx->cols, x0 + i, y0 + r)] = (uint16_t)(buf[r][i] << 8 | buf[r][i + 1]);
 }
 
 static void cfx_go(cfx_t* fx) {
     int b = fx->shown ^ 1, n = 0;
+    fx->est = 2u * 24u * 26u;                /* the rows: the marks read, the cell map written */
     for (int cy = 0; cy < CFX_ROWS; cy++) {
         uint32_t m = 0;
         if (cy < fx->rows) m = fx->full ? ((1u << fx->cols) - 1) : (fx->mark[cy] & ((1u << fx->cols) - 1));

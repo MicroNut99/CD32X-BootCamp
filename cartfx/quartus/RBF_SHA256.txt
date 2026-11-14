@@ -1,6 +1,13 @@
-cartfx v2.1 (cfx_core.sv md5 3b8cbe9aa23439f348dd45b6459c25a9, map_cfx.sv md5 6dc1411e6adbd72ecf0438eb8ca4c9b9),
-Quartus 25.1std.0 Build 1129 SC Lite, the owner's PC, 13 Nov 2026 (build_cfx.bat): fpga_work\cfx_out\<game>\mega-pro.rbf
+The cartfx cores, Quartus 25.1std.0 Build 1129 SC Lite on the owner's PC (build_cfx.bat), fpga_work\cfx_out\<game>\mega-pro.rbf.
+map_cfx.sv md5 6dc1411e6adbd72ecf0438eb8ca4c9b9 in both.
 
+v2.2, 13 Nov 2026 (cfx_core.sv md5 4a9c9e922b4639ec6db12e3c37518676: the sprite list scanned a sprite a clock) - the current one
+game      sha256                                                            md5
+hur       147a841ae9e29571643f9dd8055c662fefa22069332d92b922ef6aac179ed3a6  230110564f0a30ec044fa74592b867f9
+oj        764d9bb646d43c7e9d223379b51e16caef579b35e6d8dc3d91dc261ca4477666  7c3947b7c34cefa39e30260b8fe92b87
+stx       3220a5d76c4fccede5b5fd817d7d7e778ce8b20b3ba40461a63bc306aae37554  344ee89e95e1168c252f3a83be9995bd
+
+v2.1, 13 Nov 2026 (cfx_core.sv md5 3b8cbe9aa23439f348dd45b6459c25a9) - the same commands, kept in fpga_work\cfx_out_v21
 game      sha256                                                            md5
 hur       21a53854c48359c8cc506c1e7eb8036ebb3f5dd00f4138fccfb965d5896927a9  a3ca5d6deea8968dfad7e2f2f859cad9
 oj        74d8b8b5e840222111b1ca96d95186912da063e1d0fa19f313ba8b66b884ac4e  a04a93466907e310ec923d28df28a820

@@ -878,11 +878,13 @@ module cfx_core #(
                 if (s == nspr) begin ph_over <= 1; lyr <= 0; st <= C_LAYER; end
                 else begin spr_ra <= s[7:0]; st <= C_SPR1; end
             end
-            C_SPR1: st <= C_SPR2;                               // (the list's read)
-            C_SPR2: begin
+            C_SPR1: begin spr_ra <= s[7:0] + 8'd1; st <= C_SPR2; end   // (the list's read; the next one asked)
+            C_SPR2: begin                                       // sprite s (spr_q), s + 1 being read: one a clock
                 if (!spr_q[112] || cx < spr_q[111:107] || cx > spr_q[106:102] || cy < spr_q[101:97] || cy > spr_q[96:92])
-                begin s <= s + 1'd1; st <= C_SPR; end           // not in this cell
-                else begin
+                begin                                           // not in this cell
+                    s <= s + 1'd1; spr_ra <= s[7:0] + 8'd2;
+                    if (s + 1'd1 == nspr) begin ph_over <= 1; lyr <= 0; st <= C_LAYER; end
+                end else begin
                     sf <= spr_q[91:89];
                     sx <= {{3{spr_q[88]}}, spr_q[88:76]}; sy <= {{3{spr_q[75]}}, spr_q[75:63]};
                     sw <= spr_q[62:54]; sh <= spr_q[53:45]; sstride <= spr_q[44:32];

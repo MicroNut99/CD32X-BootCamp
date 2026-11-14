@@ -164,6 +164,9 @@ typedef struct cfx {
     uint32_t mark[CFX_ROWS];            /* bit k: cell k of the row */
     uint8_t  shade[4096];
     uint16_t cnt[16];
+    uint32_t est;                       /* not the engine's: what cfx_core.sv would take for the last GO, in its
+                                           50 MHz clocks - an estimate for ares's busy bit, set against the
+                                           Verilator runs (sim/: EST=1); the console decides */
 } cfx_t;
 
 void cfx_reset(cfx_t* fx, uint16_t key1, uint8_t id);
