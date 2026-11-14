@@ -233,6 +233,7 @@ The details are in [docs/01_HOW_IT_BOOTS.md](docs/01_HOW_IT_BOOTS.md).
 | `edboot/` | `EDCD.32X`, the disc started from the EverDrive PRO (`EDCD=1 bash build.sh`); `EDBOOT.BIN` and the C-bit tests (`bash edboot/build.sh`) | No |
 | `edpack/` | The EverDrive PRO 14 MB file probe: does the menu load a 14 MB `.32X` into the PSRAM whole? (`bash edpack/build.sh`, no disc). The question behind `edboot/pack_edcd.py`, a launcher that carries the game's data (`manuals/MegaEverDrivePro_SDCARD.md` §4.0) | No |
 | `ares/` | The EverDrive PRO 16 MB cart for the ares emulator, as a patch for ares v148 | No |
+| `cartfx/` | The cart compositor on the EverDrive PRO's FPGA, for Hurrican, Jazz REV and SuperTux REV: the specification and reference model in C, the engine beside krikzz's unchanged SSF mapper, its Verilator check against the model, and the three Quartus builds (`cartfx/README.md`). Built and checked in simulation; not yet run on a console | No |
 | `tools/` | `prep_rom.py` (checks and marks the ROM), the boot picture, a test music track, the font | No |
 | `docs/` | How it works, the commands, memory maps, rules learned on the console, how the existing games differ | Read it |
 | `manuals/` | [MicroNut99/docs](https://github.com/MicroNut99/docs) as a submodule: the command ledger, the programming guide, the Kobo PDFs, the addenda, Sega's hardware manuals (`git submodule update --init`). The reading rules are in [CLAUDE.md](CLAUDE.md) |

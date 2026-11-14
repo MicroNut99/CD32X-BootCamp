@@ -1,0 +1,7 @@
+cartfx v2.1 (cfx_core.sv md5 3b8cbe9aa23439f348dd45b6459c25a9, map_cfx.sv md5 6dc1411e6adbd72ecf0438eb8ca4c9b9),
+Quartus 25.1std.0 Build 1129 SC Lite, the owner's PC, 13 Nov 2026 (build_cfx.bat): fpga_work\cfx_out\<game>\mega-pro.rbf
+
+game      sha256                                                            md5
+hur       21a53854c48359c8cc506c1e7eb8036ebb3f5dd00f4138fccfb965d5896927a9  a3ca5d6deea8968dfad7e2f2f859cad9
+oj        74d8b8b5e840222111b1ca96d95186912da063e1d0fa19f313ba8b66b884ac4e  a04a93466907e310ec923d28df28a820
+stx       768bcc63ed39b01e62f72ba4c3819b3a06f5938c350a14c3bad1c82d96156c1a  c3b425ad28604f11931bfe32c6b52e60
