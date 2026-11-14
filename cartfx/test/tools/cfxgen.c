@@ -2,9 +2,11 @@
  * sends, and what the engine must give for each check, made by the reference model (../../model/cartfx.c)
  * running the same script over the same data.
  *
- *   cc -O2 -o cfxgen cfxgen.c ../../model/cartfx.c && ./cfxgen cfxtest_data.bin
+ *   cc -O2 -o cfxgen cfxgen.c ../../model/cartfx.c && ./cfxgen cfxtest_data.bin cfxtest_chip1.bin
  *
- * The file is the ROM from 0x040000 to 0x1FFFFF (the program's 256 KB come before it):
+ * The first file is the ROM from 0x040000 to 0x1FFFFF (the program's 256 KB come before it); the second the same
+ * pictures for 0x880000-0x8FFFFF, in the second PSRAM chip (the ROM is 9 MB: the menu loads it whole). The script
+ * runs its 8 checks twice: from the pictures in chip 0, then from their copy in chip 1 (checks 8-15).
  *   0x040000  the script: 16-bit words. 0x0000-0x7FFF a word for the engine (a read of cart 0x3F0000 + 2w);
  *             0x8001 wait until not busy (the GO's time measured); 0x81bb wait until buffer bb is shown;
  *             0x82kk check kk; 0x8300 a new pass starts here (the stress loop goes back to it); 0xFFFF the end
@@ -26,7 +28,8 @@
 #include <stdint.h>
 #include "../../model/cartfx.h"
 
-#define ROM_SIZE   0x200000u
+#define ROM_SIZE   0x200000u        /* the program, the script, the pictures, the checks */
+#define CHIP1      0x800000u        /* the pictures again 8 MB on: the second PSRAM chip (bank 17) */
 #define SCRIPT     0x040000u
 #define BMP8       0x080000u        /* 512 x 256, 8 bits */
 #define BMP4       0x0A0000u        /* 512 x 256, 4 bits */
@@ -40,12 +43,12 @@
 #define BLEND      0x0F0000u        /* 256 x 256 */
 #define EXPECT     0x100000u
 
-static uint8_t rom[ROM_SIZE];
+static uint8_t rom[CHIP1 + ROM_SIZE];
 static uint16_t sram[0x40000];
 static uint32_t rs = 12345;
 static uint32_t rnd(void) { rs = rs * 1103515245u + 12345u; return rs >> 8; }
 
-static uint8_t ps(void* ctx, uint32_t a) { (void)ctx; return a < ROM_SIZE ? rom[a] : 0xFF; }
+static uint8_t ps(void* ctx, uint32_t a) { (void)ctx; return a < CHIP1 + ROM_SIZE ? rom[a] : 0xFF; }
 static void put16(uint32_t a, uint16_t v) { rom[a] = (uint8_t)(v >> 8); rom[a + 1] = (uint8_t)v; }
 static void put32(uint32_t a, uint32_t v) { put16(a, (uint16_t)(v >> 16)); put16(a + 2, (uint16_t)v); }
 
@@ -68,8 +71,9 @@ static void layer_off(int l) { layer(l, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); }
 static void sprite(int fl, int x, int y, int w, int h, int stride, uint32_t src, int off) {
     word(CFX_WORD(CFX_OP_SPRITE, fl)); arg(x & 0x1FFF); arg(y & 0x1FFF); arg(w); arg(h); arg(stride); a24(src); arg(off & 255);
 }
+static uint32_t g_base;
 static void setup(int cols, int rows, uint32_t brk) {
-    word(CFX_WORD(CFX_OP_SETUP, 0)); arg(cols); arg(rows); a24(BLEND); word(CFX_HI(brk)); word(CFX_LO(brk));
+    word(CFX_WORD(CFX_OP_SETUP, 0)); arg(cols); arg(rows); a24(BLEND + g_base); word(CFX_HI(brk)); word(CFX_LO(brk));
 }
 static void poke(uint32_t a, uint16_t v) { word(CFX_WORD(CFX_OP_POKE, 0)); word(CFX_HI(a)); word(CFX_LO(a)); arg(v >> 8); arg(v & 255); }
 static void upload(uint32_t src, uint32_t dst, int n) { word(CFX_WORD(CFX_OP_UPLOAD, 0)); a24(src); word(CFX_HI(dst)); word(CFX_LO(dst)); arg(n); }
@@ -144,117 +148,133 @@ static void pictures(void) {
         rom[BLEND + (uint32_t)v * 256 + (uint32_t)d] = (uint8_t)((v + d) / 2 ^ (v & 0x80));
 }
 
-int main(int argc, char** argv) {
-    if (argc < 2) { fprintf(stderr, "usage: cfxgen <out.bin>\n"); return 1; }
-    memset(rom, 0xFF, sizeof rom);
-    for (uint32_t i = 0; i < 0x40000; i++) sram[i] = (uint16_t)(i * 0x9E37u + 0x5A5Au);   /* (never compared before it is written) */
-    pictures();
-    fx.psram = ps; fx.sram = sram; fx.ctx = 0;
-    cfx_reset(&fx, CFX_KEY1_HUR, CFX_ID_HUR);
-    fx.on = 1;                                           /* (the key is the program's; the words start here) */
-
-    word(0x8300);                                        /* a pass */
+/* the 8 checks, every PSRAM address + g_base (0: the pictures in chip 0, 0x800000: their copy in chip 1) */
+#define P(x) ((x) + g_base)
+static void scenes(uint32_t base) {
+    g_base = base;
     word(CFX_WORD(CFX_OP_SHOW, 0));
     word(0x8100);
-    word(CFX_WORD(CFX_OP_LUT, 0)); a24(SHADE);
+    word(CFX_WORD(CFX_OP_LUT, 0)); a24(P(SHADE));
     const uint32_t BRK = 0x30000, MS1 = 0x10000, MS2 = 0x14000;
 
     /* 0, 1: whole frames into both buffers, 21 x 24 (after these every byte of both pictures is defined) */
     setup(21, 24, BRK);
     for (int l = 0; l < 4; l++) layer_off(l);
-    layer(0, CFX_L_ON | CFX_L_OPAQUE, BMP8, 512, 256, 0, 0, 0, 0, 5, 3);
+    layer(0, CFX_L_ON | CFX_L_OPAQUE, P(BMP8), 512, 256, 0, 0, 0, 0, 5, 3);
     word(CFX_WORD(CFX_OP_BEGIN, 1));
-    sprite(0, 40, 30, 64, 64, 64, SPRITES, 0); sprite(1, 300, 150, 64, 64, 64, SPRITES, 9); sprite(2, -20, -10, 64, 64, 64, SPRITES, 77);
+    sprite(0, 40, 30, 64, 64, 64, P(SPRITES), 0); sprite(1, 300, 150, 64, 64, 64, P(SPRITES), 9); sprite(2, -20, -10, 64, 64, 64, P(SPRITES), 77);
     go_check();
     word(CFX_WORD(CFX_OP_SCROLL, 0)); arg(37); arg(100);
     word(CFX_WORD(CFX_OP_BEGIN, 1));
-    sprite(3, 100, 100, 64, 64, 64, SPRITES, 3); sprite(4, 200, 20, 64, 64, 64, SPRITES, 0);
+    sprite(3, 100, 100, 64, 64, 64, P(SPRITES), 3); sprite(4, 200, 20, 64, 64, 64, P(SPRITES), 0);
     go_check();
 
     /* 2: Hurrican's way: 20 x 22, a 4-bit bitmap, an 8-bit one, a lit tile map of 20 with broken bits and h-flips
           (map in PSRAM), an over tile map of 16 at 4 bits; sprites, some blended */
     setup(20, 22, BRK);
-    upload(BRKSRC, BRK, 2048);
+    upload(P(BRKSRC), BRK, 2048);
     for (int k = 0; k < 64; k++) poke(BRK + (uint32_t)k, (uint16_t)(rnd() & rnd() & 0xFFFF));
-    layer(0, CFX_L_ON | CFX_L_OPAQUE | CFX_L_4BPP, BMP4, 512, 256, 16, 0, 0, 0, 1000, 77);
-    layer(1, CFX_L_ON, BMP8, 512, 256, 0, 0, 0, 0, 3, 250);
-    layer(2, CFX_L_ON | CFX_L_TILES | CFX_L_SHADE | CFX_L_HFLIP, TILES8, 128, 64, 0, 1, 20, MAPP, 333, 51);
-    layer(3, CFX_L_ON | CFX_L_TILES | CFX_L_OVER | CFX_L_OPAQUE | CFX_L_4BPP, TILES4, 128, 64, 32, 0, 16, MAPP, 7, 900);
+    layer(0, CFX_L_ON | CFX_L_OPAQUE | CFX_L_4BPP, P(BMP4), 512, 256, 16, 0, 0, 0, 1000, 77);
+    layer(1, CFX_L_ON, P(BMP8), 512, 256, 0, 0, 0, 0, 3, 250);
+    layer(2, CFX_L_ON | CFX_L_TILES | CFX_L_SHADE | CFX_L_HFLIP, P(TILES8), 128, 64, 0, 1, 20, P(MAPP), 333, 51);
+    layer(3, CFX_L_ON | CFX_L_TILES | CFX_L_OVER | CFX_L_OPAQUE | CFX_L_4BPP, P(TILES4), 128, 64, 32, 0, 16, P(MAPP), 7, 900);
     word(CFX_WORD(CFX_OP_BEGIN, 1));
     for (int k = 0; k < 24; k++)
         sprite((int)(rnd() % 4) | (k % 3 == 0 ? 4 : 0), (int)(rnd() % 360) - 20, (int)(rnd() % 210) - 20, 8 + (int)(rnd() % 57),
-               8 + (int)(rnd() % 57), 64, SPRITES + (rnd() % 8) * 64, k % 5 ? 0 : (int)(rnd() & 255));
+               8 + (int)(rnd() % 57), 64, P(SPRITES) + (rnd() % 8) * 64, k % 5 ? 0 : (int)(rnd() & 255));
     go_check();
 
     /* 3: Jazz's way: 21 x 24, maps UPLOADed to the SRAM and POKEd, a sky (a bitmap 4 wide), tiles of 32 under and
           over, part of the frame (CELLS), sprites */
     setup(21, 24, BRK);
     for (uint32_t q = 0; q < 4; q++) {                  /* (UPLOAD takes at most 8,191 words) */
-        upload(MAPU + q * 8192, MS1 + q * 4096, 4096);
-        upload(MAPU + ((q + 2) & 3) * 8192, MS2 + q * 4096, 4096);
+        upload(P(MAPU) + q * 8192, MS1 + q * 4096, 4096);
+        upload(P(MAPU) + ((q + 2) & 3) * 8192, MS2 + q * 4096, 4096);
     }
     for (int k = 0; k < 12; k++) poke(MS1 + rnd() % 4096, (uint16_t)(rnd() % 3 ? 0 : 1 + rnd() % 60));
-    layer(0, CFX_L_ON | CFX_L_OPAQUE, BMP8 + 40 * 512, 4, 192, 0, 0, 0, 0, 0, 0);
-    layer(1, CFX_L_ON | CFX_L_TILES | CFX_L_MAPSRAM | CFX_L_HFLIP, TILES8, 256, 64, 0, 0, 32, MS1, 4000, 1000);
-    layer(2, CFX_L_ON | CFX_L_TILES | CFX_L_MAPSRAM | CFX_L_OVER, TILES8, 256, 64, 7, 0, 32, MS2, 4100, 900);
+    layer(0, CFX_L_ON | CFX_L_OPAQUE, P(BMP8) + 40 * 512, 4, 192, 0, 0, 0, 0, 0, 0);
+    layer(1, CFX_L_ON | CFX_L_TILES | CFX_L_MAPSRAM | CFX_L_HFLIP, P(TILES8), 256, 64, 0, 0, 32, MS1, 4000, 1000);
+    layer(2, CFX_L_ON | CFX_L_TILES | CFX_L_MAPSRAM | CFX_L_OVER, P(TILES8), 256, 64, 7, 0, 32, MS2, 4100, 900);
     layer_off(3);
     word(CFX_WORD(CFX_OP_BEGIN, 0));
     for (int r = 0; r < 24; r++) cells(r, rnd() & rnd() & 0x1FFFFF);
     for (int k = 0; k < 10; k++)
         sprite((int)(rnd() % 4), (int)(rnd() % 360) - 20, (int)(rnd() % 210) - 20, 16 + (int)(rnd() % 48), 16 + (int)(rnd() % 48), 64,
-               SPRITES + (rnd() % 8) * 64, 0);
+               P(SPRITES) + (rnd() % 8) * 64, 0);
     go_check();
 
     /* 4: SuperTux's way: 21 x 23, a picture that wraps, tiles of 16 over everything (map in SRAM), a snow of small
           sprites, part of the frame */
     setup(21, 23, BRK);
     layer_off(0); layer_off(2);
-    layer(1, CFX_L_ON | CFX_L_OPAQUE, BMP8, 320, 240, 192, 0, 0, 0, 7000, 7000);
-    layer(3, CFX_L_ON | CFX_L_TILES | CFX_L_MAPSRAM | CFX_L_OVER, TILES8, 256, 64, 0, 0, 16, MS1, 2000, 50);
+    layer(1, CFX_L_ON | CFX_L_OPAQUE, P(BMP8), 320, 240, 192, 0, 0, 0, 7000, 7000);
+    layer(3, CFX_L_ON | CFX_L_TILES | CFX_L_MAPSRAM | CFX_L_OVER, P(TILES8), 256, 64, 0, 0, 16, MS1, 2000, 50);
     word(CFX_WORD(CFX_OP_BEGIN, 0));
     for (int r = 0; r < 23; r += 2) cells(r, 0x1FFFFF);
     for (int k = 0; k < 80; k++) {
         int small = k % 4 != 0;
         sprite((int)(rnd() % 4), (int)(rnd() % 340) - 10, (int)(rnd() % 190) - 6, small ? 1 + (int)(rnd() % 4) : 10 + (int)(rnd() % 40),
-               small ? 1 + (int)(rnd() % 4) : 10 + (int)(rnd() % 40), small ? 4 : 64, small ? SPRITES + 64 * 33 + 30 : SPRITES, 0);
+               small ? 1 + (int)(rnd() % 4) : 10 + (int)(rnd() % 40), small ? 4 : 64, small ? P(SPRITES) + 64 * 33 + 30 : P(SPRITES), 0);
     }
     go_check();
 
     /* 5: the edges: a sprite wider than the picture, flipped both ways, off every side; 257 sprites (the 257th is
           dropped and sets the error bit); a sprite 0 wide (nothing) */
     setup(21, 24, BRK);
-    layer(0, CFX_L_ON | CFX_L_OPAQUE | CFX_L_4BPP, BMP4, 512, 256, 100, 0, 0, 0, 4095, 4095);
+    layer(0, CFX_L_ON | CFX_L_OPAQUE | CFX_L_4BPP, P(BMP4), 512, 256, 100, 0, 0, 0, 4095, 4095);
     layer_off(1); layer_off(3);
     word(CFX_WORD(CFX_OP_BEGIN, 1));
-    sprite(3, -100, 50, 511, 40, 512, BMP8, 0);
-    sprite(0, 330, 185, 64, 64, 64, SPRITES, 0); sprite(1, -60, -60, 64, 64, 64, SPRITES, 0);
-    sprite(0, 10, 10, 0, 20, 64, SPRITES, 0);
-    for (int k = 0; k < 253; k++) sprite(k & 3, (k * 13) % 330, (k * 7) % 190, 3, 3, 64, SPRITES + 64 * 33 + 30, k);
-    sprite(0, 160, 96, 30, 30, 64, SPRITES, 0);         /* the 257th */
+    sprite(3, -100, 50, 511, 40, 512, P(BMP8), 0);
+    sprite(0, 330, 185, 64, 64, 64, P(SPRITES), 0); sprite(1, -60, -60, 64, 64, 64, P(SPRITES), 0);
+    sprite(0, 10, 10, 0, 20, 64, P(SPRITES), 0);
+    for (int k = 0; k < 253; k++) sprite(k & 3, (k * 13) % 330, (k * 7) % 190, 3, 3, 64, P(SPRITES) + 64 * 33 + 30, k);
+    sprite(0, 160, 96, 30, 30, 64, P(SPRITES), 0);         /* the 257th */
     go_check();
 
     /* 6: after the error: tiles of 13 at 4 bits, h-flipped, opaque; tiles of 2; a bitmap 6 x 5 wrapping */
     setup(17, 19, BRK);
     word(CFX_WORD(CFX_OP_BEGIN, 1));
-    layer(0, CFX_L_ON | CFX_L_OPAQUE | CFX_L_TILES | CFX_L_4BPP | CFX_L_HFLIP, TILES4, 128, 64, 0, 0, 13, MAPP, 9, 4);
-    layer(1, CFX_L_ON | CFX_L_TILES, TILES8, 128, 64, 50, 1, 2, MAPP, 1, 1);
-    layer(2, CFX_L_ON, BMP8 + 1000, 6, 5, 0, 0, 0, 0, 2, 3);
-    sprite(4, 50, 50, 64, 64, 64, SPRITES, 0); sprite(5, 120, 70, 64, 64, 64, SPRITES, 0);
+    layer(0, CFX_L_ON | CFX_L_OPAQUE | CFX_L_TILES | CFX_L_4BPP | CFX_L_HFLIP, P(TILES4), 128, 64, 0, 0, 13, P(MAPP), 9, 4);
+    layer(1, CFX_L_ON | CFX_L_TILES, P(TILES8), 128, 64, 50, 1, 2, P(MAPP), 1, 1);
+    layer(2, CFX_L_ON, P(BMP8) + 1000, 6, 5, 0, 0, 0, 0, 2, 3);
+    sprite(4, 50, 50, 64, 64, 64, P(SPRITES), 0); sprite(5, 120, 70, 64, 64, 64, P(SPRITES), 0);
     go_check();
 
     /* 7: part of a frame again, both buffers having been whole: only the marked cells change */
     setup(21, 24, BRK);
-    layer(0, CFX_L_ON | CFX_L_OPAQUE, BMP8, 512, 256, 0, 0, 0, 0, 77, 77);
+    layer(0, CFX_L_ON | CFX_L_OPAQUE, P(BMP8), 512, 256, 0, 0, 0, 0, 77, 77);
     layer_off(1); layer_off(2); layer_off(3);
     word(CFX_WORD(CFX_OP_BEGIN, 0));
     cells(0, 0x1FFFFF); cells(23, 0x1FFFFF); cells(12, 0x00F0F0);
-    sprite(0, 150, 90, 64, 64, 64, SPRITES, 0);
+    sprite(0, 150, 90, 64, 64, 64, P(SPRITES), 0);
     go_check();
 
+}
+
+int main(int argc, char** argv) {
+    if (argc < 2) { fprintf(stderr, "usage: cfxgen <out.bin>\n"); return 1; }
+    memset(rom, 0xFF, sizeof rom);
+    for (uint32_t i = 0; i < 0x40000; i++) sram[i] = (uint16_t)(i * 0x9E37u + 0x5A5Au);   /* (never compared before it is written) */
+    pictures();
+    memcpy(rom + CHIP1 + BMP8, rom + BMP8, EXPECT - BMP8);  /* the pictures again at 8.5 MB (the menu loads the file
+                                                            whole, linearly: chip 1's banks 17) */
+    fx.psram = ps; fx.sram = sram; fx.ctx = 0;
+    cfx_reset(&fx, CFX_KEY1_HUR, CFX_ID_HUR);
+    fx.on = 1;                                           /* (the key is the program's; the words start here) */
+
+    word(0x8300);                                        /* a pass: the 8 checks from chip 0, then from chip 1 */
+    scenes(0);
+    scenes(CHIP1);
     word(0xFFFF);
     FILE* f = fopen(argv[1], "wb");
     if (!f || fwrite(rom + SCRIPT, 1, ROM_SIZE - SCRIPT, f) != ROM_SIZE - SCRIPT) { perror(argv[1]); return 1; }
     fclose(f);
-    printf("%d checks, the script %u words; %s: ROM 0x%06X-0x%06X\n", nchecks, (sp - SCRIPT) / 2, argv[1], SCRIPT, ROM_SIZE - 1);
+    if (argc > 2) {                                      /* the copy for chip 1: the ROM's 0x880000-0x8FFFFF */
+        f = fopen(argv[2], "wb");
+        if (!f || fwrite(rom + CHIP1 + BMP8, 1, EXPECT - BMP8, f) != EXPECT - BMP8) { perror(argv[2]); return 1; }
+        fclose(f);
+    }
+    printf("%d checks, the script %u words; %s: ROM 0x%06X-0x%06X%s\n", nchecks, (sp - SCRIPT) / 2, argv[1], SCRIPT,
+           ROM_SIZE - 1, argc > 2 ? "; the pictures again for 0x880000-0x8FFFFF" : "");
     return 0;
 }

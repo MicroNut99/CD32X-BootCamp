@@ -2,8 +2,10 @@
  *
  * A 32X ROM started from the Mega EverDrive PRO's menu (32X attached, no CD needed), with one of the cartfx cores
  * beside it on the SD card as mega-pro.rbf (Hurrican's, Jazz's or SuperTux's: the test tries all three keys). It:
- *  1. turns the engine on and shows which core answered (its ID), or that none did (no .rbf, or not a cartfx one);
- *  2. plays the script tools/cfxgen.c made: 8 frames composed by the engine, each checked word for word against
+ *  1. turns the engine on and shows which core answered (its ID) and its PSRAM read (counter 9: 5 or 8 clocks; 0 on
+ *     a v2.2 core, which reads in 5), or that none answered (no .rbf, or not a cartfx one);
+ *  2. plays the script tools/cfxgen.c made: 8 frames composed by the engine from pictures in the first PSRAM chip,
+ *     then the same 8 from their copy in the second chip (the ROM is 9 MB), each checked word for word against
  *     what the reference model (cartfx/model/cartfx.c) composed from the same script and the same pictures - the
  *     picture, the cell map, the error bit, the cell and sprite counts - each shown for a second as it is checked;
  *  3. M0 of the design: copies the shown picture (320 x 192 of it) from the window into the frame buffer three ways,
@@ -164,7 +166,7 @@ typedef struct { uint16_t cols, rows; uint32_t diff, first; uint8_t err_ok, cnt_
 static Check ck[16];
 static int nck;
 static int core = -1;                                            /* 0 Hurrican, 1 Jazz, 2 SuperTux */
-static uint16_t core_status, version;
+static uint16_t core_status, version, psram_t;
 static uint32_t copy_us[3], copy_bytes;
 static uint32_t passes, stress_checks, stress_wrong, stress_reads, worst_us[16];
 static uint16_t predo, sredo, lost;
@@ -173,11 +175,33 @@ static const char *const core_name[3] = { "HURRICAN", "JAZZ", "SUPERTUX" };
 static const uint16_t key1[3] = { 0x5848, 0x584A, 0x5853 };
 static const uint8_t ids[3] = { 0xC1, 0xC2, 0xC3 };
 
+/* a check's line in its chip's column (19 characters): its number, RIGHT and the two times, or what was wrong */
+static void check_line(int x, int y, int k)
+{
+    char b[24], t[16];
+    Check *c = &ck[k];
+    int ok = c->done && !c->diff && c->err_ok && c->cnt_ok;
+    text(x, y, dec(b, (uint32_t)(k & 7)), C_WHITE);
+    if (!c->done) { text(x + 16, y, "-", C_GREY); return; }
+    if (ok)
+    {
+        text(x + 16, y, "RIGHT", C_GREEN);
+        text(x + 64, y, ms1(b, c->eng_us), C_CYAN);
+        text(x + 112, y, ms1(b, c->sh2_us), C_CYAN);
+        return;
+    }
+    b[0] = 0;
+    if (c->diff) { cat(b, dec(t, c->diff)); cat(b, "@"); cat(b, hexn(t, c->first, 4)); }
+    if (!c->err_ok) cat(b, " E");
+    if (!c->cnt_ok) cat(b, " N");
+    text(x + 16, y, b, C_RED);
+}
+
 static void results(void)
 {
     char b[48], t[16];
     clear();
-    text(8, 0, "CARTFX TEST 1  (CD32X BOOTCAMP)", C_YELLOW);
+    text(8, 0, "CARTFX TEST 2  (CD32X BOOTCAMP)", C_YELLOW);
     if (core < 0)
     {
         b[0] = 0; cat(b, "NO CARTFX CORE ANSWERED (STATUS "); cat(b, hexn(t, core_status, 4)); cat(b, ")");
@@ -186,29 +210,18 @@ static void results(void)
         flip(); return;
     }
     b[0] = 0; cat(b, "CORE "); cat(b, core_name[core]); cat(b, "  ID "); cat(b, hexn(t, ids[core], 2));
-    cat(b, "  VERSION "); cat(b, hexn(t, version, 4));
+    cat(b, "  V "); cat(b, hexn(t, version, 4)); cat(b, "  T ");
+    if (psram_t) cat(b, dec(t, psram_t)); else cat(b, "5 OLD");     /* (v2.2: no counter 9, read in 5) */
     text(8, 12, b, C_WHITE);
-    text(8, 24, "CHK SIZE  RESULT       ENGINE  SH2 MS", C_GREY);
-    for (int k = 0; k < nck; k++)
+    for (int chip = 0; chip < 2; chip++)                         /* checks 0-7 from chip 0, 8-15 from chip 1 */
     {
-        Check *c = &ck[k];
-        int y = 34 + k * 10, ok = c->done && !c->diff && c->err_ok && c->cnt_ok;
-        b[0] = 0; cat(b, dec(t, k)); cat(b, "   "); cat(b, dec(t, c->cols)); cat(b, "X"); cat(b, dec(t, c->rows));
-        text(8, y, b, C_WHITE);
-        if (!c->done) { text(80, y, "-", C_GREY); continue; }
-        if (ok) text(80, y, "RIGHT", C_GREEN);
-        else
-        {
-            b[0] = 0;
-            if (c->diff) { cat(b, dec(t, c->diff)); cat(b, " @"); cat(b, hexn(t, c->first, 4)); }
-            if (!c->err_ok) cat(b, " E");
-            if (!c->cnt_ok) cat(b, " N");
-            text(80, y, b, C_RED);
-        }
-        text(192, y, ms1(b, c->eng_us), C_CYAN);
-        text(256, y, ms1(b, c->sh2_us), C_CYAN);
+        int x = 8 + 160 * chip;
+        text(x, 24, chip ? "CHIP 1" : "CHIP 0", C_GREY);
+        text(x + 64, 24, "ENG", C_GREY);
+        text(x + 112, 24, "SH2", C_GREY);
+        for (int k = 8 * chip; k < 8 * chip + 8 && k < nck; k++) check_line(x, 34 + (k & 7) * 10, k);
     }
-    int y = 34 + nck * 10 + 6;
+    int y = 34 + 8 * 10 + 6;
     text(8, y, "COPY 320 LINES X 192 FROM THE WINDOW:", C_GREY);
     static const char *const how[3] = { "WORD READS", "LONG READS", "CACHED    " };
     for (int m = 0; m < 3; m++)
@@ -354,7 +367,7 @@ int main(void)
         (void)CMD(0x4346); (void)CMD(key1[k]);
         uint16_t st = CMD(0x0C01);
         core_status = st;
-        if ((st >> 8) == ids[k] && CMD(8) == 0x0C01) { core = k; version = CMD(8); }
+        if ((st >> 8) == ids[k] && CMD(8) == 0x0C01) { core = k; version = CMD(8); psram_t = CMD(9); }
     }
     if (core < 0) { results(); while (1) { } }
 

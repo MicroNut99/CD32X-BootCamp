@@ -7,38 +7,44 @@ frame buffer. It grew from Rayman CD32X's compositor (on the console since 8 Nov
 keeps its window, key and command encoding. The design and each game's plan are in the design document
 ("FPGA accelerators for Hurrican, Jazz and SuperTux CD32X") and in each game's `fpga/` folder.
 
-**Status, 13 Nov 2026: built, never on a console, used by no game yet.** It is checked against the reference model
-in Verilator and fitted by Quartus for all three games. A green simulation or ares run is never a console pass.
+**Status, 14 Nov 2026: built (v2.3), never on a console, used by no game yet.** It is checked against the reference
+model in Verilator and fitted by Quartus for all three games, each with the cart's PSRAM read in 5 clocks and in 8 (the
+console test says which the cart needs). A green simulation or ares run is never a console pass.
 
 | Folder | What |
 |---|---|
 | [`model/`](model/) | `cartfx.h`: **the specification**, to the bit (window, key, commands, status, counters). `cartfx.c`: the reference model, plain C. The same C goes into a game's PC build and into ares |
 | [`rtl/`](rtl/) | `cfx_core.sv`: the engine. `map_cfx.sv`: krikzz's `map_ssf` instantiated unchanged, its outputs taken over only once the key is read |
 | [`sim/`](sim/) | `tb_cfx.cpp`: the engine against the model in Verilator, with the console's reads cutting in |
-| [`quartus/`](quartus/) | the three builds: `hub_<game>.sv` (krikzz's `hub.sv`, one line changed), `setup_cfx.sh`, `build_cfx.bat`, krikzz's licence |
+| [`quartus/`](quartus/) | the six builds: `hub_<game>.sv` (krikzz's `hub.sv`, one line changed), `setup_cfx.sh`, `build_cfx.bat`, krikzz's licence |
 | [`test/`](test/) | `CFXTEST.32X`, the console test: a 32X ROM started from the EverDrive menu with a core beside it (below) |
 
 ## The builds
 
-One source; `KEY1` and `ID` name the game (`hub_<game>.sv`). The game turns the engine on with three reads of the
-command port, `KEY0` (0x4346), its `KEY1`, then `KEY2` (0x0C01, the version). The status's high byte is the ID, so a
-game refuses the wrong `.rbf`.
+One source; `KEY1` and `ID` name the game (`hub_<game>.sv`), `PSRAM_T` the cart's PSRAM read: 5 clocks (Rayman's
+compositor reads so on the console) or 8 (Dracula X CD32X's core: `ROM_LAT` 8). Counter 9 reads it back. The game
+turns the engine on with three reads of the command port, `KEY0` (0x4346), its `KEY1`, then `KEY2` (0x0C01, the
+version). The status's high byte is the ID, so a game refuses the wrong `.rbf`.
 
-| Game | KEY1 | ID | Logic elements | Memory bits | Worst setup slack (slow 85C) | `mega-pro.rbf` md5 |
-|---|---|---|---|---|---|---|
-| Hurrican | 0x5848 `XH` | 0xC1 | 7,433 (48 %) | 197,792 (38 %) | +4.701 ns | `230110564f0a30ec044fa74592b867f9` |
-| Jazz REV | 0x584A `XJ` | 0xC2 | 7,446 (48 %) | 197,792 (38 %) | +4.833 ns | `7c3947b7c34cefa39e30260b8fe92b87` |
-| SuperTux REV | 0x5853 `XS` | 0xC3 | 7,432 (48 %) | 197,792 (38 %) | +3.165 ns | `344ee89e95e1168c252f3a83be9995bd` |
+| Build | KEY1 | ID | Read | Logic elements | Worst setup slack | Worst hold slack | `mega-pro.rbf` md5 |
+|---|---|---|---|---|---|---|---|
+| `hur` Hurrican | 0x5848 `XH` | 0xC1 | 5 | 7,467 (48 %) | +4.244 ns | +0.114 ns | `ed22e589b33b5c9e356c81cd5f3768e1` |
+| `oj` Jazz REV | 0x584A `XJ` | 0xC2 | 5 | 7,438 (48 %) | +3.015 ns | +0.105 ns | `4a1a7f3c6adc6fe3195b6fef43db3ec2` |
+| `stx` SuperTux REV | 0x5853 `XS` | 0xC3 | 5 | 7,449 (48 %) | +4.230 ns | +0.138 ns | `8143053db26f06a9123fa4eaad9b60de` |
+| `hur8` Hurrican | 0x5848 `XH` | 0xC1 | 8 | 7,452 (48 %) | +3.648 ns | +0.138 ns | `f2f90f31f52674d72fe91231a0780f53` |
+| `oj8` Jazz REV | 0x584A `XJ` | 0xC2 | 8 | 7,423 (48 %) | +3.729 ns | +0.102 ns | `68db3ba73088650c87d57fe2de719305` |
+| `stx8` SuperTux REV | 0x5853 `XS` | 0xC3 | 8 | 7,416 (48 %) | +4.526 ns | +0.107 ns | `c6bbbfd1d2d647c28e13872f802c99d2` |
 
-v2.2, Quartus 25.1std Lite, EP4CE15F23C8, 50 MHz, 13 Nov 2026: timing met at every corner, hold too (worst +0.101 ns,
-fast 0C). krikzz's `map_ssf` alone is 1,754 LEs and 114,688 memory bits. The SHA-256 of each (ares knows the cores by
-it) and those of v2.1, the same commands: `quartus/RBF_SHA256.txt`.
+v2.3, Quartus 25.1std Lite, EP4CE15F23C8, 50 MHz, 14 Nov 2026: timing met at every corner (the slacks above are the
+worst of the three), 197,792 memory bits (38 %) each. krikzz's `map_ssf` alone is 1,754 LEs and 114,688 memory bits.
+The SHA-256 of each (ares knows the cores by it) and those of v2.2 and v2.1 (read in 5, no counter 9):
+`quartus/RBF_SHA256.txt`.
 
 To build them again: `bash quartus/setup_cfx.sh <work>`, where `<work>/mega-ed-pub` is krikzz's tree (on the owner's
-PC, `fpga_work`). It lays out `fpga_pro/map_cfx_<game>` (krikzz's `map_ssf` project with its two mapper lines
-replaced by four) and `mapper/map_cfx_<game>`, and puts `build_cfx.bat` beside them. Double-click that `.bat`: it
-writes each game's log, exit code, md5, fit and timing summaries, and `cfx_out\<game>\mega-pro.rbf`. **Read the
-timing summary before using an `.rbf`; never use one whose timing failed.**
+PC, `fpga_work`). It lays out `fpga_pro/map_cfx_<build>` (krikzz's `map_ssf` project with its two mapper lines
+replaced by four) and `mapper/map_cfx_<build>`, and puts `build_cfx.bat` beside them. Double-click that `.bat`: it
+writes each build's log, exit code, md5, fit and timing summaries, and `cfx_out\<build>\mega-pro.rbf` (about a
+minute a build). **Read the timing summary before using an `.rbf`; never use one whose timing failed.**
 
 ## How a game uses it
 
@@ -66,8 +72,8 @@ timing summary before using an `.rbf`; never use one whose timing failed.**
 Rayman's front end with Metal Slug CD32X's console fixes. A command read's address is taken only once it has held
 steady for two clocks. The console wins every memory at once, decided from the bus pins with no clock in between, and
 its picture reads go straight to the SRAM's pins. Any engine access the console overlapped, or came into within two
-clocks after, is done again. PSRAM reads hold address and OE for 5 clocks (Rayman's console-proven read), back to
-back. SRAM writes go from a 128-word queue in block RAM. Reads that must be exact (map entries, broken bits) are
+clocks after, is done again. PSRAM reads hold address and OE for `PSRAM_T` clocks (5: Rayman's console-proven read;
+8: Dracula X's), back to back. SRAM writes go from a 128-word queue in block RAM. Reads that must be exact (map entries, broken bits) are
 sampled twice and kept only when both samples agree.
 
 A frame is composed a cell at a time in block RAM: zeros; the layers under the sprites, 0-3; the sprites in the order
@@ -87,52 +93,65 @@ games':
 | SuperTux: a bitmap, a tile map of 16, 33-38 small sprites | 87-189 | 2 | 4.1-9.2 ms |
 
 With the console reading the cart 30 % of the time, a full Hurrican frame took 18.7 ms. A word of PSRAM every
-6 clocks (one chip, OE pulsed as Rayman's) is the limit: about 3 clocks a pixel at 8 bits, 1.5 at 4 bits.
+`PSRAM_T` + 1 clocks (one chip, OE pulsed as Rayman's) is the limit: with 5, about 3 clocks a pixel at 8 bits, 1.5 at
+4 bits; with 8, 4.5 and 2.25, and frames take 1.3-1.5 times as long (the console test's frames with the console reading
+60 % of the time: 2.3-47.9 ms against 1.4-37.2).
 
 ## Checked so far
 
 - `sim/`: `make && TRAFFIC=<% of console reads> ./obj/Vcfx_core <frames>`. The SRAM after each frame is compared
   with the model's word for word, the counters and the error bit too, and 64 words are read back through the window
   as the SH2 would read them. **0 words differ**: 12 frames each at 0, 30 and 85 % console traffic and two more seeds;
-  the Jazz and SuperTux builds (`-GKEY1 -GID`) 6 frames each. Debug: `-DDBGPUB --public-flat-rw` with `DBGHIST=1`
-  (clocks per state), `DBGRUN`, `DBGFROM`, `DBGW`.
+  the Jazz and SuperTux builds (`-GKEY1 -GID`) 6 frames each. `make t8` builds the engine with `PSRAM_T` 8 in `obj8/`.
+  The bench's PSRAM gives the right word only once the address has been on the pins `PSRAM_T=n` clocks (garbage
+  before): the engine with 5 is right with `PSRAM_T=5` and wrong with 6; with 8, right with 8 and wrong with 9.
+  Debug: `-DDBGPUB --public-flat-rw` with `DBGHIST=1` (clocks per state), `DBGRUN`, `DBGFROM`, `DBGW`.
 - Quartus: the table above.
-- The model's estimate of the engine's time (`cfx_t est`, for ares's busy bit): `EST=1` prints it beside the
-  engine's. Within 0-20 % of the engine alone (13 Nov 2026, 15 frames); the console's reads add 10-20 %.
+- The model's estimate of the engine's time (`cfx_t est`, for ares's busy bit, from the build's read `psram_t`):
+  `EST=1` prints it beside the engine's. Within 0-20 % of the engine alone, on the slow side, with 5 and with 8
+  (13-14 Nov 2026); the console's reads add 10-20 %.
 - **Not checked: the console.** First check: each game's current build with its `.rbf` beside the launcher must run
   exactly as without it (the engine stays off). Then a game's STATUS page with the engine on.
 
 ## The console test (`test/`)
 
 `bash test/build.sh` makes `test/CFXTEST.32X` (a plain script, no make: the owner's toolchain, `ROOTDIR=` as the
-main build). Put it in one folder on the SD card with any of the three `mega-pro.rbf` and start it from the menu,
-32X attached; no CD is needed. It:
+main build): 9 MB, the program and the script in the first 2 MB, the test pictures again from 0x880000 (the menu loads
+the file whole and in order, so they are in the second PSRAM chip). Put it in one folder on the SD card with any of
+the six `mega-pro.rbf` and start it from the menu, 32X attached; no CD is needed. It:
 
-1. tries the three keys and names the core that answered (its ID), or says that none did;
-2. plays a script of 4,375 command words (`test/tools/cfxgen.c`: 8 frames - whole and partial, all four layer
+1. tries the three keys and names the core that answered (its ID) and its PSRAM read (counter 9: `T 5` or `T 8`; a
+   v2.2 core shows `T 5 OLD`), or says that none did;
+2. plays a script of 8,748 command words (`test/tools/cfxgen.c`: 8 frames - whole and partial, all four layer
    kinds, tiles of 2 to 32, maps in PSRAM and SRAM, broken bits, shade, h-flip, sprites flipped, blended, clipped,
-   257 of them for the error bit) over test pictures made there (no game's), checking each frame word for word
-   against what the reference model made of the same script: the picture, the cell map, the error bit, counters
-   2 and 3; each picture is shown for a second;
+   257 of them for the error bit - from the pictures in the first chip, then the same 8 from their copy in the
+   second) over test pictures made there (no game's), checking each frame word for word against what the reference
+   model made of the same script: the picture, the cell map, the error bit, counters 2 and 3; each picture is shown
+   for a second; the results in two columns, CHIP 0 and CHIP 1;
 3. times three ways of copying 320 x 192 of the picture into the frame buffer (word reads, long reads, cached line
    fills): the copy cost every game's frame budget rests on (design step M0);
 4. plays the script again and again while the slave SH2 reads the cart without a pause (window and ROM): frames
    wrong, the engine's accesses done again (counters 5, 6), words lost (7), the slowest frame.
 
-One screen of results to photograph. Checked: `sim/` plays the same script into the engine (`SCRIPT=<cfxtest_data.bin>
-PASSES=2 TRAFFIC=60`): 16 checks right, the SRAM full of other garbage than the model's (every word the engine reads
-is written by the script first). ares (`ares_android` branch `fpga-cartfx`, the owner's toolchain's build, md5
-`bbd0a1f8...`): all three cores found and all 8 checks right, the stress loop 1,000 checks right; without a core,
-"NO CARTFX CORE ANSWERED". **Not yet run on the console.**
+One screen of results to photograph (the digits are drawn by hand: 0 and 8, 5 and S stay apart on a television).
+Checked: `sim/` plays the same script into the engine (`SCRIPT=build/cfxtest_data.bin SCRIPT1=build/cfxtest_chip1.bin
+TRAFFIC=60`, `PSRAM_T=5 ./obj/Vcfx_core` and `PSRAM_T=8 ./obj8/Vcfx_core`): 16 checks right with each, the SRAM full
+of other garbage than the model's (every word the engine reads is written by the script first); without `SCRIPT1` the
+8 checks from the second chip fail. ares (`ares_android` branch `fpga-cartfx`, the owner's toolchain's build, md5
+`34f65ea3...`): all six v2.3 cores found with their read, all 16 checks right, the stress loop 400-470 checks right
+in 40 s; without a core, "NO CARTFX CORE ANSWERED". **Not yet run on the console**: the kit with the six cores, one
+folder each, is on the owner's PC (`cartfx_work\sd2`).
 
 ## Next
 
-1. The model in ares: `ares_android` branch `fpga-cartfx` (never `main` without the owner), recognised by the `.rbf`'s
-   SHA-256: the engine answers once keyed, busy for the model's estimate after a GO, the words sent meanwhile held as
-   the cart's queue holds them; traps for a full queue and for the 68000 writing the cart while the engine composes.
+1. The console: `CFXTEST.32X` with `hur` and `hur8` at least (photograph its screen, then again after a minute of
+   the stress loop). It settles the PSRAM read: the games keep the faster one that is right on both chips. Then the
+   transparency check above; then each game's STATUS page.
 2. Jazz's side behind `OJ32X_FX=1` (EDCD build only), then SuperTux's, then Hurrican's (the design document's order).
-3. The console: `CFXTEST.32X` with each core (photograph its screen, then again after a minute of the stress loop);
-   the transparency check above; then each game's STATUS page.
+   ares models the engine (`ares_android` branch `fpga-cartfx`, never `main` without the owner): it knows the cores
+   by the `.rbf`'s SHA-256, answers once keyed, stays busy for the model's estimate after a GO (from the core's read
+   time), holds the words sent meanwhile as the cart's queue does, and traps a full queue and the 68000 writing the
+   cart while the engine composes.
 
 MIT licence for `rtl/` and `quartus/`, as krikzz's mega-ed-pub that they sit beside
 ([`quartus/LICENSE-krikzz-mega-ed-pub`](quartus/LICENSE-krikzz-mega-ed-pub)); `map_ssf.sv` is krikzz's, copied

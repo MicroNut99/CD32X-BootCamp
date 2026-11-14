@@ -9,10 +9,11 @@
 //    new command.
 //  - The console always wins: it gets a memory the moment it reads or writes it (map_cfx.sv's multiplexers, from the
 //    bus pins); an engine access the console overlapped, or came into within two clocks after, is done again.
-//  - PSRAM: address and OE 5 clocks, the data taken at the 5th (Rayman's). SRAM writes from a queue (address and data
-//    a clock, WE 2, a clock off); SRAM reads (maps, broken bits) OE 4 clocks, sampled twice, done again unless both
-//    samples agree. Addresses are absolute: PSRAM byte address bits 23-0 (bit 23: the second chip), SRAM word
-//    address bits 17-0. Pictures: buffer b at SRAM words b x 0x8000.
+//  - PSRAM: address and OE PSRAM_T clocks (5, Rayman's, or 8, Dracula X's ROM_LAT), the data taken at the last, a
+//    word after another. SRAM writes from a queue (address and data a clock, WE 2, a clock off); SRAM reads (maps,
+//    broken bits) OE 4 clocks, sampled twice, done again unless both samples agree. Addresses are absolute: PSRAM
+//    byte address bits 23-0 (bit 23: the second chip), SRAM word address bits 17-0. Pictures: buffer b at SRAM words
+//    b x 0x8000.
 //  - A frame is composed a 16 x 8 cell at a time in block RAM (all layers, the sprites, the over layers), then the
 //    cell's 64 words go to the SRAM. A one-word cache sits in front of the PSRAM channel.
 //
@@ -22,7 +23,9 @@
 
 module cfx_core #(
     parameter [14:0] KEY1 = 15'h5848,           // the build: 'XH' Hurrican, 'XJ' Jazz, 'XS' SuperTux
-    parameter [7:0]  ID   = 8'hC1
+    parameter [7:0]  ID   = 8'hC1,
+    parameter [3:0]  PSRAM_T = 4'd5             // a PSRAM read: address and OE this many clocks, the data taken at the
+                                                // last (5: Rayman's, console-proven; 8: Dracula X's ROM_LAT); counter 9
 )(
     input             clk,
     input             rst,              // map_rst: the EverDrive menu / no game
@@ -112,6 +115,7 @@ module cfx_core #(
         4'd6: cnt_mux = cnt_sredo;
         4'd7: cnt_mux = cnt_lost;
         4'd8: cnt_mux = {1'b0, KEY2};
+        4'd9: cnt_mux = {12'd0, PSRAM_T};
         default: cnt_mux = 16'd0;
         endcase
     end
@@ -143,15 +147,16 @@ module cfx_core #(
 
 //***************************************************************************************** PSRAM channel
     // Words, one after another: whenever the channel is free, or ends a read the console did not touch, it starts
-    // the word w_a (w_v: the state machine wants one; registered there a clock before). Address and OE 5 clocks, the
-    // data taken at the 5th, then a clock with OE off (Rayman's read, back to back: a word every 6 clocks). A read the
+    // the word w_a (w_v: the state machine wants one; registered there a clock before). Address and OE PSRAM_T clocks,
+    // the data taken at the last, then a clock with OE off (Rayman's read with 5, back to back: a word every PSRAM_T + 1
+    // clocks). A read the
     // console overlapped, or came into within two clocks after, is done again. p_vld (a clock): p_data is word p_vld_a.
     reg        w_v;
     reg [22:0] w_a;                                             // word addresses: bit 22 the chip
     reg        p_vld;
     reg [22:0] p_cur, p_vld_a;
     reg [15:0] p_data;
-    reg  [2:0] p_cnt;
+    reg  [3:0] p_cnt;
     reg        p_busy, p_hit;
     always @(posedge clk) begin
         p_vld <= 0;
@@ -163,8 +168,8 @@ module cfx_core #(
             else begin
                 p_cnt <= p_cnt + 1'd1;
                 if (con_p) p_hit <= 1;
-                if (p_cnt == 3'd4) begin p_data <= e_rom1 ? rom1_do : rom0_do; e_rom_oe <= 0; end
-                if (p_cnt == 3'd5) begin
+                if (p_cnt == PSRAM_T - 4'd1) begin p_data <= e_rom1 ? rom1_do : rom0_do; e_rom_oe <= 0; end
+                if (p_cnt == PSRAM_T) begin
                     if (p_hit | con_p) begin p_cnt <= 0; p_hit <= 0; e_rom_oe <= 1; cnt_predo <= cnt_predo + 1'd1; end
                     else begin p_busy <= 0; p_vld <= 1; p_vld_a <= p_cur; start = w_v; end
                 end

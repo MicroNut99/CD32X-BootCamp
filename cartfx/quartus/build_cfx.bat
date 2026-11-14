@@ -1,6 +1,7 @@
 @echo off
-rem The CD32X cart compositor (CD32X-BootCamp cartfx/): the three cores - Hurrican, Jazz, SuperTux - each krikzz's
-rem map_ssf unchanged with the engine beside it (fpga_pro\map_cfx_hur / _oj / _stx, laid out by setup_cfx.sh).
+rem The CD32X cart compositor (CD32X-BootCamp cartfx/): the six cores - Hurrican, Jazz, SuperTux, each with the PSRAM
+rem read in 5 clocks (hur, oj, stx) and in 8 (hur8, oj8, stx8) - each krikzz's map_ssf unchanged with the engine beside
+rem it (fpga_pro\map_cfx_<game>, laid out by setup_cfx.sh).
 rem For each: the exit code and the .rbf's md5 in done_cfx_<game>.txt, the fit and timing summaries next to this file,
 rem the .rbf in cfx_out\<game>\mega-pro.rbf. Read the timing summary before using an .rbf: never one whose timing failed.
 set Q=S:\KoboPort\sega-toolchain-12.1\sega\altera_lite\quartus\bin64
@@ -9,7 +10,10 @@ cd /d %W%mega-ed-pub\fpga\fpga_pro
 call :one hur
 call :one oj
 call :one stx
-echo all three done > %W%done_cfx_all.txt
+call :one hur8
+call :one oj8
+call :one stx8
+echo all six done > %W%done_cfx_all.txt
 goto :eof
 
 :one

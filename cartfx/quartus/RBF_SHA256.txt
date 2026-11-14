@@ -1,14 +1,24 @@
 The cartfx cores, Quartus 25.1std.0 Build 1129 SC Lite on the owner's PC (build_cfx.bat), fpga_work\cfx_out\<game>\mega-pro.rbf.
-map_cfx.sv md5 6dc1411e6adbd72ecf0438eb8ca4c9b9 in both. (14 Nov: rtl/cfx_core.sv and rtl/map_cfx.sv here differ from the
-files these were built from in two comment lines and one, nothing else - an origin's name taken out; the next build is from these.)
 
-v2.2, 13 Nov 2026 (cfx_core.sv md5 4a9c9e922b4639ec6db12e3c37518676: the sprite list scanned a sprite a clock) - the current one
+v2.3, 14 Nov 2026 (cfx_core.sv md5 0c87592829bf3ad50279964282d2b117, map_cfx.sv c566d8507d9f7701f69ce38be9d38506: v2.2's engine
+with the PSRAM read a parameter, PSRAM_T, and counter 9 reading it) - the current ones. <game> reads in 5 clocks, <game>8 in 8.
+game      sha256                                                            md5
+hur       fb671ec9529ad465a86999abc991af6e5cfa970f71287bca75b0a3b53e6cd4ac  ed22e589b33b5c9e356c81cd5f3768e1
+oj        620b265be6cea9f94705ac87f5e0f2f83e04711309410f3d53948e339f15f4ac  4a1a7f3c6adc6fe3195b6fef43db3ec2
+stx       b3f596cb87f02f349fbc743ab8badb9e4bcdc869b05785e28aea2f35b472a289  8143053db26f06a9123fa4eaad9b60de
+hur8      92e1fb731684c70129340b637cfd5c374e7002af6629e0ee6d832e04aa6e9020  f2f90f31f52674d72fe91231a0780f53
+oj8       7c171d02689b1bec3f9413bbda65ec0fdbd4fd69b9027b4b255b4e0fab51418a  68db3ba73088650c87d57fe2de719305
+stx8      ecb80a9297a7934346a571022415b947164d96a177e5c7914b778860ca8f57a1  c6bbbfd1d2d647c28e13872f802c99d2
+
+v2.2, 13 Nov 2026 (cfx_core.sv md5 4a9c9e922b4639ec6db12e3c37518676: the sprite list scanned a sprite a clock; map_cfx.sv md5
+6dc1411e6adbd72ecf0438eb8ca4c9b9) - read in 5, no counter 9 (it reads 0); kept in fpga_work\cfx_out_v22
 game      sha256                                                            md5
 hur       147a841ae9e29571643f9dd8055c662fefa22069332d92b922ef6aac179ed3a6  230110564f0a30ec044fa74592b867f9
 oj        764d9bb646d43c7e9d223379b51e16caef579b35e6d8dc3d91dc261ca4477666  7c3947b7c34cefa39e30260b8fe92b87
 stx       3220a5d76c4fccede5b5fd817d7d7e778ce8b20b3ba40461a63bc306aae37554  344ee89e95e1168c252f3a83be9995bd
 
-v2.1, 13 Nov 2026 (cfx_core.sv md5 3b8cbe9aa23439f348dd45b6459c25a9) - the same commands, kept in fpga_work\cfx_out_v21
+v2.1, 13 Nov 2026 (cfx_core.sv md5 3b8cbe9aa23439f348dd45b6459c25a9, map_cfx.sv as v2.2's) - the same commands, kept in
+fpga_work\cfx_out_v21
 game      sha256                                                            md5
 hur       21a53854c48359c8cc506c1e7eb8036ebb3f5dd00f4138fccfb965d5896927a9  a3ca5d6deea8968dfad7e2f2f859cad9
 oj        74d8b8b5e840222111b1ca96d95186912da063e1d0fa19f313ba8b66b884ac4e  a04a93466907e310ec923d28df28a820

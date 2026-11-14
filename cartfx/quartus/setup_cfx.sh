@@ -1,24 +1,29 @@
 #!/bin/bash
-# setup_cfx.sh - lays the three cartfx cores into a checkout of krikzz's mega-ed-pub, ready for Quartus
+# setup_cfx.sh - lays the six cartfx cores into a checkout of krikzz's mega-ed-pub, ready for Quartus
 #
 #   bash setup_cfx.sh <work>          (<work>/mega-ed-pub/fpga is krikzz's tree; on the owner's PC: fpga_work)
 #
-# For each game (hur = Hurrican, oj = Jazz, stx = SuperTux):
-#   mapper/map_cfx_<g>/   hub.sv (hub_<g>.sv: krikzz's with one line changed), map_ssf.sv (krikzz's, copied unchanged
-#                         from mapper/map_ssf/), cfx_core.sv and map_cfx.sv (../rtl)
+# For each game (hur = Hurrican, oj = Jazz, stx = SuperTux), twice: <g> reads the PSRAM in 5 clocks (Rayman's read),
+# <g>8 in 8 (Dracula X's ROM_LAT) - the same engine otherwise; which one the console needs, CFXTEST.32X says:
+#   mapper/map_cfx_<g>/   hub.sv (hub_<g>.sv: krikzz's with one line changed; for <g>8 that line with .PSRAM_T(4'd8)),
+#                         map_ssf.sv (krikzz's, copied unchanged from mapper/map_ssf/), cfx_core.sv and map_cfx.sv (../rtl)
 #   fpga_pro/map_cfx_<g>/ krikzz's map_ssf project (mega-pro.qpf, topcfg.sv, the .qdf) with its .qsf's two mapper lines
 #                         replaced by the four files above
-# and build_cfx.bat beside <work>'s mega-ed-pub (double-click it: the three .rbf files in <work>\cfx_out\<g>\).
+# and build_cfx.bat beside <work>'s mega-ed-pub (double-click it: the six .rbf files in <work>\cfx_out\<g>\).
 # Only creates and overwrites (the owner's Cowork shell cannot delete). Prints the md5s to check against.
 set -e
 W=${1:?usage: setup_cfx.sh <work>}
 K=$(cd "$(dirname "$0")" && pwd)
 F=$W/mega-ed-pub/fpga
 [ -f "$F/mapper/map_ssf/map_ssf.sv" ] || { echo "no krikzz tree at $F"; exit 1; }
-for g in hur oj stx; do
+for g in hur oj stx hur8 oj8 stx8; do
     m=$F/mapper/map_cfx_$g; p=$F/fpga_pro/map_cfx_$g
     mkdir -p "$m" "$p"
-    cp "$K/hub_$g.sv" "$m/hub.sv"
+    if [ "${g%8}" = "$g" ]; then cp "$K/hub_$g.sv" "$m/hub.sv"
+    else
+        sed -e "s#^\(\tmap_cfx \#(.KEY1([^)]*), .ID([^)]*)\))#\1, .PSRAM_T(4'd8))#" "$K/hub_${g%8}.sv" > "$m/hub.sv"
+        grep -q "PSRAM_T(4'd8))" "$m/hub.sv" || { echo "map_cfx_$g: hub_${g%8}.sv's map_cfx line not found"; exit 1; }
+    fi
     cp "$F/mapper/map_ssf/map_ssf.sv" "$m/map_ssf.sv"
     cp "$K/../rtl/cfx_core.sv" "$K/../rtl/map_cfx.sv" "$m/"
     cp "$F/fpga_pro/map_ssf/mega-pro.qpf" "$F/fpga_pro/map_ssf/topcfg.sv" "$F/fpga_pro/map_ssf/mega-pro_assignment_defaults.qdf" "$p/"
@@ -31,6 +36,6 @@ for g in hur oj stx; do
     n=$(grep -c "mapper/map_cfx_$g/" "$p/mega-pro.qsf")
     [ "$n" = 4 ] || { echo "map_cfx_$g: the .qsf has $n of the 4 file lines (krikzz's .qsf changed?)"; exit 1; }
 done
-cp "$K/build_cfx.bat" "$W/build_cfx.bat"
+sed -e 's/\r*$/\r/' "$K/build_cfx.bat" > "$W/build_cfx.bat"        # (CRLF: cmd.exe's labels want them)
 md5sum "$F/mapper/map_ssf/map_ssf.sv" "$F"/mapper/map_cfx_*/map_ssf.sv "$F"/mapper/map_cfx_*/cfx_core.sv "$F"/mapper/map_cfx_*/map_cfx.sv
 echo "ready: double-click $W/build_cfx.bat"

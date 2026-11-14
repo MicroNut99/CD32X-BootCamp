@@ -40,14 +40,18 @@ static void ps_put(uint32_t a, uint8_t v) {
     w = (a & 1) ? (uint16_t)((w & 0xFF00) | v) : (uint16_t)((w & 0x00FF) | v << 8);
 }
 
-// the memories, as the pins see them: the console has them while it uses them (map_cfx.sv's multiplexers)
+// the memories, as the pins see them: the console has them while it uses them (map_cfx.sv's multiplexers).
+// PSRAM_T=n (the bench's, not the engine's): a PSRAM word is right only once its address and OE have been on the
+// pins n clocks (the engine samples at the end of its PSRAM_T-th); before that the data is garbage.
 static uint32_t con_a;
+static int ps_t = 1, ps_age = 0;
+static uint64_t ps_key = ~0ull;
 static void eval_mem() {
     top->eval();
     if (top->con_psram) {                              // the console reads the PSRAM (its own address): garbage for the engine
         uint32_t off = (con_a & 0x3FFFFF) >> 1;
         top->rom0_do = psr[0][off]; top->rom1_do = psr[1][off ^ 0x1234];
-    } else if (top->e_rom_oe) {
+    } else if (top->e_rom_oe && ps_age + 1 >= ps_t) {
         uint32_t off = (top->e_rom_addr >> 1) & 0x3FFFFF;
         uint16_t v = psr[top->e_rom1][off];
         top->rom0_do = top->e_rom1 ? 0xDEAD : v; top->rom1_do = top->e_rom1 ? v : 0xBEEF;
@@ -66,6 +70,11 @@ static void eval_mem() {
 }
 static void tick() {
     top->clk = 0; eval_mem(); top->clk = 1; eval_mem(); cycles++;
+    {   // how long the engine's PSRAM address has been on the pins (the console's use puts its own there)
+        uint64_t k = top->con_psram || !top->e_rom_oe ? ~0ull : ((uint64_t)top->e_rom1 << 32 | top->e_rom_addr);
+        if (k != ~0ull && k == ps_key) ps_age++; else ps_age = 0;
+        ps_key = k;
+    }
 #ifdef DBGPUB
     static int nr; static int last = -1;
     if (getenv("DBGRUN") && top->rootp->cfx_core__DOT__st == 2 && last != 2 && nr++ < atoi(getenv("DBGRUN")))
@@ -137,6 +146,7 @@ static void sprite(int fl, int x, int y, int w, int h, int stride, uint32_t src,
 // SCRIPT=<cfxtest_data.bin>: the console test's script (cartfx/test: tools/cfxgen.c) played into the engine as the
 // master SH2 plays it, its data in the first chip at 0x040000 as the ROM puts it, the SRAM full of other garbage than the
 // model's: every check (the picture, the cell map, the error bit, counters 2 and 3) against what cfxgen's model gave.
+// SCRIPT1=<cfxtest_chip1.bin>: the pictures' copy for the second chip (the ROM's 0x880000-0x8FFFFF, checks 8-15).
 static int run_script(const char* file, int passes) {
     FILE* f = fopen(file, "rb");
     if (!f) { perror(file); return 1; }
@@ -144,6 +154,13 @@ static int run_script(const char* file, int passes) {
     size_t n = fread(d.data(), 1, d.size(), f); fclose(f);
     if (n != d.size()) { printf("%s: %zu bytes, not %zu\n", file, n, d.size()); return 1; }
     for (uint32_t i = 0; i < d.size(); i++) ps_put(0x40000 + i, d[i]);
+    if (const char* f1 = getenv("SCRIPT1")) {
+        std::vector<uint8_t> d1(0x80000);
+        FILE* g = fopen(f1, "rb");
+        if (!g || fread(d1.data(), 1, d1.size(), g) != d1.size()) { printf("%s: not %zu bytes\n", f1, d1.size()); return 1; }
+        fclose(g);
+        for (uint32_t i = 0; i < d1.size(); i++) ps_put(0x880000 + i, d1[i]);
+    } else printf("(no SCRIPT1: the second chip's checks will fail)\n");
     for (auto& v : sram) v = (uint16_t)(rnd() ^ 0xA5A5);         // (not the model's pattern: nothing may depend on it)
     auto rom16 = [&](uint32_t a) { return (uint16_t)(d[a - 0x40000] << 8 | d[a - 0x40000 + 1]); };
     long bad_checks = 0, checks = 0;
@@ -189,6 +206,7 @@ int main(int argc, char** argv) {
     setvbuf(stdout, nullptr, _IONBF, 0);
     int frames = argc > 1 ? atoi(argv[1]) : 6;
     if (getenv("TRAFFIC")) traffic = atoi(getenv("TRAFFIC"));
+    if (getenv("PSRAM_T")) ps_t = atoi(getenv("PSRAM_T"));
     if (getenv("SEED")) rs = (uint32_t)atoi(getenv("SEED"));
     psr[0].assign(1 << 22, 0); psr[1].assign(1 << 22, 0); sram.assign(1 << 18, 0); msram.assign(1 << 18, 0);
     for (auto& v : psr[0]) v = rnd();
@@ -224,6 +242,8 @@ int main(int argc, char** argv) {
     uint16_t st = bus_read(CFX_CMD_BASE + 2 * CFX_KEY2);
     if ((st >> 8) != ID || !top->on) { printf("the key did not turn it on (status %04X)\n", st); return 1; }
     if (bus_read(CFX_CMD_BASE + 2 * 8) != CFX_KEY2) { printf("counter 8 is not the version\n"); return 1; }
+    model.psram_t = bus_read(CFX_CMD_BASE + 2 * 9);   // the engine's PSRAM read (counter 9): the model's estimate uses it
+    if (model.psram_t != 5 && model.psram_t != 8) { printf("counter 9 (the PSRAM read) is %d\n", model.psram_t); return 1; }
 
     printf("the key: on\n");
     if (getenv("SCRIPT")) return run_script(getenv("SCRIPT"), getenv("PASSES") ? atoi(getenv("PASSES")) : 1);

@@ -13,7 +13,8 @@
 
 module map_cfx #(
     parameter [14:0] KEY1 = 15'h5848,
-    parameter [7:0]  ID   = 8'hC1
+    parameter [7:0]  ID   = 8'hC1,
+    parameter [3:0]  PSRAM_T = 4'd5
 )(
     input  MapIn mai,
     output MapOut mout
@@ -33,7 +34,7 @@ module map_cfx #(
     wire [22:0] e_rom_addr, e_sram_addr;
     wire [15:0] e_sram_di;
 
-    cfx_core #(.KEY1(KEY1), .ID(ID)) fx_inst(
+    cfx_core #(.KEY1(KEY1), .ID(ID), .PSRAM_T(PSRAM_T)) fx_inst(
         .clk(clk),
         .rst(mai.map_rst),
         .a(cpu.addr[21:1]),

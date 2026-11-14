@@ -35,7 +35,7 @@
         .ascii  "GM 14021968-01"        /* Serial No. */
         .word   0x0000
         .ascii  "J6              "
-        .long   0x00000000,0x001FFFFF   /* ROM start, end */
+        .long   0x00000000,0x008FFFFF   /* ROM start, end (9 MB: the pictures again at 0x880000, chip 1) */
         .long   0x00FF0000,0x00FFFFFF   /* RAM start, end */
 
 ! edtest: no save RAM declared (an "RA" entry could make the EverDrive map its save area into window 4)

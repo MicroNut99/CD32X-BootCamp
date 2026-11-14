@@ -1,7 +1,8 @@
 #!/bin/bash
 # cartfx/test/build.sh - the cartfx console test ROM, CFXTEST.32X (run from the EverDrive PRO's menu: 32X attached,
 # no CD needed), with a cartfx mega-pro.rbf beside it on the SD card (cartfx/quartus: Hurrican's, Jazz's or SuperTux's)
-#   bash cartfx/test/build.sh        -> cartfx/test/CFXTEST.32X (2 MB: the program, then tools/cfxgen.c's data at 0x040000)
+#   bash cartfx/test/build.sh        -> cartfx/test/CFXTEST.32X (9 MB: the program, tools/cfxgen.c's data at 0x040000,
+#                                       0xFF from 0x200000, the pictures again at 0x880000 for the second PSRAM chip)
 #   ROOTDIR= / SEGA_TOOLCHAIN=       the toolchain, as for the main build.sh (default /opt/toolchains/sega)
 #   HOSTCC=                          the C compiler for tools/cfxgen.c, which runs on this machine (default cc)
 # (a plain script, no make: edw0's two Makefiles as commands)
@@ -17,7 +18,7 @@ rm -rf build && mkdir build
 
 # 1. the data: the pictures, the script, what the model makes of it (tools/cfxgen.c, on this machine)
 "$HOSTCC" -O2 -o build/cfxgen tools/cfxgen.c ../model/cartfx.c
-build/cfxgen build/cfxtest_data.bin | tee build/cfxgen.txt
+build/cfxgen build/cfxtest_data.bin build/cfxtest_chip1.bin | tee build/cfxgen.txt
 
 # 2. the 68000 side (edw0's: it waits for commands this test never sends)
 MDV=$(${MD}gcc -dumpversion)
@@ -38,8 +39,12 @@ ${SH}gcc -T "$R/ldscripts/mars.ld" -Wl,-Map=build/output.map -nostdlib build/crt
 ${SH}objcopy -O binary build/cfxtest.elf build/temp.bin
 [ "$(stat -c %s build/temp.bin)" -le 262144 ] || { echo "*** the program is over 256 KB"; exit 1; }
 
-# 4. the ROM: the program in the first 256 KB, the data after it
+# 4. the ROM: the program in the first 256 KB, the data after it to 2 MB, 0xFF to 8.5 MB, the pictures' copy for chip 1
+#    (the EverDrive menu loads the file whole and in order: its 0x800000 on is the second chip)
 dd if=build/temp.bin of=CFXTEST.32X bs=256K conv=sync count=1 status=none
 cat build/cfxtest_data.bin >> CFXTEST.32X
+head -c $((0x880000 - 0x200000)) /dev/zero | tr '\000' '\377' >> CFXTEST.32X
+cat build/cfxtest_chip1.bin >> CFXTEST.32X
+[ "$(stat -c %s CFXTEST.32X)" -eq $((0x900000)) ] || { echo "*** CFXTEST.32X is not 9 MB"; exit 1; }
 ls -l CFXTEST.32X; md5sum CFXTEST.32X
 echo "==> CFXTEST.32X and a cartfx mega-pro.rbf in one folder on the SD card; start CFXTEST.32X from the menu"
