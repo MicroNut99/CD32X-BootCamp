@@ -16,6 +16,7 @@ in Verilator and fitted by Quartus for all three games. A green simulation or ar
 | [`rtl/`](rtl/) | `cfx_core.sv`: the engine. `map_cfx.sv`: krikzz's `map_ssf` instantiated unchanged, its outputs taken over only once the key is read |
 | [`sim/`](sim/) | `tb_cfx.cpp`: the engine against the model in Verilator, with the console's reads cutting in |
 | [`quartus/`](quartus/) | the three builds: `hub_<game>.sv` (krikzz's `hub.sv`, one line changed), `setup_cfx.sh`, `build_cfx.bat`, krikzz's licence |
+| [`test/`](test/) | `CFXTEST.32X`, the console test: a 32X ROM started from the EverDrive menu with a core beside it (below) |
 
 ## The builds
 
@@ -101,13 +102,37 @@ With the console reading the cart 30 % of the time, a full Hurrican frame took 1
 - **Not checked: the console.** First check: each game's current build with its `.rbf` beside the launcher must run
   exactly as without it (the engine stays off). Then a game's STATUS page with the engine on.
 
+## The console test (`test/`)
+
+`bash test/build.sh` makes `test/CFXTEST.32X` (a plain script, no make: the owner's toolchain, `ROOTDIR=` as the
+main build). Put it in one folder on the SD card with any of the three `mega-pro.rbf` and start it from the menu,
+32X attached; no CD is needed. It:
+
+1. tries the three keys and names the core that answered (its ID), or says that none did;
+2. plays a script of 4,375 command words (`test/tools/cfxgen.c`: 8 frames - whole and partial, all four layer
+   kinds, tiles of 2 to 32, maps in PSRAM and SRAM, broken bits, shade, h-flip, sprites flipped, blended, clipped,
+   257 of them for the error bit) over test pictures made there (no game's), checking each frame word for word
+   against what the reference model made of the same script: the picture, the cell map, the error bit, counters
+   2 and 3; each picture is shown for a second;
+3. times three ways of copying 320 x 192 of the picture into the frame buffer (word reads, long reads, cached line
+   fills): the copy cost every game's frame budget rests on (design step M0);
+4. plays the script again and again while the slave SH2 reads the cart without a pause (window and ROM): frames
+   wrong, the engine's accesses done again (counters 5, 6), words lost (7), the slowest frame.
+
+One screen of results to photograph. Checked: `sim/` plays the same script into the engine (`SCRIPT=<cfxtest_data.bin>
+PASSES=2 TRAFFIC=60`): 16 checks right, the SRAM full of other garbage than the model's (every word the engine reads
+is written by the script first). ares (`ares_android` branch `fpga-cartfx`, the owner's toolchain's build, md5
+`bbd0a1f8...`): all three cores found and all 8 checks right, the stress loop 1,000 checks right; without a core,
+"NO CARTFX CORE ANSWERED". **Not yet run on the console.**
+
 ## Next
 
 1. The model in ares: `ares_android` branch `fpga-cartfx` (never `main` without the owner), recognised by the `.rbf`'s
    SHA-256: the engine answers once keyed, busy for the model's estimate after a GO, the words sent meanwhile held as
    the cart's queue holds them; traps for a full queue and for the 68000 writing the cart while the engine composes.
 2. Jazz's side behind `OJ32X_FX=1` (EDCD build only), then SuperTux's, then Hurrican's (the design document's order).
-3. The console: the transparency check above, then each game's STATUS page photographed.
+3. The console: `CFXTEST.32X` with each core (photograph its screen, then again after a minute of the stress loop);
+   the transparency check above; then each game's STATUS page.
 
 MIT licence for `rtl/` and `quartus/`, as krikzz's mega-ed-pub that they sit beside
 ([`quartus/LICENSE-krikzz-mega-ed-pub`](quartus/LICENSE-krikzz-mega-ed-pub)); `map_ssf.sv` is krikzz's, copied

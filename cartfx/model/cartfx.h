@@ -80,6 +80,9 @@
 #ifndef CARTFX_H
 #define CARTFX_H
 #include <stdint.h>
+#ifdef __cplusplus
+extern "C" {   /* (C linkage, so a C++ host can declare it inside its own namespace: ares's board.cpp) */
+#endif
 
 #define CFX_PIC_BASE   0x3E0000u
 #define CFX_MAP_OFF    0xFC00u
@@ -176,4 +179,7 @@ int  cfx_read(cfx_t* fx, uint32_t addr, uint16_t* data);
 static inline uint32_t cfx_pic_word(int b, int cols, int x, int y) { return (uint32_t)b * 0x8000u + ((uint32_t)y * 16u * (uint32_t)cols + (uint32_t)x) / 2u; }
 #define CFX_MAPWORD(b, w) ((uint32_t)(b) * 0x8000u + 0x7E00u + (uint32_t)(w))
 
+#ifdef __cplusplus
+}
+#endif
 #endif

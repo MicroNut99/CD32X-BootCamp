@@ -134,6 +134,56 @@ static void sprite(int fl, int x, int y, int w, int h, int stride, uint32_t src,
     send(CFX_ARG(h)); send(CFX_ARG(stride)); a24(src); send(CFX_ARG(off));
 }
 
+// SCRIPT=<cfxtest_data.bin>: the console test's script (cartfx/test: tools/cfxgen.c) played into the engine as the
+// master SH2 plays it, its data in the first chip at 0x040000 as the ROM puts it, the SRAM full of other garbage than the
+// model's: every check (the picture, the cell map, the error bit, counters 2 and 3) against what cfxgen's model gave.
+static int run_script(const char* file, int passes) {
+    FILE* f = fopen(file, "rb");
+    if (!f) { perror(file); return 1; }
+    std::vector<uint8_t> d(0x200000 - 0x40000);
+    size_t n = fread(d.data(), 1, d.size(), f); fclose(f);
+    if (n != d.size()) { printf("%s: %zu bytes, not %zu\n", file, n, d.size()); return 1; }
+    for (uint32_t i = 0; i < d.size(); i++) ps_put(0x40000 + i, d[i]);
+    for (auto& v : sram) v = (uint16_t)(rnd() ^ 0xA5A5);         // (not the model's pattern: nothing may depend on it)
+    auto rom16 = [&](uint32_t a) { return (uint16_t)(d[a - 0x40000] << 8 | d[a - 0x40000 + 1]); };
+    long bad_checks = 0, checks = 0;
+    for (int pass = 0; pass < passes; pass++) {
+        for (uint32_t a = 0x40000; ; a += 2) {
+            uint16_t w = rom16(a);
+            if (w == 0xFFFF) break;
+            if (w < 0x8000) {
+                uint16_t st = bus_read(CFX_CMD_BASE + 2u * w);
+                while ((st & CFX_ST_FULL) && top->on) st = bus_read(CFX_CMD_BASE);
+                noise();
+            } else if (w == 0x8001) {
+                uint64_t t0 = cycles; wait_idle();
+                if (getenv("DBG")) printf("  GO done in %.2f ms\n", (cycles - t0) * 20e-6);
+            } else if ((w & 0xFF00) == 0x8100) {
+                long k = 0;
+                while (((bus_read(CFX_CMD_BASE) & CFX_ST_SHOWN) != 0) != (w & 1)) { noise(); if (++k > 100000) { printf("never shown\n"); return 1; } }
+            } else if ((w & 0xFF00) == 0x8200) {
+                uint32_t e = 0x100000 + 0x10000u * (w & 0xFF);
+                int cols = rom16(e + 2), rows = rom16(e + 4), err = rom16(e + 8), c2 = rom16(e + 10), c3 = rom16(e + 12);
+                uint32_t pw = 16u * cols, ph = 8u * rows, diff = 0, first = 0;
+                for (uint32_t i = 0; i < pw * ph / 2; i++) {
+                    uint16_t v = bus_read(0x3E0000 + 2 * i), x = rom16(e + 32 + 2 * i);
+                    if (v != x) { if (!diff) first = i; diff++; }
+                }
+                for (uint32_t i = 0; i < 48; i++) if (bus_read(0x3EFC00 + 2 * i) != rom16(e + 32 + pw * ph + 2 * i)) { if (!diff) first = 0x7E00 + i; diff++; }
+                uint16_t st = bus_read(CFX_CMD_BASE), h2 = bus_read(CFX_CMD_BASE + 4), h3 = bus_read(CFX_CMD_BASE + 6);
+                int ok = diff == 0 && ((st & CFX_ST_ERR) != 0) == (err != 0) && h2 == c2 && h3 == c3;
+                printf("pass %d check %d: %dx%d, %u words differ%s, error %d/%d, cells %u/%d, sprites %u/%d, engine %.2f ms, PSRAM redone %u, SRAM %u%s\n",
+                       pass, w & 0xFF, cols, rows, diff, diff ? " (first: word " : "", !!(st & CFX_ST_ERR), err, h2, c2, h3, c3,
+                       bus_read(CFX_CMD_BASE + 8) * 1.28e-3, bus_read(CFX_CMD_BASE + 10), bus_read(CFX_CMD_BASE + 12), ok ? "" : "  <-- WRONG");
+                if (diff) printf("      first differing word %05X\n", first);
+                checks++; if (!ok) bad_checks++;
+            }
+        }
+    }
+    printf("cfxtest's script against the engine: %ld checks, %ld wrong\n", checks, bad_checks);
+    return bad_checks != 0;
+}
+
 int main(int argc, char** argv) {
     Verilated::commandArgs(argc, argv);
     setvbuf(stdout, nullptr, _IONBF, 0);
@@ -176,6 +226,7 @@ int main(int argc, char** argv) {
     if (bus_read(CFX_CMD_BASE + 2 * 8) != CFX_KEY2) { printf("counter 8 is not the version\n"); return 1; }
 
     printf("the key: on\n");
+    if (getenv("SCRIPT")) return run_script(getenv("SCRIPT"), getenv("PASSES") ? atoi(getenv("PASSES")) : 1);
     // the shade table
     send(CFX_WORD(CFX_OP_LUT, 0)); a24(SHADE);
     long cells = 0;
