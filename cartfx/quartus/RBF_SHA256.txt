@@ -1,7 +1,13 @@
 The cartfx cores, Quartus 25.1std.0 Build 1129 SC Lite on the owner's PC (build_cfx.bat), fpga_work\cfx_out\<game>\mega-pro.rbf.
 
+v3, 14 Nov 2026 (cfx_core.sv md5 69acd44e562451b0dc1630ee73569fcb: a command read on three samples at one whole address;
+map_cfx.sv c566d8507d9f7701f69ce38be9d38506) - Hurrican's only, read in 5 (build_cfx3.bat): 7,822 LEs (51 %), timing met,
+worst setup +3.174 ns, hold +0.103 ns. With it in cartfx_work\sd3: CFXTEST 3, md5 53c6cdff6ac06fd6d4c8a8d2c3feefc2.
+game      sha256                                                            md5
+hur       ecbf90f7dc911a0b838049351e1a2bb20f7db8c489c4b6638790bdf981bf7bda  0f8a734a8dea60ded990446c440fba6d
+
 v2.3, 14 Nov 2026 (cfx_core.sv md5 0c87592829bf3ad50279964282d2b117, map_cfx.sv c566d8507d9f7701f69ce38be9d38506: v2.2's engine
-with the PSRAM read a parameter, PSRAM_T, and counter 9 reading it) - the current ones. <game> reads in 5 clocks, <game>8 in 8.
+with the PSRAM read a parameter, PSRAM_T, and counter 9 reading it) - failed on the console (TEST 2: README). <game> reads in 5 clocks, <game>8 in 8.
 game      sha256                                                            md5
 hur       fb671ec9529ad465a86999abc991af6e5cfa970f71287bca75b0a3b53e6cd4ac  ed22e589b33b5c9e356c81cd5f3768e1
 oj        620b265be6cea9f94705ac87f5e0f2f83e04711309410f3d53948e339f15f4ac  4a1a7f3c6adc6fe3195b6fef43db3ec2
