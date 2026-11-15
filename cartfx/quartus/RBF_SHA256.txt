@@ -1,3 +1,9 @@
+v4, 15 Nov 2026 (cfx_core.sv md5 3b86b94bc5922b26feac759cf0648b8e, map_cfx.sv aa2f7baf2fd67e53eb91b6236dc49b86) - Hurrican's
+only, read in 5 (build_cfx4.bat): 7,762 LEs (50 %), timing met (setup +3.007 ns, hold +0.136, removal +1.665).
+CFXTEST 4 (md5 7bf4c231611d3a4d072b734add9cf656) on the console: 16 of 16 right, stress 304 checks 0 wrong. THE CURRENT ONE.
+game      sha256                                                            md5
+hur       8846413096d9f4d7bf2d3fa95232a888b75a3b04055da33cd00ace526715196e  240501205f772001cce5eff63103b812
+
 The cartfx cores, Quartus 25.1std.0 Build 1129 SC Lite on the owner's PC (build_cfx.bat), fpga_work\cfx_out\<game>\mega-pro.rbf.
 
 v3, 14 Nov 2026 (cfx_core.sv md5 69acd44e562451b0dc1630ee73569fcb: a command read on three samples at one whole address;

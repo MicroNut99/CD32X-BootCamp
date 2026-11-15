@@ -7,8 +7,8 @@ frame buffer. It grew from Rayman CD32X's compositor (on the console since 8 Nov
 keeps its window, key and command encoding. The design and each game's plan are in the design document
 ("FPGA accelerators for Hurrican, Jazz and SuperTux CD32X") and in each game's `fpga/` folder.
 
-**Status, 15 Nov 2026: v3 (the command read fixed) to be fitted; v2.3 failed on the console** (below, "The
-console, v2.3"). Used by no game yet. It is checked against the reference
+**Status, 15 Nov 2026: v4 passes CFXTEST on the console (Hurrican's core, read in 5)**; v2.3 and v3 failed there
+(below, "The console, v2.3"). Used by no game on the console yet. It is checked against the reference
 model in Verilator and fitted by Quartus for all three games, each with the cart's PSRAM read in 5 clocks and in 8 (the
 console test says which the cart needs). A green simulation or ares run is never a console pass.
 
@@ -82,6 +82,14 @@ clocks + the chip's access into the console's read; the bench takes it 9 clocks 
 them on `con_sram` itself, under an engine write's WE; and a PSRAM read is done again when `con_psram` was up at any
 moment of it (`p_any`, set without the clock), not only at a clock's edge. Inferred from the console's figures, not
 seen there: v4's own CFXTEST run decides.
+
+**v4 on the console (15 Nov 2026, the owner's, CFXTEST 4, `hur` read in 5): all 16 checks right, both chips; the
+stress loop 19 passes, 304 checks, 0 wrong, with the slave SH2 reading the cart throughout (21 M reads); PSRAM
+accesses done again 25,251, SRAM 29,532, no word lost; the slowest frame 25.0 ms (the model's estimate 22.8).** The
+PSRAM read in 5 clocks is right on both chips. The copy, the figure every game's budget rests on: **320 x 192 from the
+window in 28.3 ms at best (cached line fills, 10.6 SH2 clocks a byte); word reads 38.1 ms, long reads 36.1 ms** -
+ares gives 23.4 / 21.4 / 20.1 ms for the same three: the console's cart reads are slower than ares's. Only `hur` is
+built at v4 (`oj`, `stx` and the read-in-8 builds are v2.3, which fails on the console: rebuild before use).
 
 ## How a game uses it
 
