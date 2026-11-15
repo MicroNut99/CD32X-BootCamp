@@ -162,7 +162,7 @@ void secondary(void)
 }
 
 /* ---- the results ---- */
-typedef struct { uint16_t cols, rows; uint32_t diff, first; uint8_t err_ok, cnt_ok, done; uint32_t eng_us, sh2_us; } Check;
+typedef struct { uint16_t cols, rows; uint32_t diff, first, soft; uint8_t err_ok, cnt_ok, done; uint32_t eng_us, sh2_us; } Check;
 static Check ck[16];
 static int nck;
 static int core = -1;                                            /* 0 Hurrican, 1 Jazz, 2 SuperTux */
@@ -170,6 +170,7 @@ static uint16_t core_status, version, psram_t;
 static uint32_t copy_us[3], copy_bytes;
 static uint32_t passes, stress_checks, stress_wrong, stress_reads, worst_us[16];
 static uint16_t predo, sredo, lost, rtl_rev;
+static int bad_have, bad_k; static uint32_t bad_i; static uint16_t bad_got, bad_want;
 static const char *stage = "START";
 static const char *const core_name[3] = { "HURRICAN", "JAZZ", "SUPERTUX" };
 static const uint16_t key1[3] = { 0x5848, 0x584A, 0x5853 };
@@ -187,11 +188,12 @@ static void check_line(int x, int y, int k)
     {
         text(x + 16, y, "RIGHT", C_GREEN);
         text(x + 64, y, ms1(b, c->eng_us), C_CYAN);
-        text(x + 112, y, ms1(b, c->sh2_us), C_CYAN);
+        if (c->soft) { b[0] = 'S'; dec(b + 1, c->soft); text(x + 112, y, b, C_YELLOW); }   /* (reads wrong once, right again) */
+        else text(x + 112, y, ms1(b, c->sh2_us), C_CYAN);
         return;
     }
     b[0] = 0;
-    if (c->diff) { cat(b, dec(t, c->diff)); cat(b, "@"); cat(b, hexn(t, c->first, 4)); }
+    if (c->diff) { cat(b, dec(t, c->diff)); cat(b, "@"); cat(b, hexn(t, c->first, 4)); if (c->soft) { cat(b, " S"); cat(b, dec(t, c->soft)); } }
     if (!c->err_ok) cat(b, " E");
     if (!c->cnt_ok) cat(b, " N");
     text(x + 16, y, b, C_RED);
@@ -201,7 +203,7 @@ static void results(void)
 {
     char b[48], t[16];
     clear();
-    text(8, 0, "CARTFX TEST 3  (CD32X BOOTCAMP)", C_YELLOW);
+    text(8, 0, "CARTFX TEST 4  (CD32X BOOTCAMP)", C_YELLOW);
     if (core < 0)
     {
         b[0] = 0; cat(b, "NO CARTFX CORE ANSWERED (STATUS "); cat(b, hexn(t, core_status, 4)); cat(b, ")");
@@ -258,6 +260,12 @@ static void results(void)
         }
         text(8, y + 40, b, st == 0xFFFF ? C_RED : C_GREY);
     }
+    if (bad_have)                                               /* the first word wrong in the cart's own memory */
+    {
+        b[0] = 0; cat(b, "BAD CHECK "); cat(b, dec(t, bad_k)); cat(b, " WORD "); cat(b, hexn(t, bad_i, 4));
+        cat(b, " IS "); cat(b, hexn(t, bad_got, 4)); cat(b, " NOT "); cat(b, hexn(t, bad_want, 4));
+        text(8, y + 50, b, C_RED);
+    }
     flip();
 }
 
@@ -305,8 +313,23 @@ static int check(int k, int show)
     Check *c = &ck[k];
     c->cols = e[1]; c->rows = e[2];
     uint32_t n = 64u * c->cols * c->rows, diff = 0, first = 0;  /* words: 16 x 8 pixels a cell / 2 */
-    for (uint32_t i = 0; i < n; i++) if (PIC[i] != e[16 + i]) { if (!diff) first = i; diff++; }
-    for (uint32_t i = 0; i < 48; i++) if (PIC[0x7E00 + i] != e[16 + n + i]) { if (!diff) first = 0x7E00 + i; diff++; }
+    /* TEST 4: a word that differs is read again, four times: right in any of them = the console's read was wrong that
+       once (soft); wrong in all = the picture in the cart's SRAM is wrong (hard: diff counts these; the first one's
+       check, word, what was read and what was expected are kept for the last line) */
+    uint32_t soft = 0;
+    for (uint32_t j = 0; j < n + 48; j++)
+    {
+        uint32_t i = j < n ? j : 0x7E00 + (j - n);
+        uint16_t got = PIC[i], want = e[16 + j];
+        if (got == want) continue;
+        int again = 0;
+        for (int r = 0; r < 4; r++) { got = PIC[i]; want = e[16 + j]; if (got == want) { again = 1; break; } }
+        if (again) { soft++; continue; }
+        if (!diff) first = i;
+        if (!bad_have) { bad_have = 1; bad_k = k; bad_i = i; bad_got = got; bad_want = want; }
+        diff++;
+    }
+    c->soft = soft;
     uint16_t st = CMD(0);
     c->err_ok = ((st & ST_ERR) != 0) == (e[4] != 0);
     c->cnt_ok = CMD(2) == e[5] && CMD(3) == e[6];
