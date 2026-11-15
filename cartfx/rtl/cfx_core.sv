@@ -127,7 +127,7 @@ module cfx_core #(
         4'd7: cnt_mux = cnt_lost;
         4'd8: cnt_mux = {1'b0, KEY2};
         4'd9: cnt_mux = {12'd0, PSRAM_T};
-        4'd10: cnt_mux = 16'd3;                                 // the RTL's revision (v3: the command read's three samples)
+        4'd10: cnt_mux = 16'd4;                                 // the RTL's revision (v3: the command read's three samples)
         4'd11: cnt_mux = cnt_cmds;                              // words put in the queue (commands and arguments)
         4'd12: cnt_mux = cnt_orph;                              // arguments with no command (dropped; status bit 3)
         4'd13: cnt_mux = {5'd0, q_n};                           // words in the queue now
@@ -175,6 +175,14 @@ module cfx_core #(
     reg [15:0] p_data;
     reg  [3:0] p_cnt;
     reg        p_busy, p_hit;
+    // v4 (CFXTEST 4 on the console, 15 Nov 2026: 5-118 words of a picture wrong in the cart's own memory, read again
+    // and again): a console access shorter than a clock moves the chip's address between two samples of con_p and
+    // was never seen. p_any is set by con_psram itself (no clock), cleared as a read starts: a read it is set in is
+    // done again.
+    reg        p_any;
+    always @(posedge clk or posedge con_psram)
+        if (con_psram) p_any <= 1;
+        else if (!p_busy || p_cnt == PSRAM_T) p_any <= 0;
     always @(posedge clk) begin
         p_vld <= 0;
         if (rst) begin p_busy <= 0; e_rom_oe <= 0; cnt_predo <= 0; end
@@ -187,7 +195,7 @@ module cfx_core #(
                 if (con_p) p_hit <= 1;
                 if (p_cnt == PSRAM_T - 4'd1) begin p_data <= e_rom1 ? rom1_do : rom0_do; e_rom_oe <= 0; end
                 if (p_cnt == PSRAM_T) begin
-                    if (p_hit | con_p) begin p_cnt <= 0; p_hit <= 0; e_rom_oe <= 1; cnt_predo <= cnt_predo + 1'd1; end
+                    if (p_hit | con_p | p_any) begin p_cnt <= 0; p_hit <= 0; e_rom_oe <= 1; cnt_predo <= cnt_predo + 1'd1; end
                     else begin p_busy <= 0; p_vld <= 1; p_vld_a <= p_cur; start = w_v; end
                 end
             end
@@ -220,7 +228,8 @@ module cfx_core #(
     reg [17:0] sr_addr;
     reg [15:0] sr_data, sr_s1;
     reg  [2:0] s_cnt;
-    reg        s_busy, s_rd, s_hit;
+    reg        s_busy, s_rd, s_own;
+    reg  [1:0] cs_ff;
     always @(posedge clk) begin
         if (s_push) sq[sq_wr[6:0]] <= {s_in_a, s_in_d};
         sq_q <= sq[sq_rd[6:0]];
@@ -231,39 +240,50 @@ module cfx_core #(
     always @(posedge clk) begin
         sr_vld <= 0;
         if (rst) begin
-            sq_wr <= 0; sq_rd <= 0; s_busy <= 0; sr_pend <= 0;
+            sq_wr <= 0; sq_rd <= 0; s_busy <= 0; sr_pend <= 0; s_own <= 0; cs_ff <= 0;
             e_sram_we_lo <= 0; e_sram_we_hi <= 0; e_sram_oe <= 0; cnt_sredo <= 0;
         end else begin
             if (s_push) sq_wr <= sq_wr + 1'd1;
-            if (!s_busy) begin
+            // v4: the SRAM's pins come from flip-flops only, the console's window read too (map_cfx no longer switches
+            // them on con_sram itself: a flicker of it in an engine write moved the address under WE). The console's
+            // read, seen through two flip-flops (cs), takes the pins between the engine's accesses: a write in flight
+            // ends first (3 clocks), a read is given up and done again. Its data: ~6 clocks + the chip's access into
+            // the console's read.
+            cs_ff <= {cs_ff[0], con_sram};
+            if (s_own) begin
+                e_sram_addr <= {6'd0, shown_r, a[15:1], 1'b0};
+                if (!cs_ff[1]) begin
+                    s_own <= 0;
+                    if (s_busy) begin e_sram_addr <= {4'd0, sr_addr, 1'b0}; s_cnt <= 0; end   // the read given up: again
+                    else e_sram_oe <= 0;
+                end
+            end else if (cs_ff[1] && (!s_busy || s_rd)) begin
+                s_own <= 1;
+                e_sram_addr <= {6'd0, shown_r, a[15:1], 1'b0}; e_sram_oe <= 1;
+                if (s_busy) cnt_sredo <= cnt_sredo + 1'd1;
+            end else if (!s_busy) begin
                 if (sr_pend) begin                              // a read first
                     sr_pend <= 0;
-                    s_rd <= 1; s_busy <= 1; s_cnt <= 0; s_hit <= 0;
+                    s_rd <= 1; s_busy <= 1; s_cnt <= 0;
                     e_sram_addr <= {4'd0, sr_addr, 1'b0}; e_sram_oe <= 1;
                 end else if (s_head) begin                      // address and data a clock before WE
                     s_rd <= 0; sq_rd <= sq_rd + 1'd1;
                     e_sram_addr <= {4'd0, sq_q[33:16], 1'b0}; e_sram_di <= sq_q[15:0];
-                    s_busy <= 1; s_cnt <= 0; s_hit <= 0;
+                    s_busy <= 1; s_cnt <= 0;
                 end
             end else if (s_rd) begin
                 s_cnt <= s_cnt + 1'd1;
-                if (con_s) s_hit <= 1;
                 if (s_cnt == 3) sr_s1 <= sram_do;
                 if (s_cnt == 4) begin sr_data <= sram_do; e_sram_oe <= 0; end
                 if (s_cnt == 5) begin
-                    if (s_hit | con_s | sr_data != sr_s1) begin
-                        s_cnt <= 0; s_hit <= 0; e_sram_oe <= 1; cnt_sredo <= cnt_sredo + 1'd1;
-                    end else begin s_busy <= 0; sr_vld <= 1; end
+                    if (sr_data != sr_s1) begin s_cnt <= 0; e_sram_oe <= 1; cnt_sredo <= cnt_sredo + 1'd1; end
+                    else begin s_busy <= 0; sr_vld <= 1; end
                 end
-            end else begin
+            end else begin                                      // a write: WE two clocks, then a clock before the pins move
                 s_cnt <= s_cnt + 1'd1;
-                if (con_s) s_hit <= 1;
                 e_sram_we_hi <= s_cnt == 0 || s_cnt == 1;
                 e_sram_we_lo <= s_cnt == 0 || s_cnt == 1;
-                if (s_cnt == 3) begin
-                    if (s_hit | con_s) begin s_cnt <= 0; s_hit <= 0; cnt_sredo <= cnt_sredo + 1'd1; end   // again
-                    else s_busy <= 0;
-                end
+                if (s_cnt == 2) s_busy <= 0;
             end
             if (sr_go) sr_pend <= 1;                            // (after the start: a request is never lost)
         end
@@ -697,7 +717,7 @@ module cfx_core #(
             end
 
             // ---- SHOW: when the console is not reading the picture
-            S_SHOW: if (!con_s) begin shown_r <= c_arg[0]; st <= S_DONE; end
+            S_SHOW: if (!con_s && !s_own) begin shown_r <= c_arg[0]; st <= S_DONE; end
 
             // ---- a direct read: f_byte / f_word of byte address f_addr (the words held; what is not there is wanted)
             F_REQ: if (ps_hit) begin f_byte <= f_addr[0] ? ps_hd[7:0] : ps_hd[15:8]; f_word <= ps_hd; st <= f_ret; end

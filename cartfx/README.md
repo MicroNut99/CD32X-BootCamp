@@ -72,6 +72,17 @@ diagnosis (`model/cartfx.h`). Bench: the 16 checks right with `GLITCH=5` (one re
 GLITCHC=20`, `TRAFFIC=40`, both reads, two seeds, two passes; the 30-frame random run right. CFXTEST 3 shows `R 3` and,
 on its last line, the engine's status now (`OFF` for FFFF) and counters 11-14.
 
+**v3 on the console (15 Nov, CFXTEST 3 and 4):** all 16 checks run, 8,696 words taken, none orphaned, the queue
+empty - the command fault is gone. Left: 5-118 words of a picture wrong (of ~32,000), wrong at every reading again
+(TEST 4: the cart's own memory; the first, check 0 word 0x015B, CA67 for CACB - one byte). The copy: 28.3 ms for
+320 x 192 at best (10.6 SH2 clocks a byte; ares: 7.5-8.7). **v4** (`cfx_core.sv`, `map_cfx.sv`; counter 10 = 4):
+the SRAM's pins come from flip-flops only - the console's window read is put on them by the engine between its own
+accesses (seen through two flip-flops; a write in flight ends first, a read is given up and done again; the data ~6
+clocks + the chip's access into the console's read; the bench takes it 9 clocks in), where v3's `map_cfx` switched
+them on `con_sram` itself, under an engine write's WE; and a PSRAM read is done again when `con_psram` was up at any
+moment of it (`p_any`, set without the clock), not only at a clock's edge. Inferred from the console's figures, not
+seen there: v4's own CFXTEST run decides.
+
 ## How a game uses it
 
 - The `.rbf` goes beside the game's EDCD launcher (`.32X`) on the SD card. The EverDrive menu loads it in place of its

@@ -80,19 +80,13 @@ module map_cfx #(
                 mout.rom1.we_lo = 0;
                 mout.rom1.we_hi = 0;
             end
-            if (con_sram) begin                                 // the console reads the shown picture
-                mout.sram.addr  = {6'd0, fx_shown, cpu.addr[15:1], 1'b0};
-                mout.sram.dati  = 16'h0000;
-                mout.sram.oe    = 1;
-                mout.sram.we_lo = 0;
-                mout.sram.we_hi = 0;
-            end else begin                                      // the engine reads or writes it
-                mout.sram.addr  = e_sram_addr;
-                mout.sram.dati  = e_sram_di;
-                mout.sram.oe    = e_sram_oe;
-                mout.sram.we_lo = e_sram_we_lo;
-                mout.sram.we_hi = e_sram_we_hi;
-            end
+            // the SRAM: the engine's pins, all from flip-flops (v4); the console's window read is put on them by the
+            // engine itself (cfx_core's SRAM channel), between its own accesses
+            mout.sram.addr  = e_sram_addr;
+            mout.sram.dati  = e_sram_di;
+            mout.sram.oe    = e_sram_oe;
+            mout.sram.we_lo = e_sram_we_lo;
+            mout.sram.we_hi = e_sram_we_hi;
             if (area_rd) begin
                 mout.map_oe = 1;
                 mout.map_do = cmd_area ? fx_status : mai.sram_do;

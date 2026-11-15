@@ -56,10 +56,10 @@ static void eval_mem() {
         uint16_t v = psr[top->e_rom1][off];
         top->rom0_do = top->e_rom1 ? 0xDEAD : v; top->rom1_do = top->e_rom1 ? v : 0xBEEF;
     } else { top->rom0_do = rnd(); top->rom1_do = rnd(); }
-    if (top->con_sram) top->sram_do = sram[(top->shown ? 0x8000 : 0) + (((con_a - 0x3E0000) >> 1) & 0x7FFF)];
-    else if (top->e_sram_oe) top->sram_do = sram[(top->e_sram_addr >> 1) & 0x3FFFF];
+    // v4: the SRAM's pins are the engine's alone (the console's window read is put on them by the engine)
+    if (top->e_sram_oe && !top->e_sram_we_hi && !top->e_sram_we_lo) top->sram_do = sram[(top->e_sram_addr >> 1) & 0x3FFFF];
     else top->sram_do = rnd();
-    if (!top->con_sram && (top->e_sram_we_hi || top->e_sram_we_lo)) {
+    if (top->e_sram_we_hi || top->e_sram_we_lo) {
         uint32_t w = (top->e_sram_addr >> 1) & 0x3FFFF;
         uint16_t v = sram[w];
         if (top->e_sram_we_hi) v = (v & 0x00FF) | (top->e_sram_di & 0xFF00);
@@ -101,8 +101,9 @@ static uint16_t bus_read(uint32_t a) {                 // one 16-bit cart read: 
         for (int i = 0; i < 6; i++) tick();
         top->a ^= 1u << 15; tick(); top->a = (a >> 1) & 0x1FFFFF; n -= 7; glitches++;
     }
-    for (int i = 0; i < n; i++) tick();
-    if (top->area) v = (a >> 16 == 0x3F) ? top->status : sram[(top->shown ? 0x8000 : 0) + (((a - 0x3E0000) >> 1) & 0x7FFF)];
+    uint16_t win = 0;
+    for (int i = 0; i < n; i++) { tick(); if (i == 8) win = top->sram_do; }   // a window read: the data 9 clocks (180 ns) in
+    if (top->area) v = (a >> 16 == 0x3F) ? top->status : win;
     else v = psr[0][(a & 0x3FFFFF) >> 1];
     top->ce_lo_n = 1; top->oe_n = 1;
     int g = 2 + rnd() % 10;
