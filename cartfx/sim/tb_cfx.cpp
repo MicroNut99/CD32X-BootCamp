@@ -85,11 +85,22 @@ static void tick() {
     if (getenv("DBGHIST")) hist[top->rootp->cfx_core__DOT__st & 127]++;
 #endif
 }
+static long glitches;
 static uint16_t bus_read(uint32_t a) {                 // one 16-bit cart read: ~300-400 ns active, then a gap
     con_a = a;
     top->a = (a >> 1) & 0x1FFFFF; top->ce_lo_n = 0; top->oe_n = 0;
     int n = 14 + rnd() % 6;
     uint16_t v = 0;
+    // GLITCH=k: one read in k (not of the command area) starts with A16 high for one clock, as the console's address
+    // lines may ring (CFXTEST on the console, 14-15 Nov 2026: a window read at 0x3E.... taken as a command)
+    static int glitch = getenv("GLITCH") ? atoi(getenv("GLITCH")) : 0;
+    if (glitch && (a >> 16) != 0x3F && (int)(rnd() % glitch) == 0) { top->a ^= 1u << 15; tick(); top->a = (a >> 1) & 0x1FFFFF; n--; glitches++; }
+    // GLITCHC=k: one command read in k has A16 low for one clock in its middle (must not make two commands of it)
+    static int glitchc = getenv("GLITCHC") ? atoi(getenv("GLITCHC")) : 0;
+    if (glitchc && (a >> 16) == 0x3F && (int)(rnd() % glitchc) == 0) {
+        for (int i = 0; i < 6; i++) tick();
+        top->a ^= 1u << 15; tick(); top->a = (a >> 1) & 0x1FFFFF; n -= 7; glitches++;
+    }
     for (int i = 0; i < n; i++) tick();
     if (top->area) v = (a >> 16 == 0x3F) ? top->status : sram[(top->shown ? 0x8000 : 0) + (((a - 0x3E0000) >> 1) & 0x7FFF)];
     else v = psr[0][(a & 0x3FFFFF) >> 1];
@@ -197,7 +208,8 @@ static int run_script(const char* file, int passes) {
             }
         }
     }
-    printf("cfxtest's script against the engine: %ld checks, %ld wrong\n", checks, bad_checks);
+    printf("cfxtest's script against the engine: %ld checks, %ld wrong (%ld reads glitched; counters 11-14: %u %u %u %04X)\n", checks, bad_checks, glitches,
+           bus_read(CFX_CMD_BASE + 22), bus_read(CFX_CMD_BASE + 24), bus_read(CFX_CMD_BASE + 26), bus_read(CFX_CMD_BASE + 28));
     return bad_checks != 0;
 }
 

@@ -70,17 +70,28 @@ module cfx_core #(
     assign con_psram = cart_cyc & !(on_r & in_area);
     assign con_sram  = on_r & !ce_lo_n & !oe_n & a[21:16] == 6'h3E;
 
-    // a command read: the address taken once it has held steady two clocks (Metal Slug CD32X's fix)
-    reg  [1:0] rd_ff;
-    reg [14:0] a1, a2, last_a, cmd_w;
+    // a command read: taken only when three samples in a row (40 ns) are each a command read, all at the same whole
+    // address (bits 21-1). v3 (CFXTEST on the console, 14-15 Nov 2026): v2 took the address's low 15 bits once they had
+    // held two clocks, with the command area seen in one sample two clocks earlier - a window read (0x3E....) the SH2
+    // makes while address lines next to A16 switch was taken as a command (check 0's picture: buffer 0 from word 0x683F
+    // on, the word 0x683E = SHOW 0; then the queue never emptied: the engine run off by such words). As Metal Slug
+    // CD32X's: the area and the steadiness on the same samples.
+    // The read's end (for the same word read twice) is CE or OE seen high, not the area: a flicker of an address line
+    // in the middle of a command read must not make two commands of it.
+    reg  [2:0] rd_ff;
+    reg        any_ff;
+    reg [21:1] a1, a2, a3;
+    reg [14:0] last_a, cmd_w;
     reg        taken, cmd_ev;
+    wire       cmd_steady = rd_ff == 3'b111 && a1 == a2 && a2 == a3 && a3[21:16] == 6'h3F;
     always @(posedge clk) begin
-        rd_ff <= {rd_ff[0], cmd_rd};
-        a1 <= a[15:1]; a2 <= a1;
+        rd_ff <= {rd_ff[1:0], cmd_rd};
+        any_ff <= !ce_lo_n & !oe_n;
+        a1 <= a; a2 <= a1; a3 <= a2;
         cmd_ev <= 0;
-        if (!rd_ff[1]) taken <= 0;
-        else if (a1 == a2 && (!taken || a2 != last_a)) begin
-            taken <= 1; last_a <= a2; cmd_w <= a2; cmd_ev <= 1;
+        if (!any_ff) taken <= 0;
+        else if (cmd_steady && (!taken || a3[15:1] != last_a)) begin
+            taken <= 1; last_a <= a3[15:1]; cmd_w <= a3[15:1]; cmd_ev <= 1;
         end
     end
 
@@ -100,7 +111,7 @@ module cfx_core #(
     reg        exec;
     wire       mem_quiet;
     reg        off_now;
-    reg [15:0] cnt_frames, cnt_cells, cnt_spr, cnt_time, cnt_predo, cnt_sredo, cnt_lost;
+    reg [15:0] cnt_frames, cnt_cells, cnt_spr, cnt_time, cnt_predo, cnt_sredo, cnt_lost, cnt_cmds, cnt_orph;
     reg  [6:0] st;                                              // (the state machine's state, below)
     wire       busy = (q_n != 0) | exec | (st != 7'd0) | !mem_quiet;   // (st: a word between the queue and its run)
 
@@ -116,6 +127,11 @@ module cfx_core #(
         4'd7: cnt_mux = cnt_lost;
         4'd8: cnt_mux = {1'b0, KEY2};
         4'd9: cnt_mux = {12'd0, PSRAM_T};
+        4'd10: cnt_mux = 16'd3;                                 // the RTL's revision (v3: the command read's three samples)
+        4'd11: cnt_mux = cnt_cmds;                              // words put in the queue (commands and arguments)
+        4'd12: cnt_mux = cnt_orph;                              // arguments with no command (dropped; status bit 3)
+        4'd13: cnt_mux = {5'd0, q_n};                           // words in the queue now
+        4'd14: cnt_mux = {st, 4'd0, exec, !mem_quiet, q_full, on_r, err};   // the state machine (console diagnostics)
         default: cnt_mux = 16'd0;
         endcase
     end
@@ -125,7 +141,7 @@ module cfx_core #(
     reg [14:0] q_out;
     always @(posedge clk) begin
         if (rst) begin
-            on_r <= 0; key <= 0; q_wr <= 0; cnt_lost <= 0;
+            on_r <= 0; key <= 0; q_wr <= 0; cnt_lost <= 0; cnt_cmds <= 0;
         end else begin
             if (cmd_ev) begin
                 if (!on_r) begin
@@ -137,6 +153,7 @@ module cfx_core #(
                     if (q_n != 11'd1024) begin
                         q[q_wr[9:0]] <= cmd_w;
                         q_wr <= q_wr + 1'd1;
+                        cnt_cmds <= cnt_cmds + 1'd1;
                     end else cnt_lost <= cnt_lost + 1'd1;
                 end
             end
@@ -504,7 +521,7 @@ module cfx_core #(
             st <= S_IDLE; exec <= 0; q_rd <= 0; c_n <= 0; err <= 0; shown_r <= 0;
             wb_v <= 0; px2_v <= 0; ec_v <= 0; dirm <= 0; f_seq <= 0; rem <= 0;
             cols <= 5'd20; rows <= 5'd22; nspr <= 0; full <= 0; blend <= 0; brk <= 0;
-            cnt_frames <= 0; cnt_cells <= 0; cnt_spr <= 0; cnt_time <= 0;
+            cnt_frames <= 0; cnt_cells <= 0; cnt_spr <= 0; cnt_time <= 0; cnt_orph <= 0;
             for (integer j = 0; j < 4; j = j + 1) begin
                 L_fl[j] <= 0; L_w[j] <= 0; L_h[j] <= 0; L_t[j] <= 0; L_wt[j] <= 0; L_ht[j] <= 0; L_tt[j] <= 0;
                 L_x[j] <= 0; L_y[j] <= 0; L_off[j] <= 0; L_brk[j] <= 0; L_pix[j] <= 0; L_map[j] <= 0;
@@ -542,7 +559,7 @@ module cfx_core #(
                 end else if (c_n != 0) begin
                     c[c_n] <= q_out[12:0]; c_n <= c_n + 1'd1;
                     if (c_n + 1'd1 == c_need) begin exec <= 1; st <= S_RUN; end else st <= S_IDLE;
-                end else begin err <= 1; st <= S_IDLE; end         // an argument with no command: dropped
+                end else begin err <= 1; cnt_orph <= cnt_orph + 1'd1; st <= S_IDLE; end   // an argument with no command: dropped
             end
             S_RUN: begin
                 c_n <= 0;

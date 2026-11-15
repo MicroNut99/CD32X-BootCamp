@@ -169,7 +169,7 @@ static int core = -1;                                            /* 0 Hurrican, 
 static uint16_t core_status, version, psram_t;
 static uint32_t copy_us[3], copy_bytes;
 static uint32_t passes, stress_checks, stress_wrong, stress_reads, worst_us[16];
-static uint16_t predo, sredo, lost;
+static uint16_t predo, sredo, lost, rtl_rev;
 static const char *stage = "START";
 static const char *const core_name[3] = { "HURRICAN", "JAZZ", "SUPERTUX" };
 static const uint16_t key1[3] = { 0x5848, 0x584A, 0x5853 };
@@ -201,7 +201,7 @@ static void results(void)
 {
     char b[48], t[16];
     clear();
-    text(8, 0, "CARTFX TEST 2  (CD32X BOOTCAMP)", C_YELLOW);
+    text(8, 0, "CARTFX TEST 3  (CD32X BOOTCAMP)", C_YELLOW);
     if (core < 0)
     {
         b[0] = 0; cat(b, "NO CARTFX CORE ANSWERED (STATUS "); cat(b, hexn(t, core_status, 4)); cat(b, ")");
@@ -212,6 +212,7 @@ static void results(void)
     b[0] = 0; cat(b, "CORE "); cat(b, core_name[core]); cat(b, "  ID "); cat(b, hexn(t, ids[core], 2));
     cat(b, "  V "); cat(b, hexn(t, version, 4)); cat(b, "  T ");
     if (psram_t) cat(b, dec(t, psram_t)); else cat(b, "5 OLD");     /* (v2.2: no counter 9, read in 5) */
+    cat(b, "  R "); if (rtl_rev) cat(b, dec(t, rtl_rev)); else cat(b, "-");   /* (counter 10: v3 on; 0 before) */
     text(8, 12, b, C_WHITE);
     for (int chip = 0; chip < 2; chip++)                         /* checks 0-7 from chip 0, 8-15 from chip 1 */
     {
@@ -245,6 +246,18 @@ static void results(void)
     uint32_t w = 0; for (int k = 0; k < nck; k++) if (worst_us[k] > w) w = worst_us[k];
     cat(b, ms1(t, w)); cat(b, " MS");
     text(8, y + 30, b, C_WHITE);
+    /* the engine now, read as this screen is drawn: a status of FFFF is the engine off (the window is the ROM's 0xFF) */
+    {
+        uint16_t st = CMD(0);
+        b[0] = 0; cat(b, "NOW "); cat(b, hexn(t, st, 4));
+        if (st == 0xFFFF) cat(b, " OFF");
+        else if (rtl_rev)
+        {
+            cat(b, " CMDS "); cat(b, dec(t, CMD(11))); cat(b, " ORPH "); cat(b, dec(t, CMD(12)));
+            cat(b, " Q "); cat(b, dec(t, CMD(13))); cat(b, " ST "); cat(b, hexn(t, CMD(14), 4));
+        }
+        text(8, y + 40, b, st == 0xFFFF ? C_RED : C_GREY);
+    }
     flip();
 }
 
@@ -367,19 +380,20 @@ int main(void)
         (void)CMD(0x4346); (void)CMD(key1[k]);
         uint16_t st = CMD(0x0C01);
         core_status = st;
-        if ((st >> 8) == ids[k] && CMD(8) == 0x0C01) { core = k; version = CMD(8); psram_t = CMD(9); }
+        if ((st >> 8) == ids[k] && CMD(8) == 0x0C01) { core = k; version = CMD(8); psram_t = CMD(9); rtl_rev = CMD(10); }
     }
     if (core < 0) { results(); while (1) { } }
 
     /* 2. the script once, each check shown */
     stage = "-";
-    if (!play(1)) { results(); while (1) { } }
+    if (!play(1)) { predo = CMD(5); sredo = CMD(6); lost = CMD(7); results(); while (1) { } }
 
     /* 3. the copy, three ways, from the picture shown last */
     {
         int k = nck - 1;
         for (int m = 0; m < 3; m++) { clear(); copy_us[m] = copy_pic(m, 16 * ck[k].cols, 8 * ck[k].rows); flip(); }
     }
+    predo = CMD(5); sredo = CMD(6); lost = CMD(7);
     results();
 
     /* 4. the stress loop: the slave on the cart all the time */
@@ -387,7 +401,7 @@ int main(void)
     stage = "RUNNING";
     while (1)
     {
-        if (!play(0)) { *THRU(&slave_mode) = 0; results(); while (1) { } }
+        if (!play(0)) { *THRU(&slave_mode) = 0; predo = CMD(5); sredo = CMD(6); lost = CMD(7); results(); while (1) { } }
         passes++;
         stress_reads = *THRU(&slave_reads);
         predo = CMD(5); sredo = CMD(6); lost = CMD(7);

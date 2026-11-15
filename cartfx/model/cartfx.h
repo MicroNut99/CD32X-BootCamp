@@ -76,7 +76,10 @@
  * bits 8-15 the build's ID. Counters (w = n): 1 frames composed, 2 cells in the last frame, 3 sprites in it, 4 its
  * engine time in 64-clock units (1.28 us), 5 PSRAM accesses done again, 6 SRAM accesses done again, 7 words lost
  * (queue full), 8 KEY2 (the version), 9 the build's PSRAM read in clocks (5 or 8: psram_t below). The model is never
- * busy nor full; its counters 4-6 stay 0.
+ * busy nor full; its counters 4-6 stay 0. The RTL from v3 on (diagnostics; the model answers 0): 10 the RTL's revision
+ * (3), 11 words put in the queue, 12 arguments with no command, 13 words in the queue now, 14 {state 7 bits, 0000,
+ * running, memory busy, full, on, error}. A command read counts once three 20 ns samples in a row show it at one whole
+ * address: the read must hold its address and CE / OE that long (the console's do, by far).
  */
 #ifndef CARTFX_H
 #define CARTFX_H

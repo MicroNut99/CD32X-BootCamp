@@ -7,7 +7,8 @@ frame buffer. It grew from Rayman CD32X's compositor (on the console since 8 Nov
 keeps its window, key and command encoding. The design and each game's plan are in the design document
 ("FPGA accelerators for Hurrican, Jazz and SuperTux CD32X") and in each game's `fpga/` folder.
 
-**Status, 14 Nov 2026: built (v2.3), never on a console, used by no game yet.** It is checked against the reference
+**Status, 15 Nov 2026: v3 (the command read fixed) to be fitted; v2.3 failed on the console** (below, "The
+console, v2.3"). Used by no game yet. It is checked against the reference
 model in Verilator and fitted by Quartus for all three games, each with the cart's PSRAM read in 5 clocks and in 8 (the
 console test says which the cart needs). A green simulation or ares run is never a console pass.
 
@@ -45,6 +46,31 @@ PC, `fpga_work`). It lays out `fpga_pro/map_cfx_<build>` (krikzz's `map_ssf` pro
 replaced by four) and `mapper/map_cfx_<build>`, and puts `build_cfx.bat` beside them. Double-click that `.bat`: it
 writes each build's log, exit code, md5, fit and timing summaries, and `cfx_out\<build>\mega-pro.rbf` (about a
 minute a build). **Read the timing summary before using an `.rbf`; never use one whose timing failed.**
+
+## The console, v2.3 (14-15 Nov 2026) and v3
+
+`CFXTEST.32X` (TEST 2) with `hur` (read in 5) and `hur8` (in 8), the owner's console, one run each:
+
+| | `hur` (T 5) | `hur8` (T 8) |
+|---|---|---|
+| key, ID, version | C1, 0C01, T 5 | C1, 0C01, T 8 |
+| check 0 | 2 words wrong from 0x7387; picture right to the eye | 5,612 words wrong from 0x683F, error bit set; picture noise |
+| then | QUEUE FULL in check 1's 23 words, for good | the same |
+| the engine's time for check 0 | 6.5 ms (the model's estimate 6.66) | 9.1 ms |
+
+The cause, as read from that: 0x683E, the word before the first wrong one, is `SHOW 0` - a window read (cart
+0x3ED07C) taken as a command read, the window switched to the other buffer mid-check; the next 5,612 words all came
+from it. v2.3 took a command read's address once its low 15 bits had held two clocks, with the command area (bits
+21-16 = 0x3F) seen in **one** sample two clocks before: a one-clock flicker of A16 at a read's start (lines A17-A21
+switching beside it) is enough. Words taken that way run the engine off its script (an `OP_OFF` among them turns it
+off: the window is then the ROM's 0xFF, a status of FFFF, "full" for good). `sim/`'s `GLITCH=k` (one read in k starts
+with A16 high for a clock) reproduces it with v2.3: one check in several wrong from a word on, the error bit set, then
+"never idle". **v3** (`cfx_core.sv`): a command read counts only when three samples in a row are each a command read at
+one whole address (bits 21-1), as Metal Slug CD32X's console-proven core takes its own; a read's end is CE or OE seen
+high, so a flicker inside a command read never makes two of it (`GLITCHC=k`). Counters 10-14 for the console's
+diagnosis (`model/cartfx.h`). Bench: the 16 checks right with `GLITCH=5` (one read in five flickered), `GLITCH=100
+GLITCHC=20`, `TRAFFIC=40`, both reads, two seeds, two passes; the 30-frame random run right. CFXTEST 3 shows `R 3` and,
+on its last line, the engine's status now (`OFF` for FFFF) and counters 11-14.
 
 ## How a game uses it
 
