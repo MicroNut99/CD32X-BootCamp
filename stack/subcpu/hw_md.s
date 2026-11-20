@@ -901,6 +901,12 @@ fb_overdue:
         move.w  #0x2700,sr
         move.w  fb_armed(pc),d0
         beq.b   2f
+.ifdef DX_KEEPVB                            | DX-KEEPVB begin
+3:
+        btst    #3,0xC00005             | KEEPVB (Dracula X CD32X docs/226): the kept runs carry the Genesis' colours -
+        beq.b   3b                      | a CRAM write while the picture is drawn is a dot on the screen. Overdue
+                                        | runs wait for the next vertical blank, not now in the display
+.endif                                      | DX-KEEPVB end
         bsr.w   fb_vrun
 2:
         move.w  (sp)+,sr

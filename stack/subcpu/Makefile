@@ -78,6 +78,15 @@ ifeq ($(VSSWAP),1)
 ASFLAGS_GENPLANE += --defsym DX_VSSWAP=1
 endif
 # DX-VSSWAP end
+# DX-KEEPVB begin
+# KEEPVB=1 (needs FBVDP=1; Dracula X CD32X docs/226): command 79's kept runs that missed their vertical blank (the
+# interrupt held off) wait for the next one before they run - their CRAM writes in the display are dots on the screen.
+# Without it: unchanged (run at once, at the next command's start).
+KEEPVB ?= 0
+ifeq ($(KEEPVB),1)
+ASFLAGS_GENPLANE += --defsym DX_KEEPVB=1
+endif
+# DX-KEEPVB end
 # DX-HWIN begin
 # HWIN=1 (needs FBVDP=1): command 79's lists let VSPLIT's H interrupt in before each control run, so a split due
 # while a long list runs is late by a run, not by the list (Dracula X CD32X docs/110).  Without it: unchanged.
