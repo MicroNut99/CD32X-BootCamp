@@ -41,6 +41,18 @@ HWFLAGS += -DOL_FMVRING=$(FMVRING)
 # than bytes (command 33).  OpenLara's default is on; 0 builds the copy as before.
 CARTW ?= 0
 HWFLAGS += -DOL_CARTW=$(CARTW)
+# SDSAVE { SDSAVE=1: game saves on the EverDrive's SD card, CMD 76 / 77 (CD32X-BootCamp sdcard/); the save bank
+# only in the launcher's program (MODE1=1 M1SAVE=1: the listener's route to the EverDrive's bank 31)
+SDSAVE ?= 0
+SDSAVE_OUT ?= 76
+SDSAVE_IN ?= 77
+HWFLAGS += -DSDSAVE=$(SDSAVE) -DSDSAVE_CMD_OUT=$(SDSAVE_OUT) -DSDSAVE_CMD_IN=$(SDSAVE_IN)
+ifeq ($(MODE1)$(M1SAVE),11)
+HWFLAGS += -DSDSAVE_M1SAVE=1
+else
+HWFLAGS += -DSDSAVE_M1SAVE=0
+endif
+# } SDSAVE
 # DX-GENPLANE begin
 # GENPLANE=1: SuperTux CD32X REV's Genesis picture commands 62-67 (main.c, built with HWFLAGS) and their
 # listener routines 36 / 37 (hw_md.s).  Without it: unchanged.  Ledger section 1 / 2.
@@ -87,6 +99,15 @@ ifeq ($(KEEPVB),1)
 ASFLAGS_GENPLANE += --defsym DX_KEEPVB=1
 endif
 # DX-KEEPVB end
+# DX-VBSWAP begin
+# VBSWAP=1 (needs FBVDP=1; Dracula X CD32X docs/232): command 79 ops 2 / 3 - a list that ends in a vertical blank swaps
+# in that blank when the picture before did not come on in it and 10 lines or more of it are left (its kept runs then),
+# not a refresh later. The SH2 must notice that swap itself. Without it: unchanged (the display first).
+VBSWAP ?= 0
+ifeq ($(VBSWAP),1)
+ASFLAGS_GENPLANE += --defsym DX_VBSWAP=1
+endif
+# DX-VBSWAP end
 # DX-HWIN begin
 # HWIN=1 (needs FBVDP=1): command 79's lists let VSPLIT's H interrupt in before each control run, so a split due
 # while a long list runs is late by a run, not by the list (Dracula X CD32X docs/110).  Without it: unchanged.
@@ -157,27 +178,6 @@ HWFLAGS += -DOL_CDPAUSE=$(CDPAUSE)
 CDFADE ?= 0
 HWFLAGS += -DOL_CDFADE=$(CDFADE)
 # DX-CDFADE end
-# DX-TPSG begin
-# TPSG=1: command 103, the PC Engine's PSG played by the PCM chip from the cart core's write ring (main.c TPSG-1, tpsg.c /
-# tpsg.h / tpsg_tab.h): Sapphire CD32X's sound effects.  Without it: unchanged.  Ledger section 36.
-TPSG ?= 0
-HWFLAGS += -DOL_TPSG=$(TPSG)
-# (the player's files are the kit's tpsg/ folder: TPSG_DIR, for a build that runs from a copy of stack/ - EDCD's)
-TPSG_DIR ?= $(abspath ../../tpsg)
-ifeq ($(TPSG),1)
-HWFLAGS += -I$(TPSG_DIR)
-endif
-# DX-TPSG end
-# DX-USBLOG begin
-# USBLOG=1 (needs TILEP=1): command 102, records from the SH2 out of the Mega EverDrive PRO's USB port (main.c USBLOG-1,
-# the listener's routine 41 usb_out, hw_md.s): a test build's log to the PC.  Metal Slug CD32X.  Without it: unchanged.
-# Ledger section 32.
-USBLOG ?= 0
-HWFLAGS += -DOL_USBLOG=$(USBLOG)
-ifeq ($(USBLOG),1)
-ASFLAGS_GENPLANE += --defsym DX_USBLOG=1
-endif
-# DX-USBLOG end
 # DX-CDRING begin
 # CDRING=1: command 91, sectors of the open file into the cart at any place (main.c CDRING-1): a game reading its own
 # disc image while it runs keeps a ring of them in the cart.  Dracula X CD32X.  Without it: unchanged.  Ledger section 29.

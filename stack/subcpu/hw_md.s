@@ -40,12 +40,6 @@
 .ifdef DX_TILEP                             | DX-TILEP begin
         .equ    MD_CMD_END, 41              /* + tile_copy (40): TILEP, a tile page's cache (36-39 cmd_nop if off) */
 .endif                                      | DX-TILEP end
-.ifdef DX_USBLOG                            | DX-USBLOG begin
-.ifndef DX_TILEP
-        .error  "USBLOG needs TILEP (its routine 41 follows routine 40)"
-.endif
-        .equ    MD_CMD_END, 42              /* + usb_out (41): USBLOG, bytes into the EverDrive PRO's USB FIFO */
-.endif                                      | DX-USBLOG end
 
 | MODE1-1 (Makefile MODE1=1, docs/12): the listener for a CARTRIDGE boot (the Sega CD's "mode 1"), started
 | by edboot/EDCD.32X from a Mega EverDrive PRO.  There the cart is at 0x000000 and the Sega CD at 0x400000
@@ -471,9 +465,6 @@ cmd_table:
         .word   tile_copy - cmd_table           /* 40  TILEP */
 .endif                                      | DX-TILEP end
 
-.ifdef DX_USBLOG                            | DX-USBLOG begin
-        .word   usb_out - cmd_table             /* 41  USBLOG */
-.endif                                      | DX-USBLOG end
 | VSPLIT (needs GENPLANE): the V scroll of planes A and B changed part-way down the screen, from a list of
 | up to 16 entries, by the Genesis H interrupt (level 4, every line).  Mega-CD manual: on H-INT the main
 | CPU jumps to (the high word of the vector at $70) | (the word in $A12006), so $A12006 = the low word of
@@ -778,6 +769,16 @@ fb_list:
         beq.w   13f                     | op 1: the pairs
         cmpi.l  #2,d3
         blo.w   12f                     | op 0: done
+.ifdef DX_VBSWAP                            | DX-VBSWAP begin
+        btst    #3,0xC00005             | VBSWAP (Dracula X CD32X docs/232): a list that ends in a vertical blank swaps
+        beq.b   16f                     | in it - not a refresh later - when the picture before did not come on in
+        move.w  fb_vbn(pc),d0           | this same blank and 10 lines or more of it are left (V counter 0xF5 or
+        cmp.w   fb_swvb(pc),d0          | less: the kept runs written before the display). The SH2 sees the swap
+        beq.b   16f                     | itself (its pal_catch). Otherwise as before: the display first
+        move.b  0xC00008,d0
+        cmpi.b  #0xF5,d0
+        bls.w   18f
+.endif                                      | DX-VBSWAP end
 16:
         btst    #3,0xC00005             | (the list ended in a vertical blank: wait for the display first, so the
         bne.b   16b                     | swap is at the next vblank and the SH2 sees it there, as always)
@@ -787,6 +788,9 @@ fb_list:
         bmi.b   17b                     | in it swaps at once, and the kept runs - VSRAM's top - come after line 0
                                         | began: Sapphire CD32X docs/35)
 .endif                                      | DX-VSSWAP end
+.ifdef DX_VBSWAP                            | DX-VBSWAP begin
+18:
+.endif                                      | DX-VBSWAP end
         move.w  sr,-(sp)                | ops 2 / 3: the 32X to show frame buffer op - 2 (it swaps at the next
         move.w  #0x2700,sr              | vblank, at once in a blank), the kept runs at that vblank
         moveq   #1,d0
@@ -839,6 +843,11 @@ fb_list:
 | fb_vrun: the kept runs now, then nothing kept or armed (called with interrupts masked, or from vblank_int)
 fb_vrun:
         movem.l d0-d1/a0-a2,-(sp)
+.ifdef DX_VBSWAP                            | DX-VBSWAP begin
+        move.w  fb_vbn(pc),d0           | (the blank this picture came on in)
+        lea     fb_swvb(pc),a0
+        move.w  d0,(a0)
+.endif                                      | DX-VBSWAP end
         lea     fb_armed(pc),a0
         clr.w   (a0)
         lea     fb_keep(pc),a0
@@ -913,6 +922,13 @@ fb_overdue:
 1:
         rts
 
+.ifdef DX_VBSWAP                            | DX-VBSWAP begin
+        .align  2
+fb_vbn:
+        .word   0                       | the vertical blanks, counted by vblank_int
+fb_swvb:
+        .word   0xFFFF                  | fb_vbn when the last kept runs were (the blank the picture before came on in)
+.endif                                      | DX-VBSWAP end
         .align  2
 fb_armed:
         .word   0                       | 1: the kept runs wait for the vblank (ops 2 / 3)
@@ -1976,6 +1992,10 @@ message6:
 
 vblank_int:
         movem.l d0-d1/a0-a1,-(sp)
+.ifdef DX_VBSWAP                            | DX-VBSWAP begin
+        lea     fb_vbn(pc),a0
+        addq.w  #1,(a0)
+.endif                                      | DX-VBSWAP end
 .ifdef DX_FBVDP                             | DX-FBVDP begin
         lea     fb_armed(pc),a0         | FBVDP ops 2 / 3: the kept runs at the vblank the 32X shows their picture
         tst.w   (a0)
@@ -2312,42 +2332,6 @@ m1_buf:
 | offset, its value before), the rows and flags into slot s (index: the header's first slot + s), the
 | table = this leaf, 0x80000000 | q << 24 | j, and last the leaf = index << 16 | 0xFFFE.  Returns the
 | tiles done, -1 refused (page p, off, or no 'MSPG').  Needs MODE1 and M1PAGE (else refused).
-.ifdef DX_USBLOG                            | DX-USBLOG begin
-| USBLOG (Metal Slug CD32X, 10 Nov 2026; ledger section 32): int usb_out(char *src, int n) - n bytes (1-256) from src
-| (Word RAM, the Sub-CPU's) into the Mega EverDrive PRO's FIFO to its MCU, FIFODATA 0xA130D1 (krikzz lib_base/base_io.sv:
-| decoded for every mapper, a write with the low byte strobe), with RV = 1: with the 32X on the cart takes /TIME writes
-| only then (BootCamp docs/12). Copied to usb_buf first (RV = 0), as m1_xfer does: a cartridge boot does not reach the
-| Sega CD with RV = 1. Returns 0, -1 refused. The Sub-CPU (main.c USBLOG-1) puts krikzz's USB write command in front.
-usb_out:
-        movem.l d2/a2,-(sp)
-        movea.l 12(sp),a0
-        move.l  16(sp),d2
-        moveq   #-1,d0
-        tst.l   d2
-        ble.b   9f
-        cmpi.l  #256,d2
-        bhi.b   9f
-        lea     usb_buf(pc),a1
-        move.w  d2,d1
-        subq.w  #1,d1
-1:      move.b  (a0)+,(a1)+
-        dbra    d1,1b
-        lea     usb_buf(pc),a0
-        lea     0xA130D1,a2
-        move.w  sr,-(sp)
-        move.w  #0x2700,sr
-        bset    #0,0xA15107
-        subq.w  #1,d2
-2:      move.b  (a0)+,(a2)
-        dbra    d2,2b
-        bclr    #0,0xA15107
-        move.w  (sp)+,sr
-        moveq   #0,d0
-9:      movem.l (sp)+,d2/a2
-        rts
-usb_buf:
-        .space  256
-.endif                                      | DX-USBLOG end
 tile_copy:
         movem.l d2-d7/a2-a6,-(sp)
         moveq   #-1,d0
