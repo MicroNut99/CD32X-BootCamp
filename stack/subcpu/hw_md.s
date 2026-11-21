@@ -295,6 +295,16 @@ cmd_done:
         /* main loop */
         moveq   #0,d0
 cmd_loop:
+.ifdef DX_FB79                              | DX-FB79 begin
+        move.w  0xA15120,d0             | FB79 (Dracula X CD32X docs/239): the SH2's command 79 taken here, straight
+        cmpi.w  #79,d0                  | from COMM0 - not through the Sub-CPU (its poll, two reads, MD 39 and two
+        bne.b   7f                      | writes: five round trips, ~2-3 ms, before a list's first word; a picture's
+        cmp.w   0xA15120,d0             | list sent a little before a blank missed it for that alone). Read twice
+        bne.b   7f                      | (HW10)
+        bsr.w   fb79_direct
+7:
+        moveq   #0,d0
+.endif                                      | DX-FB79 end
         tst.b   d7
         beq.b   md_check
         move.w  0xA15120,d0
@@ -687,6 +697,35 @@ copy_vram_col:
         .equ    FB_KEEP, 256
         .equ    FB_JRN, 0xFFC000                | (68000 work RAM, 4 KB: nothing else of the stack uses it)
         .equ    FB_JRN_N, 2048
+.ifdef DX_FB79                              | DX-FB79 begin
+| fb79_direct: command 79 as the Sub-CPU ran it (main.c), on the 68000 alone: COMM2 = op, COMM8 = the list's frame
+| buffer offset; ops 0-3 run by fb_list with level 4 masked (as the dispatcher's VDP commands); COMM12 = the result's
+| bit 0, then COMM0 = 0 (done). d0-d1/a0-a1 used; d7 kept.
+fb79_direct:
+        moveq   #0,d1
+        move.w  0xA15122,d1             | op
+        move.l  0xA15128,d0
+        andi.l  #0x1FFFE,d0
+        addi.l  #0x840000,d0            | the list in the frame buffer (the SH2 gave it to the 68000: FM = 0)
+        cmpi.w  #3,d1
+        bhi.b   1f
+        clr.l   -(sp)
+        clr.l   -(sp)
+        move.l  d0,-(sp)
+        move.l  d1,-(sp)
+        move.w  #0x2400,sr
+        bsr.w   fb_list
+        move.w  #0x2000,sr
+        lea     16(sp),sp
+        andi.w  #1,d0
+        bra.b   2f
+1:
+        moveq   #0,d0
+2:
+        move.w  d0,0xA1512C             | COMM12 = 1 ok, 0 a bad list
+        move.w  #0,0xA15120             | COMM0 = 0: done
+        rts
+.endif                                      | DX-FB79 end
 fb_list:
         movem.l d2-d3/a2-a3,-(sp)
         movea.l 24(sp),a0               | (the arguments past the 4 registers saved)

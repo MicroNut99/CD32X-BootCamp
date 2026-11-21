@@ -96,6 +96,15 @@ ifeq ($(VBSWAP),1)
 ASFLAGS_GENPLANE += --defsym DX_VBSWAP=1
 endif
 # DX-VBSWAP end
+# DX-FB79 begin
+# FB79=1 (needs FBVDP=1; Dracula X CD32X docs/239): the 68000 takes the SH2's command 79 (a frame buffer list) straight
+# from COMM0 in its command loop; the Sub-CPU leaves it alone. Five 68000 round trips (~2-3 ms) off every list.
+FB79 ?= 0
+HWFLAGS += -DDX_FB79=$(FB79)
+ifeq ($(FB79),1)
+ASFLAGS_GENPLANE += --defsym DX_FB79=1
+endif
+# DX-FB79 end
 # DX-HWIN begin
 # HWIN=1 (needs FBVDP=1): command 79's lists let VSPLIT's H interrupt in before each control run, so a split due
 # while a long list runs is late by a run, not by the list (Dracula X CD32X docs/110).  Without it: unchanged.

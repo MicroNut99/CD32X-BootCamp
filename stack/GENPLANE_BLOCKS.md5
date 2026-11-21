@@ -1,5 +1,5 @@
 de4c8c047bff87bbd066f7ec6e489fe6  stack/sh2/Makefile.cdloader
 1932c6f6545e7f99974d15ed1378453e  stack/sh2/cdloader_sh2.c
 43c1dcec1402d1f7fd55604d0ae99b9f  stack/subcpu/Makefile
-c1bd00d448eb67f99735a62e2ddd81b9  stack/subcpu/hw_md.s
-b82e9d5c60d65a41aff260fdc28d47b8  stack/subcpu/main.c
+2e8dd46b83c08b33203b7d4e6542bc59  stack/subcpu/hw_md.s
+59bdb843a8106e8fd8471f31f58dba08  stack/subcpu/main.c

@@ -1137,6 +1137,9 @@ hb_done:    ;
         uint32_t cmd32 = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15120);
         uint16_t cmd = (uint16_t)(cmd32 >> 16);
         uint16_t cmdParam = (uint16_t)(cmd32 & 0xFFFF);
+#if DX_FB79 /* DX-FB79 begin */
+        if (cmd == 79) cmd = 0;          /* (FB79: the 68000's - idle here, the pause below: no reads raced against it) */
+#endif /* DX-FB79 end */
         if (cmd == 0) {                  /* HW6: idle - pause ~0.2 ms before the 68K reads COMM0
                                             again (fewer reads while the SH2 may be writing it) */
             volatile int k;
@@ -1859,6 +1862,9 @@ z_done:
                         buffer to the 68000 first, FM = 0, and takes it back after);
              COMM2 = 1: the commit - run the part the list kept (after the 32X swap: the vblank's register writes).
            Reply COMM12 = 1 ok, 0 a bad list.  The list's form: hw_md.s fb_list (MD 39). */
+#if DX_FB79 /* DX-FB79 begin */
+        else if (cmd == 79) { }          /* FB79 (Dracula X CD32X docs/239): the 68000 takes command 79 from COMM0 itself */
+#endif /* DX-FB79 end */
         else if (cmd == 79) {
             int op = do_md_cmd1(MD_CMD_READ_32X_16, 0xA15122) & 0xFFFF;
             uint32_t off = (uint32_t)do_md_cmd1(MD_CMD_READ_32X_32, 0xA15128) & 0x1FFFE;
