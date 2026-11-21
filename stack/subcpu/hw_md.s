@@ -787,6 +787,11 @@ fb_list:
         move.b  0xC00008,d0
         cmpi.b  #0xF5,d0
         bls.w   18f
+        cmpi.b  #0xFA,d0                | (v85, docs/238: 6 lines or more left are enough for kept runs of 32 words
+        bhi.b   16f                     | or fewer - most pictures': V counter 0xFA or less then)
+        move.w  fb_keep-2(pc),d1
+        cmpi.w  #32,d1
+        bls.w   18f
 .endif                                      | DX-VBSWAP end
 16:
         btst    #3,0xC00005             | (the list ended in a vertical blank: wait for the display first, so the
