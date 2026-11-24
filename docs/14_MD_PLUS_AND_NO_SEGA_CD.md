@@ -46,6 +46,15 @@ only** - a port that uses others (62-67, 68, 78, 79, 91, ...) adds them there. L
 effects, CD audio, backup RAM; a boot picture has to come with the launcher (OutRun: `ORSP` in the program's bank).
 With a Sega CD attached nothing changes: the launcher starts the Sub-CPU as before.
 
+## MD+ first, then the Sega CD (24 Nov 2026, OutRun V38)
+
+With MD+ there, **do not start the Sega CD**, even when one is attached: OutRun V36 started it and went to the disc
+with MD+ playing the music, and stopped black on the console; Mega Man X CD32X (its docs/15) found that the Sega CD's
+start writes 0xA12000, which puts MD+ in its Mega-CD mode. `mdplus/merge_nocd.py` now has the launcher open MD+ and
+read "RATE" first (RV = 1, from work RAM); MD+ answers -> the 68000 program, never the Sega CD; no MD+ -> the Sega CD
+and its disc as before; neither -> the 68000 program. Send an MD+ command only once 0x03F7FE reads 0 (it reads
+non-zero while the EverDrive is on the last one: Mega Man X's `mdp_send`).
+
 ## In ares
 
 `ares-headless --machine 32x --game <launcher>.32X --ramcart-type everdrive` runs a 32X and the EverDrive with no

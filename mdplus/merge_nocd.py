@@ -3,9 +3,12 @@
 
     python3 tools/merge_nocd.py build/edcd/bootcamp          (edcd/build_edcd.sh runs it)
 
-Patches the COPY's edboot/edcd_md.s (the launcher's 68000 part; the BootCamp itself is never edited). Where the
-launcher found no Sega CD it stopped with a blue screen. Now, with a packed launcher (ED_W0, ED_PACKED: the game's
-program and data came from the SD card), it goes on alone: a small 68000 program in work RAM (0xFF9000) does what
+Patches the COPY's edboot/edcd_md.s (the launcher's 68000 part; the BootCamp itself is never edited). With a packed
+launcher (ED_W0, ED_PACKED: the game's program and data came from the SD card) it looks for MD+ first, as Mega Man X
+CD32X does (its docs/15): when the EverDrive answers "RATE" the Sega CD is never started, attached or not (V38; V34-V36
+started it when it was there, and with MD+ playing the music it went to the disc and stopped black - the owner,
+24 Nov 2026; Mega Man X's note: the Sega CD's start writes 0xA12000, which puts MD+ in its Mega-CD mode). No MD+: the
+Sega CD and its disc as before. No MD+ and no Sega CD (blue before V34): on alone: a small 68000 program in work RAM (0xFF9000) does what
 the Sub-CPU and its listener do for this game, answering the SH2s' commands in COMM0 itself:
 
   the start       the Genesis VDP (the stack's register set, display off), window 0 = the program's bank, the 32X
@@ -27,6 +30,13 @@ BEGIN, END = "NOCD {", "} NOCD"
 A1 = """        cmpi.l  #0x53454741,0x400100    /* "SEGA": its BIOS at 0x400000 */
         beq.b   3f
 """
+B0 = """        .if ED_W0 * ED_PACKED           /* NOCD { MD+ first (Mega Man X CD32X docs/15): it answers -> no Sega CD */
+        bsr     nocd_copy
+        jsr     0xFF9000+(nocd_probe-nocd_blob)
+        tst.w   d0
+        bne     nocd_run
+        .endif                          /* } NOCD */
+"""
 B1 = """        .if ED_W0 * ED_PACKED           /* NOCD { no Sega CD: on without it (tools/merge_nocd.py) */
         bra     nocd_go
         .endif                          /* } NOCD */
@@ -37,12 +47,16 @@ bios_list:
 B2 = r"""| NOCD { (OutRun CD32X tools/merge_nocd.py)
         .if ED_W0 * ED_PACKED
 nocd_go:
+        bsr.b   nocd_copy
+nocd_run:
+        jmp     0xFF9000
+nocd_copy:
         lea     nocd_blob(pc),a0
         lea     0xFF9000,a1
         move.w  #(nocd_blob_end-nocd_blob)/2-1,d0
 1:      move.w  (a0)+,(a1)+
         dbra    d0,1b
-        jmp     0xFF9000
+        rts
         .align  2
 | ---- from here: position independent, run at 0xFF9000 ----
 nocd_blob:
@@ -269,7 +283,16 @@ nc_save:                                /* d0 = 74 out / 75 in, d6 = the piece *
         bra     nc_done
 
 nc_mdp:                                 /* MD+: its registers are these bus addresses (mdp.sv) */
-        move.b  #1,0xA15107
+        move.w  #30,d2                  /* V38: wait (~1 ms) while it is on the last command (Mega Man X's mdp_send) */
+0:      move.b  #1,0xA15107
+        move.w  0x03F7FE,d0
+        move.b  #0,0xA15107
+        tst.w   d0
+        beq.b   1f
+        moveq   #20,d0
+2:      dbra    d0,2b
+        dbra    d2,0b
+1:      move.b  #1,0xA15107
         move.w  #ED_CTRL0+ED_W0+0x2000,0xA130F0
         move.w  #0xCD54,0x03F7FA
         move.w  #0x0000,0x03F7FC
@@ -278,6 +301,22 @@ nc_mdp:                                 /* MD+: its registers are these bus addr
         move.b  #0,0xA15107
         move.w  #0x4D50,0xA1512C
         bra     nc_done
+
+nocd_probe:                             /* V38: MD+ there? d0 = 1 when it answers "RATE" (called from the launcher) */
+        move.w  sr,-(sp)
+        move.w  #0x2700,sr
+        move.b  #1,0xA15107             /* RV: the cart at 0x000000 (this runs from work RAM) */
+        move.w  #0xCD54,0x03F7FA
+        move.w  0x03F7F6,d1
+        swap    d1
+        move.w  0x03F7F8,d1
+        move.b  #0,0xA15107
+        moveq   #0,d0
+        cmpi.l  #0x52415445,d1          /* "RATE" */
+        bne.b   1f
+        moveq   #1,d0
+1:      move.w  (sp)+,sr
+        rts
 
 nocd_vdp:
         .byte   0x04, 0x14, 0x30, 0x2C, 0x07, 0x54, 0x00, 0x00
@@ -304,7 +343,7 @@ def main():
     p = os.path.join(root, "edboot", "edcd_md.s")
     t = open(p, newline="").read()
     if BEGIN in t: die("already merged")
-    t = insert(insert(t, A1, B1), A2, B2, after=False)
+    t = insert(insert(insert(t, A1, B0, after=False), A1, B1), A2, B2, after=False)
     open(p, "w", newline="").write(t)
     print("    merge_nocd: the launcher goes on without a Sega CD (edboot/edcd_md.s in the copy)")
 
